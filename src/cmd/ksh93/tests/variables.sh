@@ -100,16 +100,16 @@ done
 [[ $got == "$exp" ]] || err_exit 'Using $RANDOM in subshell influences reproducible sequence in parent environment' \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 # Forking a subshell shouldn't throw away the $RANDOM seed in the main shell
-exp=$(ulimit -t unlimited; RANDOM=123; echo $RANDOM)
+exp=$(ulimit -t unlimited 2> /dev/null; RANDOM=123; echo $RANDOM)
 RANDOM=123
-(ulimit -t unlimited; true)
+(ulimit -t unlimited 2> /dev/null; true)
 got=${ echo $RANDOM ;}
 [[ $got == "$exp" ]] || err_exit "Forking a subshell resets the parent shell's \$RANDOM seed" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 # Similarly, forking a subshell shouldn't throw away a seed
 # previously set inside of the subshell
-exp=$(ulimit -t unlimited; RANDOM=789; echo $RANDOM)
-got=$(RANDOM=789; ulimit -t unlimited; echo $RANDOM)
+exp=$(ulimit -t unlimited 2> /dev/null; RANDOM=789; echo $RANDOM)
+got=$(RANDOM=789; ulimit -t unlimited 2> /dev/null; echo $RANDOM)
 [[ $got == "$exp" ]] || err_exit "Forking a subshell resets the subshell's \$RANDOM seed" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 unset N i rand1 rand2
@@ -822,7 +822,7 @@ Errors=$?  # ensure error count survives subshell
 (
 	# $x must be an unknown locale.
 	for x in x x.b@d xx_XX xx_XX.b@d
-	do	errmsg=$({ LANG=$x; } 2>&1)
+	do	errmsg=$(set +x; { LANG=$x; } 2>&1)
 		[[ -n $errmsg ]] && break
 	done
 	if	[[ -z $errmsg ]]

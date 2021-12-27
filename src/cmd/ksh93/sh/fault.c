@@ -18,7 +18,6 @@
 *                  David Korn <dgk@research.att.com>                   *
 *                                                                      *
 ***********************************************************************/
-#pragma prototyped
 /*
  * Fault handling routines
  *
@@ -50,7 +49,7 @@ static int	cursig = -1;
     /*
      * This exception handler is called after vmalloc() unlocks the region
      */
-    static int malloc_done(Vmalloc_t* vm, int type, Void_t* val, Vmdisc_t* dp)
+    static int malloc_done(Vmalloc_t* vm, int type, void* val, Vmdisc_t* dp)
     {
 	dp->exceptf = 0;
 	sh_exit(SH_EXITSIG);
@@ -547,7 +546,7 @@ void sh_exit(register int xno)
 		sh_offstate(SH_STOPOK);
 		shp->trapnote = 0;
 		shp->forked = 1;
-		if(!shp->subshell && (sig=sh_fork(shp,0,NIL(int*))))
+		if(sh_isstate(SH_INTERACTIVE) && (sig=sh_fork(shp,0,NIL(int*))))
 		{
 			job.curpgid = 0;
 			job.parent = (pid_t)-1;
@@ -564,7 +563,7 @@ void sh_exit(register int xno)
 		{
 			if(shp->subshell)
 				sh_subfork();
-			/* child process, put to sleep */
+			/* script or child process; put to sleep */
 			sh_offstate(SH_STOPOK);
 			sh_offstate(SH_MONITOR);
 			shp->sigflag[SIGTSTP] = 0;

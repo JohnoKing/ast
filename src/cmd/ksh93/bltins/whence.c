@@ -18,9 +18,9 @@
 *                  David Korn <dgk@research.att.com>                   *
 *                                                                      *
 ***********************************************************************/
-#pragma prototyped
 /*
  * command [-pvVx] name [arg...]
+ * type [-afpPqt] name...
  * whence [-afpPqtv] name...
  *
  *   David Korn
@@ -132,7 +132,6 @@ int	b_whence(int argc,char *argv[],Shbltin_t *context)
 	    case 'P':
 	    case 'p':
 		flags |= P_FLAG;
-		flags &= ~V_FLAG;
 		break;
 	    case 'q':
 		flags |= Q_FLAG;
@@ -144,7 +143,7 @@ int	b_whence(int argc,char *argv[],Shbltin_t *context)
 		errormsg(SH_DICT,ERROR_usage(2), "%s", opt_info.arg);
 		UNREACHABLE();
 	}
-	if(flags&T_FLAG)
+	if(flags&(P_FLAG|T_FLAG))
 		flags &= ~V_FLAG;
 	argv += opt_info.index;
 	if(error_info.errors || !*argv)
@@ -305,8 +304,8 @@ static int whence(Shell_t *shp,char **argv, register int flags)
 			}
 			else if(cp)
 			{
-				cp = path_fullname(shp,cp);  /* resolve '.' & '..' */
 				int is_pathbound_builtin = 0;
+				cp = path_fullname(shp,cp);  /* resolve '.' & '..' */
 				if(flags&(V_FLAG|T_FLAG))
 				{
 					if(!(flags&T_FLAG))

@@ -18,7 +18,6 @@
 *                  David Korn <dgk@research.att.com>                   *
 *                                                                      *
 ***********************************************************************/
-#pragma prototyped
 /*
  * UNIX shell
  *
@@ -385,8 +384,6 @@ void	*sh_parse(Shell_t *shp, Sfio_t *iop, int flag)
 	shp->nextprompt = 1;
 	loop_level = 0;
 	label_list = label_last = 0;
-	if(sh_isoption(SH_INTERACTIVE))
-		sh_onstate(SH_INTERACTIVE);
 	if(sh_isoption(SH_VERBOSE))
 		sh_onstate(SH_VERBOSE);
 	sh_lexopen(lexp,shp,0);

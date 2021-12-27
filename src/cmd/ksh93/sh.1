@@ -5797,7 +5797,9 @@ is given, the name
 and value of the alias is printed.
 The obsolete
 .B \-x
-option has no effect.
+option has no effect in most contexts, although if it's used with
+.B \-t
+it will suppress all output.
 The exit status is non-zero if a
 .I name\^
 is given, but no value, and no alias has been defined for the
@@ -8424,6 +8426,14 @@ are programs found on the path.
 The
 .B \-t
 option only outputs the type of the given command.
+Like
+.B \-p
+and
+.BR \-P ,
+.B \-t
+will turn off the
+.B \-v
+option.
 The
 .B \-a
 option

@@ -46,10 +46,7 @@ ulimit -R/--rttime
 ```
 5. Microsecond precision has been added to the `time` keyword and `times` builtin.
 6. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
-7. Extra options have been backported from ksh93v- for bash compatibility. The options added so far are:
-  * `type -t` has been backported from ksh93v- (it functions the same way it does in Bash).
-  * `type -P` as an alias for `whence -p`.
-  * `read -a` as an alias for `read -A`.
+7. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
 8. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
   * `basename --multiple` as an alias for `basename -a`.
   * `cat --show-tabs` as an alias for `cat -T`.
