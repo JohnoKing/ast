@@ -33,21 +33,10 @@ Intended result
     * Insert (emacs):	Escape next character
     * Insert (vi):	Switch to insert mode
 3. The prompt printed for emacs reverse search mode is now `? ` instead of `^R`.
-4. Extra options have been added to the `ulimit` command (as long as the OS supports them).
-   These options are also present in Bash, although in ksh additional long forms of each option
-   are available:  
-```
-ulimit -k/--kqueues
-	This is the maximum number of kqueues.  
-ulimit -P/--npts
-	This is the maximum number of pseudo-terminals.  
-ulimit -R/--rttime
-	This is the time a real-time process can running before blocking, in microseconds.
-```
-5. Microsecond precision has been added to the `time` keyword and `times` builtin.
-6. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
-7. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
-8. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
+4. Microsecond precision has been added to the `time` keyword and `times` builtin.
+5. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
+6. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
+7. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
   * `basename --multiple` as an alias for `basename -a`.
   * `cat --show-tabs` as an alias for `cat -T`.
   * `chgrp --no-dereference` as an alias for `chgrp -h`.
@@ -58,8 +47,8 @@ ulimit -R/--rttime
   * `ln --symbolic` as an alias for `ln -s`.
   * `mv --symbolic` as an alias for `mv -s`. (GNU coreutils doesn't support `mv --symbolic`. It was added because `cp`, `ln` and `mv` share `optget` code.)
   * `rm --dir` as an alias for `rm -d`.
-9. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
-10. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
+8. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
+9. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
 
 # KornShell 93u+m
 
