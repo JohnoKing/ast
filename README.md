@@ -49,6 +49,7 @@ Intended result
   * `rm --dir` as an alias for `rm -d`.
 8. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
 9. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
+10. All of the `/opt/ast/bin` builtins (excluding `vmstate` when compiling with standard malloc) can now be enabled by compiling with `-DSHOPT_ALL_AST_BUILTINS=1`.
 
 # KornShell 93u+m
 

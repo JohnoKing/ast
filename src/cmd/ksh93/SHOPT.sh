@@ -8,6 +8,7 @@
 SHOPT 2DMATCH=1				# two dimensional ${.sh.match} for ${var//pat/str}
 SHOPT ACCT=				# accounting
 SHOPT ACCTFILE=				# per-user accounting info
+SHOPT ALL_AST_BUILTINS=			# enable all /opt/ast/bin builtins (increases the size of the ksh93 binary)
 SHOPT AUDIT=1				# enable auditing per SHOPT_AUDITFILE
 SHOPT AUDITFILE='\"/etc/ksh_audit\"'	# auditing file
 SHOPT BGX=1				# one SIGCHLD trap per completed job
