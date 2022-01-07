@@ -2610,7 +2610,7 @@ Sfio_t *sh_iogetiop(int fd, int mode)
 	switch(fd)
 	{
 	    case SH_IOHISTFILE:
-		if(!sh_histinit((void*)&sh))
+		if(!sh_histinit())
 			return(iop);
 		fd = sffileno(sh.hist_ptr->histfp);
 		break;

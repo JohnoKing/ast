@@ -136,7 +136,6 @@ extern char		*sh_checkid(char*,char*);
 extern void		sh_chktrap(void);
 extern void		sh_deparse(Sfio_t*,const Shnode_t*,int);
 extern int		sh_debug(const char*,const char*,const char*,char *const[],int);
-extern int 		sh_echolist(Shell_t*,Sfio_t*, int, char**);
 extern char 		**sh_envgen(void);
 extern void 		sh_envnolocal(Namval_t*,void*);
 extern Sfdouble_t	sh_arith(const char*);
@@ -154,7 +153,7 @@ extern int		sh_outtype(Sfio_t*);
 extern char 		*sh_mactry(char*);
 extern int		sh_mathstd(const char*);
 extern void		sh_printopts(Shopt_t,int,Shopt_t*);
-extern int 		sh_readline(Shell_t*,char**,volatile int,int,ssize_t,long);
+extern int 		sh_readline(char**,volatile int,int,ssize_t,long);
 extern Sfio_t		*sh_sfeval(char*[]);
 extern void		sh_setmatch(const char*,int,int,int[],int);
 extern void             sh_scope(struct argnod*, int);
@@ -165,7 +164,7 @@ extern void		sh_subjobcheck(pid_t);
 extern int		sh_subsavefd(int);
 extern void		sh_subtmpfile(void);
 extern char 		*sh_substitute(const char*,const char*,char*);
-extern void		sh_timetraps(Shell_t*);
+extern void		sh_timetraps(void);
 extern const char	*_sh_translate(const char*);
 extern int		sh_trace(char*[],int);
 extern void		sh_trim(char*);
@@ -212,7 +211,7 @@ extern char		*sh_getcwd(void);
 #define	sh_getstate()	(sh.st.states)
 #define	sh_setstate(x)	(sh.st.states = (x))
 
-#define sh_sigcheck(shp) do{if((shp)->trapnote&SH_SIGSET)sh_exit(SH_EXITSIG);} while(0)
+#define sh_sigcheck()	do { if(sh.trapnote & SH_SIGSET) sh_exit(SH_EXITSIG); } while(0)
 
 extern int32_t		sh_mailchk;
 extern const char	e_dict[];
@@ -241,7 +240,7 @@ extern const char	e_dict[];
 #   define	STAT_SPAWN	12
 #   define	STAT_SUBSHELL	13
     extern const Shtable_t shtab_stats[];
-#   define sh_stats(x)	(shgd->stats[(x)]++)
+#   define sh_stats(x)	(sh.stats[(x)]++)
 #else
 #   define sh_stats(x)
 #endif /* SHOPT_STATS */

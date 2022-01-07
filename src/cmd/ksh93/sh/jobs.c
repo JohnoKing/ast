@@ -330,7 +330,7 @@ int job_reap(register int sig)
 
 		if (pid<0 && errno==EINVAL && (flags&WCONTINUED))
 			pid = waitpid((pid_t)-1,&wstat,flags&=~WCONTINUED);
-		sh_sigcheck(&sh);
+		sh_sigcheck();
 		if(pid<0 && errno==EINTR && (sig||job.savesig))
 		{
 			errno = 0;
@@ -1528,7 +1528,7 @@ int	job_wait(register pid_t pid)
 		if(nochild)
 			break;
 		if(sh.sigflag[SIGALRM]&SH_SIGTRAP)
-			sh_timetraps(&sh);
+			sh_timetraps();
 		if((intr && sh.trapnote) || (pid==1 && !intr))
 			break;
 	}
