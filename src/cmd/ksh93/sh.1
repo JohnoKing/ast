@@ -4678,11 +4678,9 @@ consisting of only letters, digits and underscores.)
 .TP 10
 .BI M-[1;5C
 (Ctrl-Right arrow) Same as \fBM-f\fR.
-.PP
 .TP 10
 .BI M-[1;3C
 (Alt-Right arrow) Same as \fBM-f\fR.
-.PP
 .TP 10
 .BI ^B
 Move cursor backward (left) one character.
@@ -4695,11 +4693,9 @@ Move cursor backward one word.
 .TP 10
 .BI M-[1;5D
 (Ctrl-Left arrow) Same as \fBM-b\fR.
-.PP
 .TP 10
 .BI M-[1;3D
 (Alt-Left arrow) Same as \fBM-b\fR.
-.PP
 .TP 10
 .BI ^A
 Move cursor to start of line.
@@ -4709,11 +4705,9 @@ Move cursor to start of line.
 .TP 10
 .BI M-[1~
 Same as \fB^A\fR.
-.PP
 .TP 10
 .BI M-[7~
 Same as \fB^A\fR.
-.PP
 .TP 10
 .BI ^E
 Move cursor to end of line.
@@ -4723,14 +4717,30 @@ Move cursor to end of line.
 .TP 10
 .BI M-[4~
 Same as \fB^E\fR.
-.PP
 .TP 10
 .BI M-[8~
 Same as \fB^E\fR.
-.PP
 .TP 10
 .BI M-[Y
 Same as \fB^E\fR.
+.TP 10
+.BI M-OA
+(Up Arrow) Same as \fBM-[A\fR.
+.TP 10
+.BI M-OB
+(Down Arrow) Same as \fBM-[B\fR.
+.TP 10
+.BI M-OC
+(Right Arrow) Same as \fBM-[C\fR.
+.TP 10
+.BI M-OD
+(Left Arrow) Same as \fBM-[D\fR.
+.TP 10
+.BI M-O5C
+(Ctrl-Right Arrow) Same as \fBM-f\fR.
+.TP 10
+.BI M-O5D
+(Ctrl-Left Arrow) Same as \fBM-b\fR.
 .TP 10
 .BI ^] char
 Move cursor forward to character
@@ -4775,7 +4785,6 @@ Delete current word.
 .TP 10
 .BI M-[3;5~
 (Ctrl-Delete) Same as \fBM-d\fR.
-.PP
 .TP 10
 .BI M-^H
 (Meta-backspace) Delete previous word.
@@ -4922,7 +4931,6 @@ reverses the direction of the search.
 .TP 10
 .B ^G
 Exit reverse search mode.
-.PP
 .TP 10
 .B ^O
 Operate \- Execute the current line and fetch
@@ -5043,7 +5051,6 @@ Display version of the shell.
 .TP 10
 .BI M-[2~
 (Insert) Escape the next character.
-.PP
 .TP 10
 .B M-#
 If the line does not begin with a
@@ -5258,6 +5265,24 @@ Same as \f30\fP.
 .TP 10
 .B ^[[3;5~
 (Ctrl-Delete) Same as \f3dw\fP.
+.TP 10
+.B ^[OA
+(Up Arrow) Same as \f3^[[A\fP.
+.TP 10
+.B ^[OB
+(Down Arrow) Same as \f3^[[B\fP.
+.TP 10
+.B ^[OC
+(Right Arrow) Same as \f3^[[C\fP.
+.TP 10
+.B ^[OD
+(Left Arrow) Same as \f3^[[D\fP.
+.TP 10
+.B ^[O5C
+(Ctrl-Right Arrow) Same as \f3w\fP.
+.TP 10
+.B ^[O5D
+(Ctrl-Left Arrow) Same as \f3b\fP.
 .TP 10
 .B ^
 Cursor to first non-blank character in line.
