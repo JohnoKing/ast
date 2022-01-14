@@ -2,8 +2,8 @@
 
 # Extras branch
 This is a downstream branch of ksh93u+m I maintain that adds
-a few extra features. The [upstream branch](https://github.com/ksh93/ksh) is currently focused
-on bugfixes, so these patches will not be submitted upstream until development on v2.0 of ksh93u+m starts.
+a few extra features. I intend to eventually submit most of these features upstream,
+although some of these additions are more debugging oriented and likely will not go upstream.
 To list all non-merge commits specific to the extras branch, run the following command in a terminal:
 ```sh
 git log --no-merges extras ^master
@@ -19,8 +19,9 @@ $ foo='Intended result'
 $ echo ${$var}
 Intended result
 ```
-2. Extra keybinds have been added to the emacs and vi editing modes.
+2. Extra keybinds have been added to the emacs and vi editing modes. These additions have been submitted upstream in [ksh93#410](https://github.com/ksh93/ksh/pull/410), but aren't merged yet.
   * The following keybinds are added to both editing modes:
+    * Support for Haiku's arrow key sequences (`^[OA`, `^[OB`, etc.)
     * Support for Home key sequences `^[[1~` and `^[[7~`
     * Support for End key sequences `^[[4~` and `^[[8~`
     * Ctrl-Left Arrow:	Go back one word
@@ -32,7 +33,7 @@ Intended result
   * An insert keybind has also been added which functions differently in each mode:
     * Insert (emacs):	Escape next character
     * Insert (vi):	Switch to insert mode
-3. The prompt printed for emacs reverse search mode is now `? ` instead of `^R`.
+3. The prompt printed for emacs reverse search mode is now `? ` instead of `^R` (this will probably be refactored into a `$PS5` variable).
 4. Microsecond precision has been added to the `time` keyword and `times` builtin.
 5. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
 6. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
