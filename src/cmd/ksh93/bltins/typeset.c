@@ -185,6 +185,8 @@ int    b_alias(int argc,register char *argv[],Shbltin_t *context)
 	/* 'alias -t', 'hash' */
 	if(flag&NV_TAGGED)
 	{
+		if(xflag)
+			return(0);		/* do nothing for 'alias -tx' */
 		troot = sh_subtracktree(1);	/* use hash table */
 		if(tdata.pflag)
 			tdata.aflag = '+';	/* for 'alias -pt', don't add anything to the hash table */
@@ -193,10 +195,6 @@ int    b_alias(int argc,register char *argv[],Shbltin_t *context)
 		if(rflag)			/* hash -r: clear hash table */
 			nv_scan(troot,nv_rehash,(void*)0,NV_TAGGED,NV_TAGGED);
 	}
-	else if(argv[1] && sh.subshell && !sh.subshare)
-		sh_subfork();			/* avoid affecting the parent shell's alias table */
-	if(xflag && (flag&NV_TAGGED))
-		return(0);			/* do nothing for 'alias -tx' */
 	return(setall(argv,flag,troot,&tdata));
 }
 
@@ -747,6 +745,8 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 				path_alias(np,path_absolute(nv_name(np),NIL(Pathcomp_t*),0));
 				continue;
 			}
+			if(troot==sh.alias_tree && sh.subshell && !sh.subshare && strchr(name,'='))
+				sh_subfork();	/* avoid affecting the parent shell's alias table */
 			np = nv_open(name,troot,nvflags|((nvflags&NV_ASSIGN)?0:NV_ARRAY)|((iarray|(nvflags&(NV_REF|NV_NOADD)==NV_REF))?NV_FARRAY:0));
 			if(!np || (troot==sh.track_tree && nv_isattr(np,NV_NOALIAS)))
 			{
@@ -1256,8 +1256,6 @@ int    b_set(int argc,register char *argv[],Shbltin_t *context)
 int    b_unalias(int argc,register char *argv[],Shbltin_t *context)
 {
 	NOT_USED(context);
-	if(sh.subshell && !sh.subshare)
-		sh_subfork();
 	return(unall(argc,argv,sh.alias_tree));
 }
 
@@ -1316,12 +1314,17 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 		nflag = NV_NOSCOPE;
 	if(all)
 	{
-		dtclear(troot);
+		if(dtfirst(troot))
+		{
+			if(troot==sh.alias_tree && sh.subshell && !sh.subshare)
+				sh_subfork();	/* avoid affecting the parent shell's alias table */
+			dtclear(troot);
+		}
 		return(r);
 	}
-	sh_pushcontext(&sh,&buff,1);
 	while(name = *argv++)
 	{
+		sh_pushcontext(&sh,&buff,1);
 		jmpval = sigsetjmp(buff.buff,0);
 		np = 0;
 		if(jmpval==0)
@@ -1333,7 +1336,8 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 #endif /* SHOPT_NAMESPACE */
 			np=nv_open(name,troot,NV_NOADD|nflag);
 		}
-		else
+		sh_popcontext(&sh,&buff);
+		if(jmpval)
 		{
 			r = 1;
 			continue;
@@ -1392,7 +1396,11 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 			}
 			/* The alias has been unset by call to _nv_unset, remove it from the tree */
 			else if(troot==sh.alias_tree)
+			{
+				if(sh.subshell && !sh.subshare)
+					sh_subfork();	/* avoid affecting the parent shell's alias table */
 				nv_delete(np,troot,nofree_attr);
+			}
 			else
 				nv_close(np);
 
@@ -1402,7 +1410,6 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 		else if(troot==sh.fun_tree && troot!=sh.fun_base && nv_search(name,sh.fun_tree,0))
 			nv_open(name,troot,NV_NOSCOPE);	/* create dummy virtual subshell node without NV_FUNCTION attribute */
 	}
-	sh_popcontext(&sh,&buff);
 	return(r);
 }
 
@@ -1556,7 +1563,7 @@ static void	print_attribute(register Namval_t *np,void *data)
 
 /*
  * print the nodes in tree <root> which have attributes <flag> set
- * of <option> is non-zero, no subscript or value is printed.
+ * if <option> is non-zero, no subscript or value is printed
  */
 
 static void print_scan(Sfio_t *file, int flag, Dt_t *root, int option,struct tdata *tp)
@@ -1566,7 +1573,7 @@ static void print_scan(Sfio_t *file, int flag, Dt_t *root, int option,struct tda
 	register int namec;
 	Namval_t *onp = 0;
 	char	*name=0;
-	int	len;
+	size_t	len;
 	sh.last_table=0;
 	flag &= ~NV_ASSIGN;
 	tp->scanmask = flag&~NV_NOSCOPE;

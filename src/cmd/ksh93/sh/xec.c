@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -71,7 +71,6 @@ static void	coproc_init(int pipes[]);
 static void	*timeout;
 static char	nlock;
 static char	pipejob;
-static int	restorefd;
 
 struct funenv
 {
@@ -212,9 +211,9 @@ static void l_time(Sfio_t *outfile, struct timeval *tv, int precision)
 	int sec = tv->tv_sec % 60;
 	int frac = tv->tv_usec;
 
-	/* scale fraction from micro to milli, centi, or deci second according to precision */
+	/* scale fraction according to precision */
 	int n;
-	for(n = 3 + (3 - precision); n > 0; --n)
+	for(n = (6 - precision); n > 0; --n)
 		frac /= 10;
 #else
 /* fallback */
@@ -225,7 +224,7 @@ static void l_time(Sfio_t *outfile,register clock_t t,int precision)
 	if(precision)
 	{
 		frac = t%sh.lim.clk_tck;
-		frac = (frac*100)/sh.lim.clk_tck;
+		frac = (frac*(int)pow(10,precision))/sh.lim.clk_tck;
 	}
 	t /= sh.lim.clk_tck;
 	sec = t%60;
@@ -266,11 +265,7 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 		if(c!='%')
 			continue;
 		unsigned char l_modifier = 0;
-#ifdef timeofday
 		int precision = 6;
-#else
-		int precision = 2;
-#endif
 
 		sfwrite(stkp, first, format-first);
 		c = *++format;
@@ -289,11 +284,7 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 		}
 		if(c>='0' && c <='9')
 		{
-#ifdef timeofday
 			precision = (c>'6')?6:(c-'0');
-#else
-			precision = (c>'2')?2:(c-'0');
-#endif
 			c = *++format;
 		}
 		if(c=='P')
@@ -312,7 +303,7 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 #else
 			if(d=tm[0])
 				d = 100.*(((double)(tm[1]+tm[2]))/d);
-			precision = 2;
+			precision = 6;
 			goto skip;
 #endif
 		}
@@ -344,9 +335,9 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 			l_time(stkp, tvp, precision);
 		else
 		{
-			/* scale fraction from micro to milli, centi, or deci second according to precision */
+			/* scale fraction according to precision */
 			int n, frac = tvp->tv_usec;
-			for(n = 6 + (6 - precision); n > 0; --n)
+			for(n = (6 - precision); n > 0; --n)
 				frac /= 10;
 			if(precision)
 				sfprintf(stkp, "%d%c%0*d", tvp->tv_sec, GETDECIMAL(0), precision, frac);
@@ -1318,6 +1309,25 @@ int sh_exec(register const Shnode_t *t, int flags)
 								}
 							else
 								type = (execflg && !sh.subshell && !sh.st.trapcom[0]);
+							/*
+							 * A command substitution will hang on exit, writing infinite '\0', if,
+							 * within it, standard output (FD 1) is redirected for a built-in command
+							 * that calls sh_subfork(), or redirected permanently using 'exec' or
+							 * 'redirect'. This forking workaround is necessary to avoid that bug.
+							 * For shared-state comsubs, forking is incorrect, so error out then.
+							 * TODO: actually fix the bug and remove this workaround.
+							 */
+							if((io->iofile & IOUFD)==1 && sh.subshell && sh.comsub)
+							{
+								if(!sh.subshare)
+									sh_subfork();
+								else if(type==2)  /* block stdout perma-redirects: would hang */
+								{
+									errormsg(SH_DICT,ERROR_exit(1),"cannot redirect stdout"
+												" inside shared-state comsub");
+									UNREACHABLE();
+								}
+							}
 							sh.redir0 = 1;
 							sh_redirect(io,type);
 							for(item=buffp->olist;item;item=item->next)
@@ -1328,7 +1338,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 							if(!sh.pwd)
 								path_pwd();
 							if(sh.pwd)
-								stat(".",&statb);
+								stat(e_dot,&statb);
 							sfsync(NULL);
 							share = sfset(sfstdin,SF_SHARE,0);
 							sh_onstate(SH_STOPOK);
@@ -1374,7 +1384,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 						bp->data = (void*)save_data;
 						if(sh.exitval && errno==EINTR && sh.lastsig)
 							sh.exitval = SH_EXITSIG|sh.lastsig;
-						else if(!nv_isattr(np,BLT_EXIT) && sh.exitval!=SH_RUNPROG)
+						else if(!nv_isattr(np,BLT_EXIT))
 							sh.exitval &= SH_EXITMASK;
 					}
 					else
@@ -1413,7 +1423,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 						if(sh.pwd)
 						{
 							struct stat stata;
-							stat(".",&stata);
+							stat(e_dot,&stata);
 							/* restore directory changed */
 							if(statb.st_ino!=stata.st_ino || statb.st_dev!=stata.st_dev)
 								chdir(sh.pwd);
@@ -1617,7 +1627,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 				}
 #endif /* SHOPT_BGX */
 				nv_getval(RANDNOD);
-				restorefd = sh.topfd;
 				if(type&FCOOP)
 				{
 					pipes[2] = 0;
@@ -1710,6 +1719,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 				struct ionod *iop;
 				int	rewrite=0;
 #if !SHOPT_DEVFD
+				char	*save_sh_fifo = sh.fifo;
 				if(sh.fifo_tree)
 				{
 					/* do not clean up process substitution FIFOs in child; parent handles this */
@@ -1749,8 +1759,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 					fn = sh_open(sh.fifo,fd?O_WRONLY:O_RDONLY);
 					save_errno = errno;
 					timerdel(fifo_timer);
-					unlink(sh.fifo);
-					free(sh.fifo);
 					sh.fifo = 0;
 					if(fn<0)
 					{
@@ -1825,6 +1833,13 @@ int sh_exec(register const Shnode_t *t, int flags)
 					path_exec(com0,com,t->com.comset);
 				}
 			done:
+#if !SHOPT_DEVFD
+				if(save_sh_fifo)
+				{
+					unlink(save_sh_fifo);
+					free(save_sh_fifo);
+				}
+#endif
 				sh_popcontext(&sh,buffp);
 				if(jmpval>SH_JMPEXIT)
 					siglongjmp(*sh.jmplist,jmpval);
@@ -2919,7 +2934,7 @@ pid_t _sh_fork(register pid_t parent,int flags,int *jobid)
 		{
 			/*
 			 * errno==EPERM means that an earlier processes
-			 * completed.  Make parent the job group id.
+			 * completed.  Make parent the job group ID.
 			 */
 			if(postid==0)
 				job.curpgid = parent;
@@ -3399,20 +3414,6 @@ int sh_fun(Namval_t *np, Namval_t *nq, char *argv[])
 		stakset(base,offset);
 	sh.prefix = prefix;
 	return(sh.exitval);
-}
-
-/*
- * This dummy routine is called by built-ins that do recursion
- * on the file system (chmod, chgrp, chown).  It causes
- * the shell to invoke the non-builtin version in this case
- */
-int cmdrecurse(int argc, char* argv[], int ac, char* av[])
-{
-	NOT_USED(argc);
-	NOT_USED(argv[0]);
-	NOT_USED(ac);
-	NOT_USED(av[0]);
-	return(SH_RUNPROG);
 }
 
 /*

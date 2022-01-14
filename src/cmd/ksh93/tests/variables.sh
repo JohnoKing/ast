@@ -1052,7 +1052,7 @@ $SHELL -c '
 	exit $((errors + 1))	# a possible erroneous asynchronous fork would cause exit status 0
 ' unset_test "$@"
 (((e = $?) == 1)) || err_exit "Failure in unsetting one or more special variables" \
-	"(exit status $e$( ((e>128)) && print -n / && kill -l "$e"))"
+	"(exit status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 
 # ... unset in virtual subshell inside of nested function
 $SHELL -c '
@@ -1082,7 +1082,7 @@ $SHELL -c '
 	exit $((errors + 1))	# a possible erroneous asynchronous fork would cause exit status 0
 ' unset_subsh_fun_test "$@"
 (((e = $?) == 1)) || err_exit "Unset of special variable(s) in a virtual subshell within a nested function fails" \
-	"(exit status $e$( ((e>128)) && print -n / && kill -l "$e"))"
+	"(exit status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 
 # ... readonly in subshell
 $SHELL -c '
@@ -1106,7 +1106,7 @@ $SHELL -c '
 	exit $((errors + 1))	# a possible erroneous asynchronous fork would cause exit status 0
 ' readonly_test "$@"
 (((e = $?) == 1)) || err_exit "Failure in making one or more special variables readonly in a subshell" \
-	"(exit status $e$( ((e>128)) && print -n / && kill -l "$e"))"
+	"(exit status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 
 # ... subshell leak test
 $SHELL -c '
@@ -1123,7 +1123,7 @@ $SHELL -c '
 	exit $((errors + 1))
 ' subshell_leak_test "$@"
 (((e = $?) == 1)) || err_exit "One or more special variables leak out of a subshell" \
-	"(exit status $e$( ((e>128)) && print -n / && kill -l "$e"))"
+	"(exit status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 
 # ... upper/lowercase test
 $SHELL -c '
@@ -1159,7 +1159,7 @@ $SHELL -c '
 	exit $((errors + 1))
 ' changecase_test "$@"
 (((e = $?) == 1)) || err_exit "typeset -l/-u doesn't work on special variables" \
-	"(exit status $e$( ((e>128)) && print -n / && kill -l "$e"))"
+	"(exit status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 
 # ... unset followed by launching a forked subshell
 $SHELL -c '
@@ -1176,7 +1176,7 @@ $SHELL -c '
 	exit $?
 ' unset_to_fork_test "$@"
 (((e = $?) == 1)) || err_exit "Failure in unsetting one or more special variables followed by launching forked subshell" \
-	"(exit status $e$( ((e>128)) && print -n / && kill -l "$e"))"
+	"(exit status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 
 # ======
 # Basic test for ${$var} to make sure it works

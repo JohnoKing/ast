@@ -1042,7 +1042,7 @@ function foo
 	typeset pid
 	$tmp1 > $tmp2 & pid=$!
 	wait $!
-	[[ $(< $tmp2) == $pid ]] || err_exit 'wrong pid for & job in function'
+	[[ $(< $tmp2) == $pid ]] || err_exit 'wrong PID for & job in function'
 }
 foo
 # make sure compiled functions work
@@ -1340,7 +1340,7 @@ cat >$tmp/crash_rhbz1117404.ksh <<-'EOF'
 EOF
 got=$( { "$SHELL" "$tmp/crash_rhbz1117404.ksh"; } 2>&1)
 ((!(e = $?))) || err_exit 'crash while handling function-local trap' \
-	"(got status $e$( ((e>128)) && print -n / && kill -l "$e"), $(printf %q "$got"))"
+	"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

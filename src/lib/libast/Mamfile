@@ -6240,11 +6240,6 @@ make install
 		done man/setenviron.3
 		exec - test '' = 'man/setenviron.3' || ${STDCMP} 2>/dev/null -s man/setenviron.3 ${INSTALLROOT}/man/man3/setenviron.3 || { ${STDMV} ${INSTALLROOT}/man/man3/setenviron.3 ${INSTALLROOT}/man/man3/setenviron.3.old 2>/dev/null || true; ${STDCP} man/setenviron.3 ${INSTALLROOT}/man/man3/setenviron.3 ;}
 	done ${INSTALLROOT}/man/man3/setenviron.3 generated
-	make ${INSTALLROOT}/man/man3/sfdisc.3
-		make man/sfdisc.3
-		done man/sfdisc.3
-		exec - test '' = 'man/sfdisc.3' || ${STDCMP} 2>/dev/null -s man/sfdisc.3 ${INSTALLROOT}/man/man3/sfdisc.3 || { ${STDMV} ${INSTALLROOT}/man/man3/sfdisc.3 ${INSTALLROOT}/man/man3/sfdisc.3.old 2>/dev/null || true; ${STDCP} man/sfdisc.3 ${INSTALLROOT}/man/man3/sfdisc.3 ;}
-	done ${INSTALLROOT}/man/man3/sfdisc.3 generated
 	make ${INSTALLROOT}/man/man3/sfio.3
 		make man/sfio.3
 		done man/sfio.3

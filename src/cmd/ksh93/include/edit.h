@@ -135,7 +135,9 @@ typedef struct edit
 	int	e_stkoff;	/* saved stack offset */
 	char	**e_clist;	/* completion list after <ESC>= */
 	int	e_nlist;	/* number of elements on completion list */
+#if SHOPT_ESH || SHOPT_VSH
 	int	e_multiline;	/* allow multiple lines for editing */
+#endif
 	int	e_winsz;	/* columns in window */ 
 	Edpos_t	e_curpos;	/* cursor line and column */
 	Namval_t *e_default;	/* variable containing default value */

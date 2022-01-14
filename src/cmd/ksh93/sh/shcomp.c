@@ -164,7 +164,9 @@ int main(int argc, char *argv[])
 		sh_onoption(SH_VERBOSE);
 	if(!dflag && !deparse)
 		sfwrite(out,header,sizeof(header));  /* write binary shcomp header */
+#if SHOPT_ESH || SHOPT_VSH
 	sh_offoption(SH_MULTILINE);
+#endif
 	sh.inlineno = 1;
 #if SHOPT_BRACEPAT
         sh_onoption(SH_BRACEEXPAND);

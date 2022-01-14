@@ -1162,7 +1162,7 @@ then	got=$( { "$SHELL" -c '
 		done
 	'; } 2>&1)
 	((!(e = $?))) || err_exit 'crash with alarm and IFS' \
-		"(got status $e$( ((e>128)) && print -n / && kill -l "$e"), $(printf %q "$got"))"
+		"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 fi
 
 # ======
@@ -1515,6 +1515,11 @@ if builtin tail 2> /dev/null; then
 	[[ $got == $exp ]] || err_exit "tail builtin fails to correctly handle files without an ending newline" \
 		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 fi
+
+# ======
+# ksh93v- accidentally broke the sleep builtin's support for
+# using microseconds in the form of <num>U.
+got=$(sleep 1U 2>&1) || err_exit "sleep builtin cannot handle microseconds in the form of <num>U (got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))
