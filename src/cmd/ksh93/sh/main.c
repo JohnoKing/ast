@@ -365,7 +365,7 @@ static void	exfile(register Sfio_t *iop,register int fno)
 	int maxtry=IOMAXTRY, tdone=0, execflags;
 	int states,jmpval;
 	struct checkpt buff;
-	sh_pushcontext(&sh,&buff,SH_JMPERREXIT);
+	sh_pushcontext(&buff,SH_JMPERREXIT);
 	/* open input stream */
 	nv_putval(SH_PATHNAMENOD, sh.st.filename, NV_NOFREE);
 	if(!iop)
@@ -600,7 +600,7 @@ static void	exfile(register Sfio_t *iop,register int fno)
 		}
 	}
 done:
-	sh_popcontext(&sh,&buff);
+	sh_popcontext(&buff);
 	if(sh_isstate(SH_INTERACTIVE))
 	{
 		if(isatty(0) && !sh_isoption(SH_CFLAG))

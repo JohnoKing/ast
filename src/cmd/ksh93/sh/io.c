@@ -1990,6 +1990,12 @@ static ssize_t slowread(Sfio_t *iop,void *buff,register size_t size,Sfdisc_t *ha
 				xp = 0;
 			}
 			r = hist_expand(buff, &xp);
+			if(r == HIST_PRINT && xp)
+			{
+				/* !event:p -- print history expansion without executing */
+				sfputr(sfstderr, xp, -1);
+				continue;
+			}
 			if((r & (HIST_EVENT|HIST_PRINT)) && !(r & HIST_ERROR) && xp)
 			{
 				strlcpy(buff, xp, size);

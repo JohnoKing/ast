@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -1214,6 +1214,28 @@ pid_t path_spawn(const char *opath,register char **argv, char **envp, Pathcomp_t
 		path = sp;
 	}
 #endif /* SHELLMAGIC */
+#if __CYGWIN__
+	/*
+	 * On Cygwin, execve(2) happily executes shell scripts without a #! path with /bin/sh (which is bash --posix).
+	 * However, ksh relies on execve(2) executing binaries or #! only, as it uses an ENOEXEC failure to decide
+	 * whether to fork and execute a #!-less shell script with a reinitialized copy of itself via exscript() below.
+	 * So, simulate that failure if the file is not a Windows executable or a script with a #! path.
+	 */
+	if((n = sh_open(opath,O_RDONLY,0)) >= 0)
+	{
+		uint16_t mz;
+		r = !(read(n,&mz,2)==2 && (mz==0x5A4D || mz==0x2123));  /* "MZ" or "#!" */
+		sh_close(n);
+	}
+	else
+		r = 0;
+	if(r)
+	{
+		pid = -1;
+		errno = ENOEXEC;
+	}
+	else
+#endif
 #if SHOPT_PFSH
 	if(spawn && !sh_isoption(SH_PFSH))
 		pid = _spawnveg(opath, &argv[0], envp, spawn>>1);

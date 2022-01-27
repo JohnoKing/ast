@@ -106,11 +106,11 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	if(mode= (*options==':'))
 		options++;
 	extended = *options=='\n' && *(options+1)=='[' || *options=='[' && *(options+1)=='-';
-	sh_pushcontext(&sh,&buff,1);
+	sh_pushcontext(&buff,1);
 	jmpval = sigsetjmp(buff.buff,0);
 	if(jmpval)
 	{
-		sh_popcontext(&sh,&buff);
+		sh_popcontext(&buff);
 		sh.st.opterror = 1;
 		if(r==0)
 			return(2);
@@ -199,7 +199,7 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	else
 		nv_putval(np, opt_info.arg, NV_RDONLY);
 	nv_close(np);
-	sh_popcontext(&sh,&buff);
+	sh_popcontext(&buff);
         opt_info.disc = 0;
 	return(r);
 }

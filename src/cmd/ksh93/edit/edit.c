@@ -1716,7 +1716,6 @@ static int ed_histlencopy(const char *cp, char *dp)
 					*dp++ = *oldcp++;
 			}
 		}
-		
 	}
 	return(n);
 }

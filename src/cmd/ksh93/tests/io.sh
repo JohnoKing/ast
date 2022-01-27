@@ -800,7 +800,12 @@ procsub_pid=$(
 	true >(true) <(true) >(true) <(true)
 	echo "$!"
 )
-sleep .1
+integer -s i=0
+while	kill -0 "$procsub_pid"	# on the Alpine Linux console (no GUI), these take about a second to disappear
+do	sleep .1
+	((++i > 10)) && break
+done 2>/dev/null
+unset i
 if kill -0 "$procsub_pid" 2>/dev/null; then
 	kill -TERM "$procsub_pid" # don't leave around what is effectively a zombie process
 	err_exit "process substitutions loop or linger after parent shell finishes"

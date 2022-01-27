@@ -294,11 +294,11 @@ static void	assign(Namval_t *np,const char* val,int flags,Namfun_t *handle)
 		block(bp,type);
 		if(bflag = (type==APPEND && !isblocked(bp,LOOKUPS)))
 			block(bp,LOOKUPS);
-		sh_pushcontext(&sh, &checkpoint, 1);
+		sh_pushcontext(&checkpoint, 1);
 		jmpval = sigsetjmp(checkpoint.buff, 0);
 		if(!jmpval)
 			sh_fun(nq,np,(char**)0);
-		sh_popcontext(&sh, &checkpoint);
+		sh_popcontext(&checkpoint);
 		if(sh.topfd != checkpoint.topfd)
 			sh_iorestore(checkpoint.topfd, jmpval);
 		unblock(bp,type);
@@ -410,11 +410,11 @@ static char*	lookup(Namval_t *np, int type, Sfdouble_t *dp,Namfun_t *handle)
 		}
 		block(bp,type);
 		block(bp, UNASSIGN);   /* make sure nv_setdisc doesn't invalidate 'vp' by freeing it */
-		sh_pushcontext(&sh, &checkpoint, 1);
+		sh_pushcontext(&checkpoint, 1);
 		jmpval = sigsetjmp(checkpoint.buff, 0);
 		if(!jmpval)
 			sh_fun(nq,np,(char**)0);
-		sh_popcontext(&sh, &checkpoint);
+		sh_popcontext(&checkpoint);
 		if(sh.topfd != checkpoint.topfd)
 			sh_iorestore(checkpoint.topfd, jmpval);
 		unblock(bp,UNASSIGN);

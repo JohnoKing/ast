@@ -2437,8 +2437,6 @@ static void table_unset(register Dt_t *root, int flags, Dt_t *oroot)
 					Sfdouble_t d = nv_getnum(nq);
 					nv_putval(nq,(char*)&d,NV_LDOUBLE);
 				}
-				else if(sh.test&4)
-					nv_putval(nq, sh_strdup(nv_getval(nq)), NV_RDONLY);
 				else
 					nv_putval(nq, nv_getval(nq), NV_RDONLY);
 				sh.subshell = subshell;
@@ -2569,7 +2567,6 @@ void	_nv_unset(register Namval_t *np,int flags)
 		up = np->nvalue.up;
 	else if(nv_isref(np) && !nv_isattr(np,NV_EXPORT|NV_MINIMAL) && np->nvalue.nrp)
 	{
-
 		if(np->nvalue.nrp->root && Refdict)
 			dtdelete(Refdict,(void*)np->nvalue.nrp);
 		if(np->nvalue.nrp->sub)

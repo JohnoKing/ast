@@ -1449,7 +1449,7 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 	 */
 	error_info.id = sh_strdup(sh.st.dolv[0]); /* error_info.id is $0 */
 	sh.jmpbuffer = (void*)&sh.checkbase;
-	sh_pushcontext(&sh,&sh.checkbase,SH_JMPSCRIPT);
+	sh_pushcontext(&sh.checkbase,SH_JMPSCRIPT);
 	sh.st.self = &sh.global;
         sh.topscope = (Shscope_t*)sh.st.self;
 	sh_offstate(SH_INIT);

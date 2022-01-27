@@ -309,7 +309,7 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 	sh.posix_fun = 0;
 	if(np || argv[1])
 		argsave = sh_argnew(argv,&saveargfor);
-	sh_pushcontext(&sh,&buff,SH_JMPDOT);
+	sh_pushcontext(&buff,SH_JMPDOT);
 	jmpval = sigsetjmp(buff.buff,0);
 	if(jmpval == 0)
 	{
@@ -324,7 +324,7 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 			sh_eval(iop,sh_isstate(SH_PROFILE)?SH_FUNEVAL:0);
 		}
 	}
-	sh_popcontext(&sh,&buff);
+	sh_popcontext(&buff);
 	if(buffer)
 		free(buffer);
 	if(!np)

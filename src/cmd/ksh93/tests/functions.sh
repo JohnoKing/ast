@@ -976,7 +976,6 @@ function _Dbg_print_frame
 
 function _Dbg_debug_trap_handler
 {
-
 	integer .level=.sh.level .max=.sh.level-1
 	while((--.level>=0))
 	do

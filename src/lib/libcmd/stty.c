@@ -597,7 +597,6 @@ static const Tty_t *lookup(const char *name)
 			return(&Ttable[i]);
 	}
 	return(0);
-
 }
 
 static const Tty_t *getspeed(unsigned long val)

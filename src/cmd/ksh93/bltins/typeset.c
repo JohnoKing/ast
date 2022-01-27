@@ -1324,7 +1324,7 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 	}
 	while(name = *argv++)
 	{
-		sh_pushcontext(&sh,&buff,1);
+		sh_pushcontext(&buff,1);
 		jmpval = sigsetjmp(buff.buff,0);
 		np = 0;
 		if(jmpval==0)
@@ -1336,7 +1336,7 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 #endif /* SHOPT_NAMESPACE */
 			np=nv_open(name,troot,NV_NOADD|nflag);
 		}
-		sh_popcontext(&sh,&buff);
+		sh_popcontext(&buff);
 		if(jmpval)
 		{
 			r = 1;
