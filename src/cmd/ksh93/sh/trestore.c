@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -195,7 +195,7 @@ static struct argnod *r_arg(void)
 		ap = (struct argnod*)stkfreeze(stkp,0);
 		if(*ap->argval==0 && (ap->argflag&ARG_EXP))
 			ap->argchn.ap = (struct argnod*)r_tree();
-		else if(*ap->argval==0 && (ap->argflag&~(ARG_APPEND|ARG_MESSAGE|ARG_QUOTED))==0)
+		else if(*ap->argval==0 && (ap->argflag&~(ARG_APPEND|ARG_MESSAGE|ARG_QUOTED|ARG_ARRAY))==0)
 		{
 			struct fornod *fp = (struct fornod*)getnode(fornod);
 			fp->fortyp = sfgetu(infile);

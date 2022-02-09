@@ -55,6 +55,10 @@
 #   include <sys/resource.h>
 #endif
 
+#if _lib_posix_spawn > 1 && _lib_posix_spawn_file_actions_addtcsetpgrp_np
+#define _use_ntfork_tcpgrp 1
+#endif
+
 #define SH_NTFORK	SH_TIMING
 #define NV_BLTPFSH	NV_ARRAY
 
@@ -1600,16 +1604,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 			&& !sh.st.trap[SH_ERRTRAP]
 			&& ((struct checkpt*)sh.jmplist)->mode!=SH_JMPEVAL
 			&& (execflg2 || (execflg && sh.fn_depth==0 && !(pipejob && sh_isoption(SH_PIPEFAIL))));
-			if(sh_isstate(SH_PROFILE) || sh.dot_depth)
-			{
-				/* disable foreground job monitor */
-				if(!(type&FAMP))
-					sh_offstate(SH_MONITOR);
-#if SHOPT_DEVFD
-				else if(!(type&FINT))
-					sh_offstate(SH_MONITOR);
-#endif /* SHOPT_DEVFD */
-			}
 			if(no_fork)
 				job.parent=parent=0;
 			else
@@ -1637,7 +1631,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 					fifo_save_ppid = sh.current_pid;
 #endif
 #if SHOPT_SPAWN
+#if _use_ntfork_tcpgrp
+				if(com)
+#else
 				if(com && !job.jobcontrol)
+#endif /* _use_ntfork_tcpgrp */
 				{
 					parent = sh_ntfork(t,com,&jobid,ntflag);
 					if(parent<0)
@@ -1674,7 +1672,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 					{
 						if(!(sh.sigflag[SIGINT]&(SH_SIGFAULT|SH_SIGOFF)))
 							sh_sigtrap(SIGINT);
-						sh.trapnote |= SH_SIGIGNORE;
+						sigblock(SIGINT);
 					}
 					if(sh.pipepid)
 						sh.pipepid = parent;
@@ -1689,11 +1687,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 					if(usepipe && tsetio && subdup && unpipe)
 						sh_iounpipe();
 					if(!sh_isstate(SH_MONITOR))
-					{
-						sh.trapnote &= ~SH_SIGIGNORE;
-						if(sh.exitval == (SH_EXITSIG|SIGINT))
-							kill(sh.current_pid,SIGINT);
-					}
+						sigrelease(SIGINT);
 				}
 				if(type&FAMP)
 				{
@@ -2520,7 +2514,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 				else
 				{
 					root = dtopen(&_Nvdisc,Dtoset);
-					dtuserdata(root,&sh,1);
 					nv_mount(np, (char*)0, root);
 					np->nvalue.cp = Empty;
 					dtview(root,sh.var_base);
@@ -2639,10 +2632,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 					if(!sh.fpathdict)
 						sh.fpathdict = dtopen(&_Rpdisc,Dtobag);
 					if(sh.fpathdict)
-					{
-						dtuserdata(sh.fpathdict,&sh,1);
 						dtinsert(sh.fpathdict,rp);
-					}
 				}
 			}
 			else
@@ -2835,9 +2825,11 @@ int sh_trace(register char *argv[], register int nl)
 			cp = "+ ";
 		else
 		{
+			sh.intrace = 1;
 			sh_offoption(SH_XTRACE);
 			cp = sh_mactry(cp);
 			sh_onoption(SH_XTRACE);
+			sh.intrace = 0;
 		}
 		if(*cp)
 			sfputr(sfstderr,cp,-1);
@@ -3424,7 +3416,7 @@ static void coproc_init(int pipes[])
 	int outfd;
 	if(sh.coutpipe>=0 && sh.cpid)
 	{
-		errormsg(SH_DICT,ERROR_exit(1),e_pexists);
+		errormsg(SH_DICT,ERROR_exit(1),e_copexists);
 		UNREACHABLE();
 	}
 	sh.cpid = 0;
@@ -3476,7 +3468,8 @@ static void sigreset(int mode)
 
 /*
  * A combined fork/exec for systems with slow fork().
- * Incompatible with job control on interactive shells (job.jobcontrol).
+ * Incompatible with job control on interactive shells (job.jobcontrol) if
+ * the system does not support posix_spawn_file_actions_addtcsetpgrp_np().
  */
 static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 {
@@ -3488,6 +3481,9 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 	char		**arge, *path;
 	volatile pid_t	grp = 0;
 	Pathcomp_t	*pp;
+#if _use_ntfork_tcpgrp
+	volatile int	jobwasset=0;
+#endif /* _use_ntfork_tcpgrp */
 	if(flag)
 	{
 		otype = savetype;
@@ -3552,8 +3548,21 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 		}
 		arge = sh_envgen();
 		sh.exitval = 0;
+#if _use_ntfork_tcpgrp
+		if(job.jobcontrol)
+		{
+			signal(SIGTTIN,SIG_DFL);
+			signal(SIGTTOU,SIG_DFL);
+			signal(SIGTSTP,SIG_DFL);
+			jobwasset++;
+		}
+#endif /* _use_ntfork_tcpgrp */
 #ifdef JOBS
+#if _use_ntfork_tcpgrp
+		if(sh_isstate(SH_MONITOR) && (job.jobcontrol || (otype&FAMP)))
+#else
 		if(sh_isstate(SH_MONITOR) && (otype&FAMP))
+#endif /* _use_ntfork_tcpgrp */
 		{
 			if((otype&FAMP) || job.curpgid==0)
 				grp = 1;
@@ -3614,6 +3623,17 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 	sh_popcontext(buffp);
 	if(buffp->olist)
 		free_list(buffp->olist);
+#if _use_ntfork_tcpgrp
+	if(jobwasset)
+	{
+		signal(SIGTTIN,SIG_IGN);
+		signal(SIGTTOU,SIG_IGN);
+		if(sh_isstate(SH_INTERACTIVE))
+			signal(SIGTSTP,SIG_IGN);
+		else
+			signal(SIGTSTP,SIG_DFL);
+	}
+#endif /* _use_ntfork_tcpgrp */
 	if(sigwasset)
 		sigreset(1);	/* restore ignored signals */
 	if(scope)

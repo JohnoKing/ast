@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -556,9 +556,11 @@ void nv_outnode(Namval_t *np, Sfio_t* out, int indent, int special)
 	Indent = indent;
 	if(ap)
 	{
+		sfputc(out,'(');
+		if(array_elem(ap)==0)
+			return;
 		if(!(ap->nelem&ARRAY_SCAN))
 			nv_putsub(np,NIL(char*),ARRAY_SCAN);
-		sfputc(out,'(');
 		if(indent>=0)
 		{
 			sfputc(out,'\n');
@@ -585,6 +587,9 @@ void nv_outnode(Namval_t *np, Sfio_t* out, int indent, int special)
 		tabs=0;
 		if(associative||special)
 		{
+			Namarr_t *aq;
+			if(mp && (aq=nv_arrayptr(mp)) && !aq->fun && array_elem(aq) < nv_aimax(mp)+1)
+				sfwrite(out,"typeset -a ",11);
 			if(!(fmtq = nv_getsub(np)))
 				break;
 			sfprintf(out,"[%s]",sh_fmtq(fmtq));
@@ -665,11 +670,12 @@ void nv_outnode(Namval_t *np, Sfio_t* out, int indent, int special)
 static void outval(char *name, const char *vname, struct Walk *wp)
 {
 	register Namval_t *np, *nq=0, *last_table=sh.last_table;
-        register Namfun_t *fp;
+	register Namfun_t *fp;
 	int isarray=0, special=0,mode=0;
+	Dt_t *root = wp->root?wp->root:sh.var_base;
 	if(*name!='.' || vname[strlen(vname)-1]==']')
 		mode = NV_ARRAY;
-	if(!(np=nv_open(vname,wp->root,mode|NV_VARNAME|NV_NOADD|NV_NOASSIGN|NV_NOFAIL|wp->noscope)))
+	if(!(np=nv_open(vname,root,mode|NV_VARNAME|NV_NOADD|NV_NOASSIGN|NV_NOFAIL|wp->noscope)))
 	{
 		sh.last_table = last_table;
 		return;
@@ -744,7 +750,9 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 	{
 		if(*name!='.')
 		{
+#if SHOPT_FIXEDARRAY
 			Namarr_t *ap;
+#endif
 			nv_attribute(np,wp->out,"typeset",'=');
 #if SHOPT_FIXEDARRAY
 			if((ap=nv_arrayptr(np)) && ap->fixed)

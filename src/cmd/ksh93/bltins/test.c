@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -83,7 +83,7 @@ static int e3(struct test*);
 
 static int test_strmatch(const char *str, const char *pat)
 {
-	regoff_t match[2*(MATCH_MAX+1)],n;
+	int match[2*(MATCH_MAX+1)],n;
 	register int c, m=0;
 	register const char *cp=pat; 
 	while(c = *cp++)
@@ -99,9 +99,9 @@ static int test_strmatch(const char *str, const char *pat)
 		match[0] = 0;
 	if(m >  elementsof(match)/2)
 		m = elementsof(match)/2;
-	n = strgrpmatch(str, pat, match, m, STR_GROUP|STR_MAXIMAL|STR_LEFT|STR_RIGHT);
+	n = strgrpmatch(str, pat, (ssize_t*)match, m, STR_GROUP|STR_MAXIMAL|STR_LEFT|STR_RIGHT|STR_INT);
 	if(m==0 && n==1)
-		match[1] = strlen(str);
+		match[1] = (int)strlen(str);
 	if(n)
 		sh_setmatch(str, -1, n, match, 0);
 	return(n);

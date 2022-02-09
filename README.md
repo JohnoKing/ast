@@ -19,25 +19,11 @@ $ foo='Intended result'
 $ echo ${$var}
 Intended result
 ```
-2. Extra keybinds have been added to the emacs and vi editing modes. These additions have been submitted upstream in [ksh93#410](https://github.com/ksh93/ksh/pull/410), but aren't merged yet.
-  * The following keybinds are added to both editing modes:
-    * Support for Haiku's arrow key sequences (`^[OA`, `^[OB`, etc.)
-    * Support for Home key sequences `^[[1~` and `^[[7~`
-    * Support for End key sequences `^[[4~` and `^[[8~`
-    * Ctrl-Left Arrow:	Go back one word
-    * Alt-Left Arrow:	Go back one word
-    * Ctrl-Right Arrow:	Go forward one word
-    * Alt-Right Arrow:	Go forward one word
-    * Ctrl-G:		End reverse search
-    * Ctrl-Delete:	Delete next word
-  * An insert keybind has also been added which functions differently in each mode:
-    * Insert (emacs):	Escape next character
-    * Insert (vi):	Switch to insert mode
-3. The prompt printed for emacs reverse search mode is now `? ` instead of `^R` (this will probably be refactored into a `$PS5` variable).
-4. Microsecond precision has been added to the `time` keyword and `times` builtin.
-5. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
-6. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
-7. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
+2. Microsecond precision has been added to the `time` keyword and `times` builtin.
+3. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
+4. The prompt printed for emacs reverse search mode is now `? ` instead of `^R` (this will probably be refactored into a `$PS5` variable).
+5. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
+6. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
   * `basename --multiple` as an alias for `basename -a`.
   * `cat --show-tabs` as an alias for `cat -T`.
   * `chgrp --no-dereference` as an alias for `chgrp -h`.
@@ -48,9 +34,9 @@ Intended result
   * `ln --symbolic` as an alias for `ln -s`.
   * `mv --symbolic` as an alias for `mv -s`. (GNU coreutils doesn't support `mv --symbolic`. It was added because `cp`, `ln` and `mv` share `optget` code.)
   * `rm --dir` as an alias for `rm -d`.
-8. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
-9. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
-10. All of the `/opt/ast/bin` builtins (excluding `vmstate` when compiling with standard malloc) can now be enabled by compiling with `-DSHOPT_ALL_AST_BUILTINS=1`.
+7. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
+8. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
+9. All of the `/opt/ast/bin` builtins (excluding `vmstate` when compiling with standard malloc) can now be enabled by compiling with `-DSHOPT_ALL_AST_BUILTINS=1`.
 
 # KornShell 93u+m
 
@@ -59,7 +45,7 @@ The sources in this repository were forked from the
 GitHub [AST repository](https://github.com/att/ast)
 which is no longer under active development.
 
-For user-visible fixes, see [NEWS](https://github.com/ksh93/ksh/blame/master/NEWS)
+For user-visible fixes, see [NEWS](https://github.com/ksh93/ksh/blame/dev/NEWS)
 and click on commit messages for full details.
 For all fixes, see [the commit log](https://github.com/ksh93/ksh/commits/).
 To see what's left to fix, see [the issue tracker](https://github.com/ksh93/ksh/issues).
@@ -91,7 +77,7 @@ Between 2017 and 2020 there was an ultimately unsuccessful
 [attempt](https://github.com/att/ast/tree/2020.0.1)
 to breathe new life into the KornShell by extensively refactoring the last
 unstable AST beta version (93v-).
-While that ksh2020 branch is now abandoned and still has many critical bugs,
+While that ksh2020 effort is now abandoned and still has many critical bugs,
 it also had a lot of bugs fixed. More importantly, the AST issue tracker
 now contains a lot of documentation on how to fix those bugs, which made
 it possible to backport many of them to the last stable release instead.
@@ -106,13 +92,15 @@ as well as many new fixes from the community
 [2](https://github.com/ksh93/ksh/issues?q=is%3Aissue+is%3Aclosed+label%3Abug)).
 Though there are many
 [bugs left to fix](https://github.com/ksh93/ksh/issues),
-we are confident at this point that 93u+m is already the least buggy branch
+we are confident at this point that 93u+m is already the least buggy version
 of ksh93 ever released.
+As of late 2021, distributions such as Debian and Slackware have begun
+to package it as their default version of ksh93.
 
 ## Build
 
 To build ksh with a custom configuration of features, edit
-[`src/cmd/ksh93/SHOPT.sh`](https://github.com/ksh93/ksh/blob/master/src/cmd/ksh93/SHOPT.sh).
+[`src/cmd/ksh93/SHOPT.sh`](https://github.com/ksh93/ksh/blob/dev/src/cmd/ksh93/SHOPT.sh).
 
 Then `cd` to the top directory and run:
 ```sh
@@ -140,6 +128,10 @@ to run the build scripts this way. For example:
 ```sh
 bin/package make SHELL=/bin/bash CCFLAGS="-O2 -I/opt/local/include" LDFLAGS="-L/opt/local/lib"
 ```
+
+**Note:** Do not add compiler flags that cause the compiler to emit terminal
+escape codes, such as `-fdiagnostics-color=always`; this will cause the
+build to fail as the probing code greps compiler diagnostics.
 
 For more information run
 ```sh

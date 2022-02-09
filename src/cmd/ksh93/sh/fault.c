@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -113,8 +113,6 @@ void	sh_fault(register int sig)
 	flag = sh.sigflag[sig]&~SH_SIGOFF;
 	if(!trap)
 	{
-		if(sig==SIGINT && (sh.trapnote&SH_SIGIGNORE))
-			return;
 		if(flag&SH_SIGIGNORE)
 		{
 			if(sh.subshell)
@@ -352,6 +350,8 @@ void	sh_sigreset(register int mode)
 		}
 		
 	}
+	if(sh.st.trapcom[0] && sh.st.trapcom[0] != Empty)
+		free(sh.st.trapcom[0]);
 	sh.st.trapcom[0] = 0;
 	if(mode)
 		sh.st.trapmax = 0;
@@ -386,7 +386,7 @@ void	sh_chktrap(void)
 {
 	register int 	sig=sh.st.trapmax;
 	register char *trap;
-	if(!(sh.trapnote&~SH_SIGIGNORE))
+	if(!sh.trapnote)
 		sig=0;
 	sh.trapnote &= ~SH_SIGTRAP;
 	/* execute errexit trap first */
@@ -413,7 +413,7 @@ void	sh_chktrap(void)
 		sh_timetraps();
 #if SHOPT_BGX
 	if((sh.sigflag[SIGCHLD]&SH_SIGTRAP) && sh.st.trapcom[SIGCHLD])
-		job_chldtrap(sh.st.trapcom[SIGCHLD],1);
+		job_chldtrap(1);
 #endif /* SHOPT_BGX */
 	while(--sig>=0)
 	{
@@ -585,6 +585,7 @@ void sh_exit(register int xno)
 	if(!pp)
 		sh_done(sig);
 	sh.arithrecursion = 0;
+	sh.intrace = 0;
 	sh.prefix = 0;
 #if SHOPT_TYPEDEF
 	sh.mktype = 0;

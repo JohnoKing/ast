@@ -20,8 +20,6 @@ options where no feature probe is available, probe is the same as off.
 
 The options have the following defaults and meanings:
 
-    2DMATCH      on  Two-dimensional ${.sh.match} for ${var//pat/str}.
-
     ACCT         off Shell accounting.
                      Noted by "L" in the version string when enabled.
                      See README-AUDIT.md.
@@ -191,6 +189,10 @@ run the build scripts this way. For example:
 
 	bin/package make SHELL=/bin/bash CCFLAGS="-O2 -I/opt/local/include" \
 		LDFLAGS="-L/opt/local/lib"
+
+Note: Do not add compiler flags that cause the compiler to emit terminal
+escape codes, such as -fdiagnostics-color=always; this will cause the build
+to fail as the probing code greps compiler diagnostics.
 
 For more information, run:
 

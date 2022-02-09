@@ -1,8 +1,8 @@
 iff AST_API
 
-ver ast 20220101
+ver ast 20220208
 
-api ast 20120528 regexec regnexec regrexec regsubexec strgrpmatch
+api ast 20120528 regexec regnexec regrexec regsubexec
 
 api ast 20120411 cmdopen
 

@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -219,7 +219,7 @@ static struct back_save	bck;
 typedef int (*Waitevent_f)(int,long,int);
 
 #if SHOPT_BGX
-void job_chldtrap(const char *trap, int unpost)
+void job_chldtrap(int unpost)
 {
 	register struct process *pw,*pwnext;
 	pid_t bckpid;
@@ -240,7 +240,9 @@ void job_chldtrap(const char *trap, int unpost)
 		sh.savexit = pw->p_exit;
 		if(pw->p_flag&P_SIGNALLED)
 			sh.savexit |= SH_EXITSIG;
-		sh_trap(trap,0);
+		/* The trap handler for SIGCHLD may change after sh_trap() because of
+		   'trap - CHLD', so it's obtained for each iteration of the loop. */
+		sh_trap(sh.st.trapcom[SIGCHLD],0);
 		if(pw->p_pid==bckpid && unpost)
 			job_unpost(pw,0);
 		sh.savexit = oldexit;
@@ -434,7 +436,7 @@ int job_reap(register int sig)
 				{
 					sh.sigflag[SIGCHLD] |= SH_SIGTRAP;
 					if(sig==0)
-						job_chldtrap(sh.st.trapcom[SIGCHLD],0);
+						job_chldtrap(0);
 					else
 						sh.trapnote |= SH_SIGTRAP;
 				}

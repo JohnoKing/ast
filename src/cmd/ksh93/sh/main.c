@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -142,8 +142,6 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 	}
 	sh.fn_depth = sh.dot_depth = 0;
 	command = error_info.id;
-	if(nv_isnull(PS4NOD))
-		nv_putval(PS4NOD,e_traceprompt,NV_RDONLY);
 	path_pwd();
 	iop = (Sfio_t*)0;
 	if(sh_isoption(SH_POSIX))
@@ -174,7 +172,6 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 				/* preset aliases for interactive non-POSIX ksh */
 				dtclose(sh.alias_tree);
 				sh.alias_tree = sh_inittree(shtab_aliases);
-				dtuserdata(sh.alias_tree,&sh,1);
 			}
 		}
 #if SHOPT_REMOTE
@@ -347,8 +344,27 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 		fixargs(sh.st.dolv,1);
 	}
 	if(sh_isoption(SH_INTERACTIVE))
+	{
 		sh_onstate(SH_INTERACTIVE);
+#if SHOPT_ESH
+		/* do not leave users without a line editor */
+		if(!sh_isoption(SH_GMACS)
+#if SHOPT_VSH
+		&& !sh_isoption(SH_VI)
+#endif /* SHOPT_VSH */
+		)
+			sh_onoption(SH_EMACS);
+#endif /* SHOPT_ESH */
+	}
+	/* (Re)set PS4 and IFS, but don't export these now even if allexport is on. */
+	i = (sh_isoption(SH_ALLEXPORT) != 0);
+	sh_offoption(SH_ALLEXPORT);
+	if(nv_isnull(PS4NOD))
+		nv_putval(PS4NOD,e_traceprompt,NV_RDONLY);
 	nv_putval(IFSNOD,(char*)e_sptbnl,NV_RDONLY);
+	if(i)
+		sh_onoption(SH_ALLEXPORT);
+	/* Start main execution loop. */
 	exfile(iop,fdin);
 	sh_done(0);
 }

@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -780,7 +780,7 @@ static void putstring(Emacs_t* ep,register char *sp)
 static int escape(register Emacs_t* ep,register genchar *out,int count)
 {
 	register int i,value;
-	int digit,ch;
+	int digit,ch,c,d;
 	digit = 0;
 	value = 0;
 	while ((i=ed_getchar(ep->ed,0)),digit(i))
@@ -1140,17 +1140,19 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 				 * ed_getchar() can only be run once on each character
 				 * and shouldn't be used on non-existent characters.
 				 */
-				if((ch = ed_getchar(ep->ed,1)) == '~')
+				ch = ed_getchar(ep->ed,1);
+				if(ch == '~')
 				{ /* Home key */
 					ed_ungetchar(ep->ed,cntl('A'));
 					return(-1);
 				}
 				else if(i == '1' && ch == ';')
 				{
-					ch = ed_getchar(ep->ed,1);
-					if(ch == '3' || ch == '5') /* 3 == Alt, 5 == Ctrl */
+					c = ed_getchar(ep->ed,1);
+					if(c == '3' || c == '5' || c == '9') /* 3 == Alt, 5 == Ctrl, 9 == iTerm2 Alt */
 					{
-						switch(ed_getchar(ep->ed,1))
+						d = ed_getchar(ep->ed,1);
+						switch(d)
 						{
 						    case 'D': /* Ctrl/Alt-Left arrow (go back one word) */
 							ch = 'b';
@@ -1159,18 +1161,26 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 							ch = 'f';
 							goto forward;
 						}
+						ed_ungetchar(ep->ed,d);
 					}
+					ed_ungetchar(ep->ed,c);
 				}
+				ed_ungetchar(ep->ed,ch);
 				ed_ungetchar(ep->ed,i);
 				return(-1);
 			    case '2': /* Insert key */
-				if(ed_getchar(ep->ed,1) == '~')
+				ch = ed_getchar(ep->ed,1);
+				if(ch == '~')
+				{
 					ed_ungetchar(ep->ed, cntl('V'));
-				else
-					ed_ungetchar(ep->ed,i);
+					return(-1);
+				}
+				ed_ungetchar(ep->ed,ch);
+				ed_ungetchar(ep->ed,i);
 				return(-1);
 			    case '3':
-				if((ch=ed_getchar(ep->ed,1))=='~')
+				ch = ed_getchar(ep->ed,1);
+				if(ch == '~')
 				{	/*
 					 * VT220 forward-delete key.
 					 * Since ERASECHAR and EOFCHAR are usually both mapped to ^D, we
@@ -1181,15 +1191,28 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 						ed_ungetchar(ep->ed,ERASECHAR);
 					return(-1);
 				}
-				else if(ch == ';' && ed_getchar(ep->ed,1) == '5' && ed_getchar(ep->ed,1) == '~')
-				{ /* Ctrl-Delete (delete next word) */
-					ch = 'd';
-					goto forward;
+				else if(ch == ';')
+				{
+					c = ed_getchar(ep->ed,1);
+					if(c == '5')
+					{
+						d = ed_getchar(ep->ed,1);
+						if(d == '~')
+						{
+							/* Ctrl-Delete (delete next word) */
+							ch = 'd';
+							goto forward;
+						}
+						ed_ungetchar(ep->ed,d);
+					}
+					ed_ungetchar(ep->ed,c);
 				}
+				ed_ungetchar(ep->ed,ch);
 				ed_ungetchar(ep->ed,i);
 				return(-1);
 			    case '5':  /* Haiku terminal Ctrl-Arrow key */
-				switch(ed_getchar(ep->ed,1))
+				ch = ed_getchar(ep->ed,1);
+				switch(ch)
 				{
 				    case 'D': /* Ctrl-Left arrow (go back one word) */
 					ch = 'b';
@@ -1198,15 +1221,18 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 					ch = 'f';
 					goto forward;
 				}
+				ed_ungetchar(ep->ed,ch);
 				ed_ungetchar(ep->ed,i);
 				return(-1);
 			    case '4':
 			    case '8': /* rxvt */
-				if(ed_getchar(ep->ed,1) == '~')
+				ch = ed_getchar(ep->ed,1);
+				if(ch == '~')
 				{
 					ed_ungetchar(ep->ed,cntl('E')); /* End key */
 					return(-1);
 				}
+				ed_ungetchar(ep->ed,ch);
 				/* FALLTHROUGH */
 			    default:
 				ed_ungetchar(ep->ed,i);

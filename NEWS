@@ -3,10 +3,106 @@ For full details, see the git log at: https://github.com/ksh93/ksh
 
 Any uppercase BUG_* names are modernish shell bug IDs.
 
+2022-02-08:
+
+- Multiple bugs were fixed in the method that ksh uses to execute a shell
+  script without a #! path. Among other things, custom types and other
+  changes in built-in commands will no longer affect the invoked script.
+  The state of the 'posix' option is now inherited by the script.
+
+- To avoid an inconsistent state, the 'enum' and 'typeset -T' commands are
+  no longer allowed to replace special built-in commands. For instance,
+  'enum trap=(a b c)' is now an error because 'trap' is a special built-in.
+  The ability of 'typeset -T' to redefine a type is not affected.
+
+- A command like 'typeset -T foo_t' without any assignment no longer creates
+  an incompletely defined 'foo_t' built-in comamnd that will crash the shell
+  when used. Instead, it is now silently ignored for backwards compatibility.
+
+- Compound arrays belonging to a type created with 'typeset -T' now have
+  their -C attribute preserved in the output of 'typeset -p'.
+
+- A bug has been fixed in which the 'typeset -p' output of a two-dimensional
+  sparse indexed array would cause the second subscript to be treated as an
+  associative array when read back in by the shell. Elements that are sparse
+  indexed arrays are now prefixed with "typeset -a".
+
+- The rewritten .sh.match code from ksh93v- has been backported to ksh93u+m,
+  fixing many bugs and improving performance by a considerable amount.
+
+2022-02-05:
+
+- Fixed: for indexed arrays, given an unset array member a[i] with i > 0,
+  ${a[i]=value} failed to assign the value and ${v[i]?error} failed to throw
+  an error.
+
+- Fixed: the -a/--allexport shell option incorrectly exported some variables
+  with names containing a dot to the environment. Note that the '-x' typeset
+  attribute may still be set for them, but this will now not have any
+  effect. Variables created in namespaces declared with the 'namespace'
+  keyword are only exported while their namespace is active.
+
+2022-02-04:
+
+- Fixed a bug in 'typeset -p': for an indexed array variable that is set
+  but empty, it will no longer output a nonexistent '[0]=' element.
+
+2022-02-02:
+
+- Fixed the -a/allexport option to export all variables that are assigned
+  values. Previously, arithmetic $((var=1)) or conditional ${var:=value}
+  assignments were not exported even with allexport on.
+
+- Fixed a memory leak that could occur when using traps.
+
+- Fixed a use after free issue that could occur when modifying or setting
+  a SIGCHLD trap.
+
+2022-02-01:
+
+- Upon invocation, the interactive shell no longer leaves the user without
+  a line editor if the VISUAL or EDITOR variable does not indicate emacs,
+  gmacs or vi; instead, it now turns on the emacs option by default.
+
+2022-01-31:
+
+- Improved keyboard support for the vi and emacs built-in line editors:
+  - Added support for Home key sequences ^[[1~ and ^[[7~ as well as End key
+    sequences ^[[4~ and ^[[8~.
+  - Added support for arrow key sequences ^[OA, ^[OB, ^[OC and ^[OD.
+  - Added support for the following keyboard shortcuts (if the platform
+    supports the expected escape sequence):
+    - Ctrl-Left Arrow:  Go back one word
+    - Alt-Left Arrow:   Go back one word        (Not supported on Haiku)
+    - Ctrl-Right Arrow: Go forward one word
+    - Alt-Right Arrow:  Go forward one word     (Not supported on Haiku)
+    - Ctrl-G:           Cancel reverse search
+    - Ctrl-Delete:      Delete next word        (Not supported on Haiku)
+  - Added a keybind for the Insert key, which differs in the emacs and vi
+    editing modes:
+    - In emacs mode, Insert escapes the next character.
+    - In vi mode, Insert will switch the editor to insert mode (like in vim).
+
+- Fixed a bug in SIGINT handling: if a script ran an external command that
+  interrupted itself (and only itself, not the process group) with SIGINT,
+  the script that ran the command was also interrupted.
+
+2022-01-28:
+
+- Fixed longstanding job control breakage that occurred on the interactive
+  shell when suspending (Ctrl+Z) an external command invoked by a dot script
+  or POSIX shell function, or via 'eval'.
+
+- Fixed a memory leak that occurred when running a command that was found on
+  the PATH.
+
 2022-01-26:
 
 - On Cygwin, ksh now executes scripts that do not have a #! path itself,
   like it does on other systems, instead of with /bin/sh.
+
+- Fixed a spurious syntax error which occurred when attempting to use array
+  subscript expansion with unset variables (i.e., ${foo[${bar}..${baz}]}).
 
 2022-01-24:
 
@@ -34,25 +130,6 @@ Any uppercase BUG_* names are modernish shell bug IDs.
 
 - Added bash-inspired --histreedit and --histverify options that modify history
   expansion (--histexpand), allowing editing on failure or before execution.
-
-- Added support for Home key sequences ^[[1~ and ^[[7~ as well as End key
-  sequences ^[[4~ and ^[[8~.
-
-- Added support for arrow key sequences ^[OA, ^[OB, ^[OC and ^[OD.
-
-- Added support for the following keyboard shortcuts (if the platform
-  supports the expected escape sequence):
-  - Ctrl-Left Arrow:  Go back one word
-  - Alt-Left Arrow:   Go back one word        (Not supported on Haiku)
-  - Ctrl-Right Arrow: Go forward one word
-  - Alt-Right Arrow:  Go forward one word     (Not supported on Haiku)
-  - Ctrl-G:           Cancel reverse search
-  - Ctrl-Delete:      Delete next word        (Not supported on Haiku)
-
-- Added a keybind for the Insert key, which differs in the emacs and vi
-  editing modes:
-  - In emacs mode, Insert escapes the next character.
-  - In vi mode, Insert will switch the editor to insert mode (like in vim).
 
 2022-01-04:
 
@@ -865,7 +942,7 @@ Any uppercase BUG_* names are modernish shell bug IDs.
   the parent environment was corrupted or the shell crashed.
   When a redirection was used in a DEBUG trap action, the trap was disabled.
   DEBUG traps were also incorrectly inherited by subshells and ksh functions.
-  All this was caused by a bug introduced in ksh 93t 2008-07-25.
+  All this was caused by a bug introduced in ksh 93t 2008-06-24.
 
 2021-01-22:
 
@@ -876,7 +953,7 @@ Any uppercase BUG_* names are modernish shell bug IDs.
 
 - Fixed: executing a DEBUG trap in a command substitution had side effects
   on the exit status ($?) of non-trap commands.
-  This bug was introduced in ksh 93t 2008-11-04.
+  This bug was introduced in ksh 93t 2008-09-21.
 
 - The typeset builtin command now gives an informative error message if an
   incompatible combination of options is given.

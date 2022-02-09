@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -552,7 +552,8 @@ compound -a b.ca
 b_t b.ca[4].b
 exp='typeset -C b=(typeset -C -a ca=( [4]=(b_t b=(a_t b=(a=hello))));)'
 got=$(typeset -p b)
-[[ $got == "$exp" ]] || err_exit 'typeset -p of nested type not correct'
+[[ $got == "$exp" ]] || err_exit 'typeset -p of nested type not correct' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 typeset -T u_t=(
 	integer dummy 
@@ -565,8 +566,9 @@ unset z
 u_t -a x | read z
 [[ $z == unset ]]  && err_exit 'unset discipline called on type creation'
 
-{ z=$($SHELL 2> /dev/null 'typeset -T foo; typeset -T') ;} 2> /dev/null
-[[ $z == 'typeset -T foo' ]] || err_exit '"typeset -T foo; typeset -T" failed'
+got=$("$SHELL" -c 'typeset -T foo; typeset -T' 2>&1)
+[[ -z $got ]] || err_exit '"typeset -T foo; typeset -T" exposed incomplete type builtin' \
+	"(got $(printf %q "$got"))"
 
 { z=$($SHELL 2> /dev/null 'typeset -T foo=bar; typeset -T') ;} 2> /dev/null
 [[ $z ]] && err_exit '"typeset -T foo=bar" should not creates type foo'
@@ -591,7 +593,7 @@ $SHELL << \EOF
 			 compound p=( hello=world )
 			 c.b.binsert p 1 $i
 		done
-		exp='typeset -C c=(board_t b=(typeset -a board_y=( [1]=(typeset -a board_x=( [0]=(field=(hello=world;))[1]=(field=(hello=world)));));))'
+		exp='typeset -C c=(board_t b=(typeset -C -a board_y=( [1]=(typeset -a board_x=( [0]=(field=(hello=world;))[1]=(field=(hello=world)));));))'
 		[[ $(typeset -p c) == "$exp" ]] || exit 1
 	}
 	main
@@ -634,6 +636,13 @@ bar.foo+=(bam)
 [[ ${bar.foo[0]} == bam ]] || err_exit 'appending to empty array variable in type does not create element 0'
 
 # ======
+# Compound arrays listed with 'typeset -p' should have their -C attribute
+# preserved in the output.
+typeset -T Z_t=(compound -a x)
+Z_t z
+[[ $(typeset -p z.x) ==  *'-C -a'* ]] || err_exit 'typeset -p for compound array element does not display all attributes'
+
+# ======
 # Type names that have 'a' as the first letter should be functional
 "$SHELL" -c 'typeset -T al=(typeset bar); al foo=(bar=testset)' || err_exit "type names that start with 'a' don't work"
 
@@ -656,6 +665,62 @@ exp='Subsh_t -a v=((typeset -i x=1) (typeset -i x=2) (typeset -i x=3))'
 [[ $got == "$exp" ]] || err_exit "bad typeset output for Subsh_t" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 PATH=/dev/null command -v Subsh_t >/dev/null && err_exit "Subsh_t leaked out of subshell"
+
+# ======
+# https://github.com/ksh93/ksh/issues/350#issuecomment-982168684
+got=$("$SHELL" -c 'typeset -T trap=( typeset -i i )' 2>&1)
+exp=': trap: is a special shell builtin'
+[[ $got == *"$exp" ]] || err_exit "typeset -T overrides special builtin" \
+	"(expected match of *$(printf %q "$exp"); got $(printf %q "$got"))"
+
+# ======
+# Bugs involving scripts without a #! path
+# Hashbangless scripts are execeuted in a reinitialised fork of ksh, which is very bug-prone.
+# https://github.com/ksh93/ksh/issues/350
+# Some of these fixed bugs don't involve types at all, but the tests need to go somewhere.
+# Plus, invoking these from an environment with a bunch of types defined is an additional test.
+: >|foo1
+: >|foo2
+chmod +x foo1 foo2
+
+enum _foo1_t=(VERY BAD TYPE)
+_foo1_t foo=BAD
+normalvar=BAD2
+cat >|foo1 <<-'EOF'
+	# no hashbang path here
+	echo "normalvar=$normalvar"
+	echo "foo=$foo"
+	PATH=/dev/null
+	typeset -p .sh.type
+	_foo1_t --version
+EOF
+./foo1 >|foo1.out 2>&1
+got=$(<foo1.out)
+exp=$'normalvar=\nfoo=\nnamespace sh.type\n{\n\t:\n}\n*: _foo1_t: not found'
+[[ $got == $exp ]] || err_exit "types survive exec of hashbangless script" \
+	"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
+
+if	builtin basename 2>/dev/null
+then	cat >|foo1 <<-'EOF'
+		PATH=/dev/null
+		basename --version
+	EOF
+	./foo1 >|foo1.out 2>&1
+	got=$(<foo1.out)
+	exp=': basename: not found'
+	[[ $got == *"$exp" ]] || err_exit "builtins survive exec of hashbangless script" \
+		"(expected match of *$(printf %q "$exp"), got $(printf %q "$got"))"
+fi
+
+echo $'echo start1\ntypeset -p a\n. ./foo2\necho end1' >| foo1
+echo $'echo start2\ntypeset -p a\necho end2' >| foo2
+unset a
+typeset -a a=(one two three)
+export a
+got=$(./foo1)
+exp=$'start1\ntypeset -x a=one\nstart2\ntypeset -x a=one\nend2\nend1'
+[[ $got == "$exp" ]] || err_exit 'exporting variable to #!-less script' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

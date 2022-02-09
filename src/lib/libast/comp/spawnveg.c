@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -32,12 +32,6 @@
 
 #include <ast.h>
 
-#if _lib_spawnveg
-
-NoN(spawnveg)
-
-#else
-
 #if _lib_posix_spawn > 1	/* reports underlying exec() errors */
 
 #include <spawn.h>
@@ -45,39 +39,59 @@ NoN(spawnveg)
 #include <wait.h>
 
 pid_t
-spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
+spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, int tcfd)
 {
-	int			err;
-	pid_t			pid;
-	posix_spawnattr_t	attr;
+	int				err, flags = 0;
+	pid_t				pid;
+	posix_spawnattr_t		attr;
+#if _lib_posix_spawn_file_actions_addtcsetpgrp_np
+	posix_spawn_file_actions_t	actions;
+#endif
 
 	if (err = posix_spawnattr_init(&attr))
 		goto nope;
-	if (pgid)
+#if POSIX_SPAWN_SETSID
+	if (pgid == -1)
+		flags |= POSIX_SPAWN_SETSID;
+#endif
+	if (pgid && pgid != -1)
+		flags |= POSIX_SPAWN_SETPGROUP;
+	if (flags && (err = posix_spawnattr_setflags(&attr, flags)))
+		goto bad;
+	if (pgid && pgid != -1)
 	{
 		if (pgid <= 1)
 			pgid = 0;
 		if (err = posix_spawnattr_setpgroup(&attr, pgid))
 			goto bad;
-		if (err = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP))
-			goto bad;
 	}
+#if _lib_posix_spawn_file_actions_addtcsetpgrp_np
+	if (tcfd >= 0)
+	{
+		if (err = posix_spawn_file_actions_init(&actions))
+			goto bad;
+		if (err = posix_spawn_file_actions_addtcsetpgrp_np(&actions, tcfd))
+			goto fail;
+	}
+	if (err = posix_spawn(&pid, path, (tcfd >= 0) ? &actions : NiL, &attr, argv, envv ? envv : environ))
+#else
 	if (err = posix_spawn(&pid, path, NiL, &attr, argv, envv ? envv : environ))
+#endif
 	{
 		if ((err != EPERM) || (err = posix_spawn(&pid, path, NiL, NiL, argv, envv ? envv : environ)))
-			goto bad;
+			goto fail;
 	}
-	posix_spawnattr_destroy(&attr);
-#if _lib_posix_spawn < 2
-	if (waitpid(pid, &err, WNOHANG|WNOWAIT) == pid && EXIT_STATUS(err) == 127)
-	{
-		while (waitpid(pid, NiL, 0) == -1 && errno == EINTR);
-		if (!access(path, X_OK))
-			errno = ENOEXEC;
-		pid = -1;
-	}
+#if _lib_posix_spawn_file_actions_addtcsetpgrp_np
+	if (tcfd >= 0)
+		posix_spawn_file_actions_destroy(&actions);
 #endif
+	posix_spawnattr_destroy(&attr);
 	return pid;
+ fail:
+#if _lib_posix_spawn_file_actions_addtcsetpgrp_np
+	if (tcfd >= 0)
+		posix_spawn_file_actions_destroy(&actions);
+#endif
  bad:
 	posix_spawnattr_destroy(&attr);
  nope:
@@ -99,8 +113,9 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
 #endif
 
 pid_t
-spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
+spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, int tcfd)
 {
+	NOT_USED(tcfd);
 #if defined(P_DETACH)
 	return spawnve(pgid ? P_DETACH : P_NOWAIT, path, argv, envv ? envv : environ);
 #else
@@ -119,10 +134,11 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
  */
 
 pid_t
-spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
+spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, int tcfd)
 {
 	struct inheritance	inherit;
 
+	NOT_USED(tcfd);
 	inherit.flags = 0;
 	if (pgid)
 	{
@@ -156,7 +172,7 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
  */
 
 pid_t
-spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
+spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, int tcfd)
 {
 #if _lib_fork || _lib_vfork
 	int			n;
@@ -171,6 +187,7 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
 #endif
 #endif
 
+	NOT_USED(tcfd);
 	if (!envv)
 		envv = environ;
 #if _lib_spawnve
@@ -216,11 +233,9 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
 #if _lib_tcgetpgrp
 			if (m)
 				tcsetpgrp(2, pgid);
-#else
-#ifdef TIOCSPGRP
+#elif defined(TIOCSPGRP)
 			if (m)
 				ioctl(2, TIOCSPGRP, &pgid);
-#endif
 #endif
 		}
 		execve(path, argv, envv);
@@ -285,8 +300,6 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid)
 	return -1;
 #endif
 }
-
-#endif
 
 #endif
 

@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -108,7 +108,7 @@ function m
 	x_t c.x[4][5][8].field
 	x_t x
 	typeset -m c.x[4][6][9].field=x
-	exp=$'(\n\ttypeset -C -a x=(\n\t\t[4]=(\n\t\t\t[5]=(\n\t\t\t\t[8]=(\n\t\t\t\t\tx_t field=(\n\t\t\t\t\t\thello=world\n\t\t\t\t\t)\n\t\t\t\t)\n\t\t\t)\n\t\t\t[6]=(\n\t\t\t\t[9]=(\n\t\t\t\t\tx_t field=(\n\t\t\t\t\t\thello=world\n\t\t\t\t\t)\n\t\t\t\t)\n\t\t\t)\n\t\t)\n\t)\n)'
+	exp=$'(\n\ttypeset -C -a x=(\n\t\ttypeset -a [4]=(\n\t\t\ttypeset -a [5]=(\n\t\t\t\t[8]=(\n\t\t\t\t\tx_t field=(\n\t\t\t\t\t\thello=world\n\t\t\t\t\t)\n\t\t\t\t)\n\t\t\t)\n\t\t\ttypeset -a [6]=(\n\t\t\t\t[9]=(\n\t\t\t\t\tx_t field=(\n\t\t\t\t\t\thello=world\n\t\t\t\t\t)\n\t\t\t\t)\n\t\t\t)\n\t\t)\n\t)\n)'
 	[[ $(print -v c) == "$exp" ]] || err_exit "typeset -m c.x[4][6][9].field=x where x is a type is not working"
 }
 m
@@ -152,4 +152,21 @@ then	if	[[ $(kill -l $exitval) == SEGV ]]
 	else	err_exit 'typeset -m "c.board[1][i]=el" gives wrong value'
 	fi
 fi
+
+function f2
+{
+	nameref mar=$1 exp=$2
+	typeset dummy x="-1a2b3c4d9u"
+	dummy="${x//~(E)([[:digit:]])|([[:alpha:]])/D}"
+	exp=${ print -v .sh.match;}
+	typeset -m "mar=.sh.match"
+}
+function f1
+{
+	typeset matchar exp
+	f2 matchar exp
+	[[ ${ print -v matchar;} == "$exp" ]] || err_exit 'moving .sh.match to a function local variable using a name reference fails'
+}
+f1
+
 exit $((Errors<125?Errors:125))

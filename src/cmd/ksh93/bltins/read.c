@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -802,11 +802,6 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 		}
 		while(1)
 		{
-			if(sh_isoption(SH_ALLEXPORT)&&!strchr(nv_name(np),'.') && !nv_isattr(np,NV_EXPORT))
-			{
-				nv_onattr(np,NV_EXPORT);
-				sh_envput(sh.env,np);
-			}
 			if(name)
 			{
 				nv_close(np);

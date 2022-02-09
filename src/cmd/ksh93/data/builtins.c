@@ -213,9 +213,8 @@ const struct shtable3 shtab_builtins[] =
 
 
 const char sh_set[] =
-"[a?Set the export attribute for each variable whose name does not "
-	"contain a \b.\b that you assign a value in the current shell "
-	"environment.]"
+"[a?All variables that are assigned a value while this option is on are "
+	"automatically exported, unless they have a dot in their name.]"
 "[b?The shell writes a message to standard error as soon it detects that "
 	"a background job completes rather than waiting until the next prompt.]"
 "[e?A simple command that has an non-zero exit status will cause the shell "
@@ -225,9 +224,8 @@ const char sh_set[] =
 	"[++?contained in the pipeline following \b!\b.]"
 "}"
 "[f?Pathname expansion is disabled.]"
-"[h?Obsolete.  Causes each command whose name has the syntax of an "
-	"alias to become a tracked alias when it is first encountered.]"
-"[k?This is obsolete.  All arguments of the form \aname\a\b=\b\avalue\a "
+"[h?Obsolete; no effect.]"
+"[k?All arguments of the form \aname\a\b=\b\avalue\a "
 	"are removed and placed in the variable assignment list for "
 	"the command.  Ordinarily, variable assignments must precede "
 	"command arguments.]"

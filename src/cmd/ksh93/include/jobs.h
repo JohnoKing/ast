@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -170,7 +170,7 @@ extern int	job_post(pid_t,pid_t);
 extern void	*job_subsave(void);
 extern void	job_subrestore(void*);
 #if SHOPT_BGX
-extern void	job_chldtrap(const char*,int);
+extern void	job_chldtrap(int);
 #endif /* SHOPT_BGX */
 #ifdef JOBS
 	extern void	job_init(int);

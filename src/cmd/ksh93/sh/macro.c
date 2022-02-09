@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -46,11 +46,6 @@
 #include	"national.h"
 #include	"streval.h"
 
-#undef STR_GROUP
-#ifndef STR_GROUP
-#   define STR_GROUP	0
-#endif
-
 #if _WINIX
     static int Skip;
 #endif /* _WINIX */
@@ -74,6 +69,7 @@ typedef struct  _mac_
 	char		arith;		/* set for ((...)) */
 	char		arrayok;	/* $x[] ok for arrays */
 	char		subcopy;	/* set when copying subscript */
+	char		macsub;		/* set to 1 when running mac_substitute */
 	int		dotdot;		/* set for .. in subscript */
 	void		*nvwalk;	/* for name space walking */
 } Mac_t;
@@ -97,7 +93,7 @@ typedef struct  _mac_
 #define M_EVAL		9	/* ${$var}	*/
 
 static noreturn void	mac_error(Namval_t*);
-static int	substring(const char*, const char*, int[], int);
+static int	substring(const char*, size_t, const char*, int[], int);
 static void	copyto(Mac_t*, int, int);
 static void	comsubst(Mac_t*, Shnode_t*, int);
 static int	varsub(Mac_t*);
@@ -439,6 +435,7 @@ static void copyto(register Mac_t *mp,int endch, int newquote)
 	int		ansi_c = 0;
 	int		paren = 0;
 	int		ere = 0;
+	int		dotdot = 0;
 	int		brace = 0;
 	Sfio_t		*sp = mp->sp;
 	Stk_t		*stkp = sh.stk;
@@ -844,7 +841,7 @@ static void copyto(register Mac_t *mp,int endch, int newquote)
 			{
 				sfwrite(stkp,first,c);
 				sfputc(stkp,0);
-				mp->dotdot = stktell(stkp);
+				dotdot = stktell(stkp);
 				cp = first = fcseek(c+2);
 			}
 			break;
@@ -852,6 +849,7 @@ static void copyto(register Mac_t *mp,int endch, int newquote)
 	}
 done:
 	mp->sp = sp;
+	mp->dotdot = dotdot;
 	mp->quote = oldquote;
 }
 
@@ -861,7 +859,22 @@ done:
 static void mac_substitute(Mac_t *mp, register char *cp,char *str,register int subexp[],int subsize)
 {
 	register int	c,n;
-	register char *first=cp;
+	register char *first=fcseek(0);
+	char		*ptr;
+	Mac_t		savemac;
+	n = stktell(sh.stk);
+	savemac = *mp;
+	mp->pattern = 3;
+	mp->split = 0;
+	mp->macsub++;
+	fcsopen(cp);
+	copyto(mp,0,0);
+	sfputc(sh.stk,0);
+	ptr = cp = sh_strdup(stkptr(sh.stk,n));
+	stkseek(sh.stk,n);
+	*mp = savemac;
+	fcsopen(first);
+	first = cp;
 	while(1)
 	{
 		while((c= *cp++) && c!=ESCAPE);
@@ -889,6 +902,7 @@ static void mac_substitute(Mac_t *mp, register char *cp,char *str,register int s
 	}
 	if(n=cp-first-1)
 		mac_copy(mp,first,n);
+	free(ptr);
 }
 
 #if  SHOPT_FILESCAN
@@ -1309,27 +1323,22 @@ retry1:
 			if(c=='=' || (c==':' && d=='='))
 				flag |= NV_ASSIGN;
 			flag &= ~NV_NOADD;
+			sh.cond_expan = 1;	/* tell nv_putsub() not to change value from null to empty */
+			np = nv_open(id,sh.var_tree,flag|NV_NOFAIL);
+			sh.cond_expan = 0;
 		}
 #if  SHOPT_FILESCAN
-		if(sh.cur_line && *id=='R' && strcmp(id,"REPLY")==0)
+		else if(sh.cur_line && strcmp(id,REPLYNOD->nvname)==0)
 		{
 			sh.argaddr=0;
 			np = REPLYNOD;
 		}
-		else
 #endif  /* SHOPT_FILESCAN */
+		else
 		{
 			if(sh.argaddr)
 				flag &= ~NV_NOADD;
-			/*
-			 * Get a node pointer (np) to the parameter, if any.
-			 */
 			np = nv_open(id,sh.var_tree,flag|NV_NOFAIL);
-			if(!np)
-			{
-				sfprintf(sh.strbuf,"%s%c",id,0);
-				id = sfstruse(sh.strbuf);
-			}
 
 			/* handle ${$var} */
 			if(type==M_EVAL && np && (v=nv_getval(np)))
@@ -1356,6 +1365,12 @@ retry1:
 				} else
 					np = nv_open(v,sh.var_tree,flag|NV_NOFAIL);
 			}
+		}
+		if(!np)
+		{
+			/* id points to stack, which will be overwritten; save it for error message */
+			sfputr(sh.strbuf,id,-1);
+			id = sfstruse(sh.strbuf);
 		}
 		if(isastchar(mode))
 			var = 0;
@@ -1392,7 +1407,7 @@ retry1:
 					ap = nv_arrayptr(np=nq);
 				if(ap)
 				{
-					nv_putsub(np,v,ARRAY_SCAN);
+					np = nv_putsub(np,v,ARRAY_SCAN);
 					v = stkptr(stkp,mp->dotdot);
 					dolmax =1;
 					if(array_assoc(ap))
@@ -1832,22 +1847,7 @@ skip:
 		}
 		pattern = sh_strdup(argp);
 		if((type=='/' || c=='/') && (repstr = mac_getstring(pattern)))
-		{
-			Mac_t	savemac;
-			char	*first = fcseek(0);
-			int	n = stktell(stkp);
-			savemac = *mp;
-			fcsopen(repstr);
-			mp->pattern = 3;
-			mp->split = 0;
-			copyto(mp,0,0);
-			sfputc(stkp,0);
-			repstr = sh_strdup(stkptr(stkp,n));
 			replen = strlen(repstr);
-			stkseek(stkp,n);
-			*mp = savemac;
-			fcsopen(first);
-		}
 		if(v || c=='/' && offset>=0)
 			stkseek(stkp,offset);
 	}
@@ -1858,29 +1858,30 @@ retry2:
 	if(v && (!nulflg || *v ) && c!='+')
 	{
 		int ofs_size = 0;
-		regoff_t match[2*(MATCH_MAX+1)];
-		int nmatch, nmatch_prev, vsize_last;
-		char *vlast = NIL(char*);
+		int match[2*(MATCH_MAX+1)],index;
+		int nmatch, nmatch_prev, vsize_last, tsize;
+		char *vlast = NIL(char*), *oldv;
 		while(1)
 		{
 			if(!v)
 				v= "";
 			if(c=='/' || c=='#' || c== '%')
 			{
-				int index = 0;
 				flag = (type || c=='/')?(STR_GROUP|STR_MAXIMAL):STR_GROUP;
 				if(c!='/')
 					flag |= STR_LEFT;
-				nmatch = 0;
+				index = nmatch = 0;
+				tsize = (int)strlen(v);
 				while(1)
 				{
-					vsize = strlen(v);
+					vsize = tsize;
+					oldv = v;
 					nmatch_prev = nmatch;
 					if(c=='%')
-						nmatch=substring(v,pattern,match,flag&STR_MAXIMAL);
+						nmatch=substring(v,tsize,pattern,match,flag&STR_MAXIMAL);
 					else
-						nmatch=strgrpmatch(v,pattern,match,elementsof(match)/2,flag);
-					if(nmatch && replen>0)
+						nmatch=strngrpmatch(v,vsize,pattern,(ssize_t*)match,elementsof(match)/2,flag|STR_INT);
+					if(nmatch && repstr && !mp->macsub)
 						sh_setmatch(v,vsize,nmatch,match,index++);
 					if(nmatch)
 					{
@@ -1907,13 +1908,16 @@ retry2:
 							mac_copy(mp,v,1);
 							v++;
 						}
+						tsize -= v-oldv;
 						continue;
 					}
 					vsize = -1;
 					break;
 				}
-				if(replen==0)
+				if(!mp->macsub && (!repstr || (nmatch==0 && index==0)))
 					sh_setmatch(vlast,vsize_last,nmatch,match,index++);
+				if(!mp->macsub && index>0 && c=='/' && type)
+					sh_setmatch(0,0,nmatch,0,-1);
 			}
 			if(vsize)
 				mac_copy(mp,v,vsize>0?vsize:strlen(v));
@@ -2080,8 +2084,6 @@ retry2:
 		nv_close(np);
 	if(pattern)
 		free(pattern);
-	if(repstr)
-		free(repstr);
 	if(idx)
 		free(idx);
 	return(1);
@@ -2305,10 +2307,8 @@ static void comsubst(Mac_t *mp,register Shnode_t* t, int type)
 			str[c] = 0;
 		else
 		{
-			ssize_t len = 1;
-
 			/* can't write past buffer so save last character */
-			c -= len;
+			c -= 1;
 			lastc = str[c];
 			str[c] = 0;
 		}
@@ -2572,27 +2572,27 @@ static void endfield(register Mac_t *mp,int split)
  * Finds the right substring of STRING using the expression PAT
  * the longest substring is found when FLAG is set.
  */
-static int substring(register const char *string,const char *pat,int match[], int flag)
+static int substring(register const char *string,size_t len,const char *pat,int match[], int flag)
 {
 	register const char *sp=string;
-	register int size,len,nmatch,n;
+	register int size,nmatch,n;
 	int smatch[2*(MATCH_MAX+1)];
 	if(flag)
 	{
-		if(n=strgrpmatch(sp,pat,smatch,elementsof(smatch)/2,STR_RIGHT|STR_MAXIMAL))
+		if(n=strngrpmatch(sp,len,pat,(ssize_t*)smatch,elementsof(smatch)/2,STR_RIGHT|STR_MAXIMAL|STR_INT))
 		{
 			memcpy(match,smatch,n*2*sizeof(smatch[0]));
 			return(n);
 		}
 		return(0);
 	}
-	size = len = strlen(sp);
+	size = (int)len;
 	sp += size;
 	while(sp>=string)
 	{
 		if(mbwide())
 			sp = lastchar(string,sp);
-		if(n=strgrpmatch(sp,pat,smatch,elementsof(smatch)/2,STR_RIGHT|STR_LEFT|STR_MAXIMAL))
+		if(n=strgrpmatch(sp,pat,(ssize_t*)smatch,elementsof(smatch)/2,STR_RIGHT|STR_LEFT|STR_MAXIMAL|STR_INT))
 		{
 			nmatch = n;
 			memcpy(match,smatch,n*2*sizeof(smatch[0]));
@@ -2767,10 +2767,7 @@ static char *sh_tilde(register const char *string)
 skip:
 #endif /* _WINIX */
 	if(!logins_tree)
-	{
 		logins_tree = dtopen(&_Nvdisc,Dtbag);
-		dtuserdata(logins_tree,&sh,1);
-	}
 	if(np=nv_search(string,logins_tree,NV_ADD))
 	{
 		save = sh.subshell;

@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -209,10 +209,7 @@ int    b_eval(int argc,char *argv[], Shbltin_t *context)
 	}
 	argv += opt_info.index;
 	if(*argv && **argv)
-	{
-		sh_offstate(SH_MONITOR);
 		sh_eval(sh_sfeval(argv),0);
-	}
 	return(sh.exitval);
 }
 

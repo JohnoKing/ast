@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -120,6 +120,7 @@ struct argnod
 #define ARG_QUOTED	0x20	/* word contained quote characters */
 #define ARG_MESSAGE	0x40	/* contains international string */
 #define ARG_APPEND	0x80	/* for += assignment */
+#define ARG_ARRAY	0x2	/* for typeset -a */
 /* The following can be passed as options to sh_macexpand() */
 #define ARG_ARITH	0x100	/* arithmetic expansion */
 #define ARG_OPTIMIZE	0x200	/* try to optimize */

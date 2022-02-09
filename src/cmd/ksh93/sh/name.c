@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -289,8 +289,6 @@ void nv_setlist(register struct argnod *arg,register int flags, Namval_t *typ)
 		flags |= NV_NOSCOPE;
 #endif /* SHOPT_NAMESPACE */
 	flags &= ~(NV_TYPE|NV_ARRAY|NV_IARRAY);
-	if(sh_isoption(SH_ALLEXPORT))
-		flags |= NV_EXPORT;
 	if(sh.prefix)
 	{
 		flags &= ~(NV_IDENT|NV_EXPORT);
@@ -310,17 +308,26 @@ void nv_setlist(register struct argnod *arg,register int flags, Namval_t *typ)
 		else
 		{
 			stakseek(0);
-			if(*arg->argval==0 && arg->argchn.ap && !(arg->argflag&~(ARG_APPEND|ARG_QUOTED|ARG_MESSAGE)))
+			if(*arg->argval==0 && arg->argchn.ap && !(arg->argflag&~(ARG_APPEND|ARG_QUOTED|ARG_MESSAGE|ARG_ARRAY)))
 			{
 				int flag = (NV_VARNAME|NV_ARRAY|NV_ASSIGN);
 				int sub=0;
 				struct fornod *fp=(struct fornod*)arg->argchn.ap;
 				register Shnode_t *tp=fp->fortre;
 				flag |= (flags&(NV_NOSCOPE|NV_STATIC|NV_FARRAY));
+				if(arg->argflag&ARG_ARRAY)
+					array |= NV_IARRAY;
 				if(arg->argflag&ARG_QUOTED)
 					cp = sh_mactrim(fp->fornam,-1);
 				else
 					cp = fp->fornam;
+				/* Do not allow 'typeset -T' to override special built-ins -- however, exclude
+				 * previously created type commands from this search as that is handled elsewhere. */
+				if(maketype && (np=nv_search(cp,sh.bltin_tree,0)) && nv_isattr(np,BLT_SPC) && !nv_search(cp,sh.typedict,0))
+				{
+					errormsg(SH_DICT,ERROR_exit(1),"%s:%s",cp,is_spcbuiltin);
+					UNREACHABLE();
+				}
 				error_info.line = fp->fortyp-sh.st.firstline;
 				if(!array && tp->tre.tretyp!=TLST && tp->com.comset && !tp->com.comarg && tp->com.comset->argval[0]==0 && tp->com.comset->argval[1]=='[')
 					array |= (tp->com.comset->argflag&ARG_MESSAGE)?NV_IARRAY:NV_ARRAY;
@@ -811,7 +818,6 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 				{
 					Dt_t *dp = dtview(sh.var_tree,(Dt_t*)0);
 					rp->sdict = dtopen(&_Nvdisc,Dtoset);
-					dtuserdata(rp->sdict,&sh,1);
 					dtview(rp->sdict,dp);
 					dtview(sh.var_tree,rp->sdict);
 				}
@@ -1164,10 +1170,7 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 								ap = nv_arrayptr(np);
 							}
 							if(n && ap && !ap->table)
-							{
 								ap->table = dtopen(&_Nvdisc,Dtoset);
-								dtuserdata(ap->table,&sh,1);
-							}
 							if(ap && ap->table && (nq=nv_search(sub,ap->table,n)))
 								nq->nvenv = (char*)np;
 							if(nq && nv_isnull(nq))
@@ -1623,7 +1626,12 @@ void nv_putval(register Namval_t *np, const char *string, int flags)
 	sh.argaddr = 0;
 	if(sh.subshell && !nv_local && !(flags&NV_RDONLY))
 		np = sh_assignok(np,1);
-
+	/* Export the variable if 'set -o allexport' is enabled */
+	if(sh_isoption(SH_ALLEXPORT))
+	{
+		flags |= NV_EXPORT;
+		nv_onattr(np,NV_EXPORT);
+	}
 	if(np->nvfun && np->nvfun->disc && !(flags&NV_NODISC) && !nv_isref(np))
 	{
 		/* This function contains disc */
@@ -2200,10 +2208,15 @@ static void attstore(register Namval_t *np, void *data)
 	ap->attval = strcopy(++ap->attval,nv_name(np));
 }
 
+/*
+ * Called from sh_envgen() to push an individual variable to export
+ */
 static void pushnam(Namval_t *np, void *data)
 {
 	register char *value;
 	register struct adata *ap = (struct adata*)data;
+	if(strchr(np->nvname,'.'))
+		return;
 	ap->tp = 0;
 	if(nv_isattr(np,NV_IMPORT) && np->nvenv)
 		*ap->argnam++ = np->nvenv;
@@ -2216,7 +2229,6 @@ static void pushnam(Namval_t *np, void *data)
 /*
  * Generate the environment list for the child.
  */
-
 char **sh_envgen(void)
 {
 	register char **er;
@@ -2346,7 +2358,6 @@ void sh_scope(struct argnod *envlist, int fun)
 		newroot = nv_dict(sh.namespace);
 #endif /* SHOPT_NAMESPACE */
 	newscope = dtopen(&_Nvdisc,Dtoset);
-	dtuserdata(newscope,&sh,1);
 	if(envlist)
 	{
 		dtview(newscope,(Dt_t*)sh.var_tree);
@@ -2374,8 +2385,8 @@ void sh_scope(struct argnod *envlist, int fun)
 
 void	sh_envnolocal (register Namval_t *np, void *data)
 {
+	char *cp = 0, was_export = nv_isattr(np,NV_EXPORT)!=0;
 	NOT_USED(data);
-	char *cp=0;
 	if(np==VERSIONNOD && nv_isref(np))
 		return;
 	if(np==L_ARGNOD)
@@ -2410,6 +2421,8 @@ void	sh_envnolocal (register Namval_t *np, void *data)
 		nv_putval(np,cp,0);
 		free((void*)cp);
 	}
+	if(was_export)
+		nv_onattr(np,NV_EXPORT);
 }
 
 /*
@@ -3336,10 +3349,7 @@ int nv_rename(register Namval_t *np, int flags)
 		if(ap=nv_arrayptr(np))
 		{
 			if(!ap->table)
-			{
 				ap->table = dtopen(&_Nvdisc,Dtoset);
-				dtuserdata(ap->table,&sh,1);
-			}
 			if(ap->table)
 				mp = nv_search(nv_getsub(np),ap->table,NV_ADD);
 			nv_arraychild(np,mp,0);
@@ -3347,7 +3357,28 @@ int nv_rename(register Namval_t *np, int flags)
 		}
 		else
 			mp = np;
-		nv_clone(nr,mp,(flags&NV_MOVE)|NV_COMVAR);
+		if(nr==SH_MATCHNOD)
+		{
+			Sfio_t *iop;
+			Dt_t *save_root = sh.var_tree;
+			int trace = sh_isoption(SH_XTRACE);
+			sfprintf(sh.strbuf,"typeset -a %s=",nv_name(mp));
+			nv_outnode(nr,sh.strbuf,-1,0);
+			sfwrite(sh.strbuf,")\n",2);
+			cp = sfstruse(sh.strbuf);
+			iop = sfopen((Sfio_t*)0,cp,"s");
+			if(trace)
+				sh_offoption(SH_XTRACE);
+			sh.var_tree = last_root;
+			sh_eval(iop,SH_READEVAL);
+			sh.var_tree = save_root;
+			if(trace)
+				sh_onoption(SH_XTRACE);
+			if(flags&NV_MOVE)
+				sh_setmatch(0,0,0,0,0);
+		}
+		else
+			nv_clone(nr,mp,(flags&NV_MOVE)|NV_COMVAR);
 		mp->nvenv = nvenv;
 		if(flags&NV_MOVE)
 		{
@@ -3624,6 +3655,8 @@ char *nv_name(register Namval_t *np)
 #endif /* SHOPT_NAMESPACE */
 		return(np->nvname);
 	}
+	if(!np->nvname)
+		goto skip;
 #if SHOPT_FIXEDARRAY
 	ap = nv_arrayptr(np);
 #endif /* SHOPT_FIXEDARRAY */
@@ -3643,6 +3676,7 @@ char *nv_name(register Namval_t *np)
 		sh.last_table = nv_parent(np);
 	else if(!nv_isref(np))
 	{
+	skip:
 		for(fp= np->nvfun ; fp; fp=fp->next)
 		if(fp->disc && fp->disc->namef)
 		{
