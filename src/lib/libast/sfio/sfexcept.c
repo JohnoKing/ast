@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -34,9 +34,9 @@ int _sfexcept(Sfio_t*	f,	/* stream where the exception happened */
 	reg int		ev, local, lock;
 	reg ssize_t	size;
 	reg uchar*	data;
-	SFMTXDECL(f); /* declare a local stream variable for multithreading */
 
-	SFMTXENTER(f,-1);
+	if(!f)
+		return -1;
 
 	GETLOCAL(f,local);
 	lock = f->mode&SF_LOCK;
@@ -58,18 +58,18 @@ int _sfexcept(Sfio_t*	f,	/* stream where the exception happened */
 			SFLOCK(f,0);
 
 		if(io > 0 && !(f->flags&SF_STRING) )
-			SFMTXRETURN(f, ev);
+			return ev;
 		if(ev < 0)
-			SFMTXRETURN(f, SF_EDONE);
+			return SF_EDONE;
 		if(ev > 0)
-			SFMTXRETURN(f, SF_EDISC);
+			return SF_EDISC;
 	}
 
 	if(f->flags&SF_STRING)
 	{	if(type == SF_READ)
 			goto chk_stack;
 		else if(type != SF_WRITE && type != SF_SEEK)
-			SFMTXRETURN(f, SF_EDONE);
+			return SF_EDONE;
 		if(local && io >= 0)
 		{	if(f->size >= 0 && !(f->flags&SF_MALLOC))
 				goto chk_stack;
@@ -89,18 +89,18 @@ int _sfexcept(Sfio_t*	f,	/* stream where the exception happened */
 			f->endr = f->endw = f->data = data;
 			f->size = size;
 		}
-		SFMTXRETURN(f, SF_EDISC);
+		return SF_EDISC;
 	}
 
 	if(errno == EINTR)
 	{	if(_Sfexiting || (f->bits&SF_ENDING) ||	/* stop being a hero	*/
 		   (f->flags&SF_IOINTR) ) /* application requests to return	*/
-			SFMTXRETURN(f, SF_EDONE);
+			return SF_EDONE;
 
 		/* a normal interrupt, we can continue */
 		errno = 0;
 		f->flags &= ~(SF_EOF|SF_ERROR);
-		SFMTXRETURN(f, SF_ECONT);
+		return SF_ECONT;
 	}
 
 chk_stack:
@@ -125,5 +125,5 @@ chk_stack:
 	}
 	else	ev = SF_EDONE;
 
-	SFMTXRETURN(f, ev);
+	return ev;
 }

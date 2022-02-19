@@ -393,14 +393,12 @@ int    b_typeset(int argc,register char *argv[],Shbltin_t *context)
 			case 'r':
 				flag |= NV_RDONLY;
 				break;
-#if SHOPT_TYPEDEF
 			case 'S':
 				sflag=1;
 				break;
 			case 'h':
 				tdata.help = opt_info.arg;
 				break;
-#endif /* SHOPT_TYPEDEF */
 			case 's':
 				if(!isfloat)
 				{
@@ -851,7 +849,6 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 			if(flag&NV_MOVE)
 			{
 				nv_rename(np, flag);
-				nv_close(np);
 				continue;
 			}
 			if(tp->tp && nv_type(np)!=tp->tp)
@@ -960,7 +957,6 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 				else
 					nv_unref(np);
 			}
-			nv_close(np);
 		}
 	}
 	else
@@ -1142,13 +1138,6 @@ int	b_builtin(int argc,char *argv[],Shbltin_t *context)
 			errormsg(SH_DICT,ERROR_exit(1),e_restricted,argv[-opt_info.index]);
 			UNREACHABLE();
 		}
-#if SHOPT_PFSH
-		if(sh_isoption(SH_PFSH))
-		{
-			errormsg(SH_DICT,ERROR_exit(1),e_pfsh,argv[-opt_info.index]);
-			UNREACHABLE();
-		}
-#endif
 		if(sh.subshell && !sh.subshare)
 			sh_subfork();
 	}
@@ -1403,8 +1392,6 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 					sh_subfork();	/* avoid affecting the parent shell's alias table */
 				nv_delete(np,troot,nofree_attr);
 			}
-			else
-				nv_close(np);
 
 		}
 		else if(troot==sh.alias_tree)
@@ -1532,11 +1519,7 @@ static int print_namval(Sfio_t *file,register Namval_t *np,register int flag, st
 				sfprintf(file,"[%s]\n", sh_fmtq(nv_refsub(np)));
 			}
 			else
-#if SHOPT_TYPEDEF
 				sfputr(file,nv_isvtree(np)?cp:sh_fmtq(cp),'\n');
-#else
-				sfputr(file,sh_fmtq(cp),'\n');
-#endif /* SHOPT_TYPEDEF */
 		}
 		return(1);
 	}
@@ -1581,10 +1564,8 @@ static void print_scan(Sfio_t *file, int flag, Dt_t *root, int option,struct tda
 	tp->scanmask = flag&~NV_NOSCOPE;
 	tp->scanroot = root;
 	tp->outfile = file;
-#if SHOPT_TYPEDEF
 	if(!tp->prefix && tp->tp)
 		tp->prefix = nv_name(tp->tp);
-#endif /* SHOPT_TYPEDEF */
 	if(flag&NV_INTEGER)
 		tp->scanmask |= (NV_DOUBLE|NV_EXPNOTE);
 	if(flag==NV_LTOU || flag==NV_UTOL)

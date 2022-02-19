@@ -6,7 +6,7 @@ a few extra features. I intend to eventually submit most of these features upstr
 although some of these additions are more debugging oriented and likely will not go upstream.
 To list all non-merge commits specific to the extras branch, run the following command in a terminal:
 ```sh
-git log --no-merges extras ^master
+git log --no-merges extras ^dev
 ```
 
 The extra features the extras branch adds are as follows:
@@ -22,8 +22,7 @@ Intended result
 2. Microsecond precision has been added to the `time` keyword and `times` builtin.
 3. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
 4. The prompt printed for emacs reverse search mode is now `? ` instead of `^R` (this will probably be refactored into a `$PS5` variable).
-5. `read -a` (as an alias for `read -A`) has been backported from ksh93v- for bash compatibility.
-6. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
+5. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
   * `basename --multiple` as an alias for `basename -a`.
   * `cat --show-tabs` as an alias for `cat -T`.
   * `chgrp --no-dereference` as an alias for `chgrp -h`.
@@ -34,9 +33,9 @@ Intended result
   * `ln --symbolic` as an alias for `ln -s`.
   * `mv --symbolic` as an alias for `mv -s`. (GNU coreutils doesn't support `mv --symbolic`. It was added because `cp`, `ln` and `mv` share `optget` code.)
   * `rm --dir` as an alias for `rm -d`.
-7. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
-8. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
-9. All of the `/opt/ast/bin` builtins (excluding `vmstate` when compiling with standard malloc) can now be enabled by compiling with `-DSHOPT_ALL_AST_BUILTINS=1`.
+6. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
+7. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
+8. All of the `/opt/ast/bin` builtins (excluding `vmstate` when compiling with standard malloc) can now be enabled by compiling with `-DSHOPT_ALL_AST_BUILTINS=1`.
 
 # KornShell 93u+m
 

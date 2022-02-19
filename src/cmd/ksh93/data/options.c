@@ -72,9 +72,6 @@ const Shtable_t shtab_options[] =
 	"pipefail",			SH_PIPEFAIL,
 	"posix",			SH_POSIX,
 	"privileged",			SH_PRIVILEGED,
-#if SHOPT_PFSH
-	"profile",			SH_PFSH|SH_COMMANDLINE,
-#endif
 	"rc",				SH_RC|SH_COMMANDLINE,
 	"restricted",			SH_RESTRICTED,
 	"showme",			SH_SHOWME,

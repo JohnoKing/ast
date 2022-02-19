@@ -809,7 +809,6 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 				int32_t sl = 1;
 				value->ip = (int*)(((char*)np->nvalue.lp) + (*((char*)&sl) ? 0 : sizeof(int)));
 			}
-			nv_close(np);
 			break;
 		}
 		case 'q':

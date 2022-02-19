@@ -1122,7 +1122,10 @@ int ed_getchar(register Edit_t *ep,int mode)
 				killpg(getpgrp(),SIGINT);
 				siglongjmp(ep->e_env, UINTR);
 			}
-			if(mode<=0 && sh.st.trap[SH_KEYTRAP])
+			if(mode<=0 && sh.st.trap[SH_KEYTRAP]
+			/* workaround for <https://github.com/ksh93/ksh/issues/307>:
+			 * do not trigger KEYBD for non-ASCII in multibyte locale */
+			&& (CC_NATIVE!=CC_ASCII || !mbwide() || c > -128))
 			{
 				ep->e_keytrap = 1;
 				n=1;

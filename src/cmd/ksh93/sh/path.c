@@ -36,16 +36,6 @@
 #include	"test.h"
 #include	"FEATURE/dynamic"
 #include	"FEATURE/externs"
-#if SHOPT_PFSH 
-#   ifdef _hdr_exec_attr
-#	include	<exec_attr.h>
-#   endif
-#   if     _lib_vfork
-#	include     <ast_vfork.h>
-#   else
-#	define vfork()      fork()
-#   endif
-#endif
 
 #define RW_ALL	(S_IRUSR|S_IRGRP|S_IROTH|S_IWUSR|S_IWGRP|S_IWOTH)
 #define LIBCMD	"cmd"
@@ -86,60 +76,6 @@ static int ondefpath(const char *name)
 	}
 	return(0);
 }
-
-#if SHOPT_PFSH 
-int path_xattr(const char *path, char *rpath)
-{
-	char  resolvedpath[PATH_MAX + 1];
-	if (sh.user && *sh.user)
-	{
-		execattr_t *pf;
-		if(!rpath)
-			rpath = resolvedpath;
-		if (!realpath(path, resolvedpath))
-			return -1;
-		if(pf=getexecuser(sh.user, KV_COMMAND, resolvedpath, GET_ONE))
-		{
-			if (!pf->attr || pf->attr->length == 0)
-			{
-				free_execattr(pf);
-				return(0);
-			}
-			free_execattr(pf);
-			return(1);
-		}
-	}
-	errno = ENOENT;
-	return(-1);
-}
-
-static pid_t pf_execve(const char *path, char *argv[],char *const envp[],int spawn)
-{
-	char  resolvedpath[PATH_MAX + 1];
-	pid_t	pid;
-	if(spawn)
-	{
-		while((pid = vfork()) < 0)
-			_sh_fork(pid, 0, (int*)0);
-		if(pid)
-			return(pid);
-	}
-	if(!sh_isoption(SH_PFSH))
-		return(execve(path, argv, envp));
-	/* Solaris implements realpath(3C) using the resolvepath(2) */
-	/* system call so we can save us to call access(2) first */
-
-	/* we can exec the command directly instead of via pfexec(1) if */
-	/* there is a matching entry without attributes in exec_attr(4) */
-	if(!path_xattr(path,resolvedpath))
-		return(execve(path, argv, envp));
-	--argv;
-	argv[0] = argv[1];
-	argv[1] = resolvedpath;
-	return(execve("/usr/bin/pfexec", argv, envp));
-}
-#endif /* SHOPT_PFSH */
-
 
 static pid_t _spawnveg(const char *path, char* const argv[], char* const envp[], pid_t pgid)
 {
@@ -219,11 +155,7 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 				saveargs = 0;
 			}
 		}
-#if SHOPT_PFSH
-		else if(spawn && !sh_isoption(SH_PFSH))
-#else
 		else if(spawn)
-#endif
 		{
 			sh.xargexit = exitval;
 			if(saveargs)
@@ -234,11 +166,7 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 		{
 			if(saveargs)
 				free((void*)saveargs);
-#if SHOPT_PFSH
-			return(pf_execve(path,argv,envp,spawn));
-#else
 			return(execve(path,argv,envp));
-#endif
 		}
 	}
 	if(!spawn)
@@ -258,7 +186,11 @@ char *path_pwd(void)
 	Namval_t *pwdnod;
 	/* Don't bother if PWD already set */
 	if(sh.pwd)
-		return((char*)sh.pwd);
+	{
+		if(*sh.pwd=='/')
+			return((char*)sh.pwd);
+		free((void*)sh.pwd);
+	}
 	/* First see if PWD variable is correct */
 	pwdnod = sh_scoped(PWDNOD);
 	cp = nv_getval(pwdnod);
@@ -270,22 +202,29 @@ char *path_pwd(void)
 		cp = nv_getval(sh_scoped(HOME));
 		if(!(cp && *cp=='/' && test_inode(cp,e_dot)))
 		{
-			/* Get physical PWD (no symlinks) using getcwd(3), fall back to "." */
+			/* Get physical PWD (no symlinks) using getcwd(3) */
 			cp = sh_getcwd();
-			if(!cp)
-				return((char*)e_dot);
-			tofree++;
+			if(cp)
+				tofree++;
 		}
 		/* Store in PWD variable */
-		if(sh.subshell)
-			pwdnod = sh_assignok(pwdnod,1);
-		nv_putval(pwdnod,cp,NV_RDONLY);
+		if(cp)
+		{
+			if(sh.subshell)
+				pwdnod = sh_assignok(pwdnod,1);
+			nv_putval(pwdnod,cp,NV_RDONLY);
+		}
 		if(tofree)
-			free(cp);
+			free((void*)cp);
 	}
 	nv_onattr(pwdnod,NV_EXPORT);
+	/* Neither obtained the pwd nor can fall back to sane-ish $PWD: fall back to "." */
+	if(!cp)
+		cp = nv_getval(pwdnod);
+	if(!cp || *cp!='/')
+		nv_putval(pwdnod,cp=(char*)e_dot,NV_RDONLY);
 	/* Set shell PWD */
-	sh.pwd = sh_strdup(pwdnod->nvalue.cp);
+	sh.pwd = sh_strdup(cp);
 	return((char*)sh.pwd);
 }
 
@@ -453,8 +392,7 @@ static void pathinit(void)
 	}
 	else
 	{
-		if(!(pp=(Pathcomp_t*)sh.defpathlist))
-			pp = defpathinit();
+		pp = defpathinit();
 		sh.pathlist = (void*)path_dup(pp);
 	}
 	if(val=sh_scoped((FPATHNOD))->nvalue.cp)
@@ -479,8 +417,7 @@ Pathcomp_t *path_get(const char *name)
 	}
 	if(!pp && (!(sh_scoped(PATHNOD)->nvalue.cp)) || sh_isstate(SH_DEFPATH))
 	{
-		if(!(pp=(Pathcomp_t*)sh.defpathlist))
-			pp = defpathinit();
+		pp = defpathinit();
 	}
 	return(pp);
 }
@@ -702,12 +639,7 @@ int	path_search(register const char *name,Pathcomp_t **oldpp, int flag)
 		stakputc(0);
 		return(0);
 	}
-	if(sh_isstate(SH_DEFPATH))
-	{
-		if(!sh.defpathlist)
-			defpathinit();
-	}
-	else if(!sh.pathlist)
+	if(!sh_isstate(SH_DEFPATH) && !sh.pathlist)
 		pathinit();
 	if(flag)
 	{
@@ -735,8 +667,8 @@ int	path_search(register const char *name,Pathcomp_t **oldpp, int flag)
 	}
 	if(flag==0 || !pp || (pp->flags&PATH_FPATH))
 	{
-		if(!pp)
-			pp=sh_isstate(SH_DEFPATH)?sh.defpathlist:sh.pathlist;
+		if(!pp && !sh_isstate(SH_DEFPATH))
+			pp = sh.pathlist;
 		if(pp && strlen(name)<256 && strmatch(name,e_alphanum) && (fno=opentype(name,pp,1))>=0)
 		{
 			if(flag >= 2)
@@ -1242,17 +1174,10 @@ pid_t path_spawn(const char *opath,register char **argv, char **envp, Pathcomp_t
 	}
 	else
 #endif
-#if SHOPT_PFSH
-	if(spawn && !sh_isoption(SH_PFSH))
-		pid = _spawnveg(opath, &argv[0], envp, spawn>>1);
-	else
-		pid = pf_execve(opath, &argv[0], envp, spawn);
-#else
 	if(spawn)
 		pid = _spawnveg(opath, &argv[0], envp, spawn>>1);
 	else
 		pid = execve(opath, &argv[0], envp);
-#endif /* SHOPT_PFSH */
 	if(xp)
 		*xp = xval;
 #ifdef SHELLMAGIC
@@ -1365,7 +1290,7 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 		sh_close(sh.infd);
 	sh_setstate(sh_state(SH_FORKED));
 	sfsync(sfstderr);
-#if SHOPT_SUID_EXEC && !SHOPT_PFSH
+#if SHOPT_SUID_EXEC
 	/* check if file cannot open for read or script is setuid/setgid */
 	{
 		static char name[] = "/tmp/euidXXXXXXXXXX";
@@ -1401,11 +1326,7 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 		}
 		savet = *--argv;
 		*argv = path;
-#if SHOPT_PFSH
-		pf_execve(e_suidexec,argv,envp,0);
-#else
 		execve(e_suidexec,argv,envp);
-#endif
 	fail:
 		/*
 		 *  The following code is just for compatibility
@@ -1718,12 +1639,7 @@ Pathcomp_t *path_addpath(Pathcomp_t *first, register const char *path,int type)
 	if(old)
 	{
 		if(!first && !path)
-		{
-			Pathcomp_t *pp = (Pathcomp_t*)sh.defpathlist;
-			if(!pp)
-				pp = defpathinit();
-			first = path_dup(pp);
-		}
+			first = path_dup(defpathinit());
 		if(cp=(sh_scoped(FPATHNOD))->nvalue.cp)
 			first = (void*)path_addpath((Pathcomp_t*)first,cp,PATH_FPATH);
 		path_delete(old);

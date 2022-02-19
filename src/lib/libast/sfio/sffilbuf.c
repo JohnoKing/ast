@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -37,9 +37,9 @@ int _sffilbuf(Sfio_t*	f,	/* fill the read buffer of this stream */
 {
 	reg ssize_t	r;
 	reg int		first, local, rcrv, rc, justseek;
-	SFMTXDECL(f); /* declare a local stream variable for multithreading */
 
-	SFMTXENTER(f,-1);
+	if(!f)
+		return -1;
 
 	GETLOCAL(f,local);
 
@@ -52,7 +52,7 @@ int _sffilbuf(Sfio_t*	f,	/* fill the read buffer of this stream */
 	for(first = 1;; first = 0, (f->mode &= ~SF_LOCK) )
 	{	/* check mode */
 		if(SFMODE(f,local) != SF_READ && _sfmode(f,SF_READ,local) < 0)
-			SFMTXRETURN(f,-1);
+			return -1;
 		SFLOCK(f,local);
 
 		/* current extent of available data */
@@ -108,5 +108,5 @@ int _sffilbuf(Sfio_t*	f,	/* fill the read buffer of this stream */
 
 	rcrv = (n == 0) ? (r > 0 ? (int)(*f->next++) : EOF) : (int)r;
 
-	SFMTXRETURN(f,rcrv);
+	return rcrv;
 }

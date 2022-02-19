@@ -1,5 +1,5 @@
 .fp 5 CW
-.TH SFIO 3 "01 June 2008"
+.TH SFIO 3 "12 February 2022"
 .SH NAME
 \fBsfio\fR \- safe/fast string/file input/output
 .SH SYNOPSIS
@@ -63,7 +63,6 @@ SF_MALLOC
 SF_STATIC
 SF_IOCHECK
 SF_WHOLE
-SF_MTSAFE
 SF_IOINTR
 .ft 1
 .fi
@@ -76,18 +75,6 @@ Sfio_t*    sfpopen(Sfio_t* f, const char* cmd, const char* mode);
 Sfio_t*    sftmp(size_t size);
 int        sfclose(Sfio_t* f);
 
-
-.ft 1
-.fi
-.Ss "THREAD SAFETY"
-.nf
-.ft 5
-int        sfmutex(Sfio_t* f, int type);
-
-SFMTX_LOCK
-SFMTX_TRYLOCK
-SFMTX_UNLOCK
-SFMTX_CLRLOCK
 .ft 1
 .fi
 .Ss "INPUT/OUTPUT OPERATIONS"
@@ -306,19 +293,8 @@ There are three \fIstandard streams\fP:
 \f3sfstdout\fP for normal output (file descriptor \f31\fP), and
 \f3sfstderr\fP for error output (file descriptor \f32\fP).
 
-.Ss "LIBRARIES"
 .PP
-This version of Sfio can be built and used for both single-threaded and multi-threaded
-environments. In the former case, streams are not protected from
-simultaneous accesses by different threads. In the latter case, a stream
-is typically locked with a mutex during access so that another thread
-trying to access the same stream will block until the mutex is released.
-
-A program that does not use multiple threads can link with \fBlibsfio.a\fP
-while a program that uses multiple threads should link with \fBlibsfio-mt.a\fP.
-The libraries \fBlibstdio.a\fP and \fBlibstdio-mt.a\fP provide
-corresponding Stdio functions to link with code already compiled using the
-native header \fBstdio.h\fP instead of the one provided by Sfio.
+This version of Sfio does not support threads.
 
 .Ss "DATA TYPES"
 .Ss "  void*"
@@ -355,9 +331,9 @@ of extension functions definable in \f3Sffmt_t\fP.
 See \f3Sffmt_t\fP below for more details.
 .Ss "  SFIO_VERSION"
 This is a macro value of type \f3long int\fP that defines
-the current version number of Sfio. For example, the Sfio2000's
-version number is \f320000515L\fP
-(which also indicates its latest version date: 05/15/2000).
+the current version number of Sfio. It is composed of a year,
+month and day. For example, \f320220212L\fP indicates the
+version from February 12, 2022.
 
 .Ss "BIT FLAGS"
 A number of bit flags control stream operations.
@@ -436,15 +412,6 @@ This is useful in certain applications (e.g., networking) where a complex object
 must be output without being split in different system calls.
 Note that the respective stream still buffers data as much as the buffer can accommodate.
 .Tp
-\f3SF_MTSAFE\fP:
-This flag indicates that the respective stream may be accessed by more than one threads.
-A mutex lock will be used to ensure that only one thread at a time can access
-the stream. Note that this flag can only be set at stream opening time
-(see \f3sfopen()\fP, \f3sfpopen()\fP and \f3sfnew()\fP).
-Certain fast macro functions such as \f3sfgetc()\fP and \f3sfputc()\fP will
-no longer behave as macros. Thus, an application that requires such fast macro functions
-should leave \f3SF_MTSAFE\fP off and performs explicit locking with \f3sfmutex()\fP.
-.Tp
 \f3SF_IOINTR\fP:
 This flag indicates that I/O system calls should not be resumed
 after being interrupted by signals. It is useful for
@@ -481,9 +448,6 @@ opened for both read and write, e.g., sockets.
 \f3flags\fP:
 This is composed from \f3SF_EOF\fP and
 bit values defined in the \fBBIT FLAGS\fP section.
-Note, in particular, that a multi-threaded application should
-set the bit \f3SF_MTSAFE\fP to protect the new stream from
-being simultaneously accessed by multiple threads.
 
 .Ss "  Sfio_t* sfopen(Sfio_t* f, const char* string, const char* mode)"
 
@@ -529,14 +493,6 @@ The \f3+\fP modifier indicates that the stream is opened for both read and write
 
 \f3x\fP specifies exclusive mode, i.e.,
 a file opened for writing should not already exist.
-
-\f3m\fP specifies that the stream needs to be protected from
-simultaneous accesses by multiple threads.
-This turns on the bit flag \f3SF_MTSAFE\fP.
-
-\f3u\fP specifies that the stream is guaranteed to be accessed
-by only one thread at a time. The bit flag \f3SF_MTSAFE\fP is left off.
-The absence of option \f3m\fP is the same as the presence of option \f3u\fP.
 
 .Ss "  Sfio_t* sfpopen(Sfio_t* f, const char* cmd, const char* mode)"
 This function opens a stream that corresponds to the coprocess \f3cmd\fP.
@@ -611,73 +567,6 @@ In either case, if the exception handler returns a negative value,
 If the exception handler returns a positive value,
 \f3sfclose()\fP will immediately return a zero value.
 
-.Ss "THREAD SAFETY"
-.PP
-The libraries \f3libsfio.a\fP and \f3libstdio.a\fP (providing binary
-compatibility to Stdio-based code) only support single-threaded code.
-Multi-threaded applications should link with
-\f3libsfio-mt.a\fP and \f3libstdio-mt.a\fP.
-When this is done, certain platforms may require additional
-thread libraries for linkage. For example, Linux, IRIX and Solaris
-require \f3-lpthread\fP while HPUX requires \f3-lcma\fP.
-Aside from linkage differences, the Sfio API remains identical in all cases.
-
-Note that unlike Stdio streams which are in thread-safe mode by default.
-Sfio streams can be opened in either single-threaded or multi-threaded mode.
-A single-threaded stream is more efficient than a multi-threaded one.
-For example, functions such as \f3sfgetc()\fP and \f3sfputc()\fP
-remain as macro or inline functions for a single-threaded stream while
-they will act as full function calls in a multi-threaded case.
-The three standard streams \f3sfstdin/sfstdout/sfstderr\fP
-are in multi-threaded mode by default
-(however, see \f3sfopen()\fP for how this may be changed).
-Other Sfio streams are normally opened single-threaded unless
-the flag \f3SF_MTSAFE\fP or the option \f3m\fP were specified.
-Stdio-based code can also make a Stdio stream single-threaded by
-using the option \f3u\fP when opening a file.
-
-.Ss "int sfmutex(Sfio_t* f, int type)"
-This function acquires or releases a mutex
-(mutually exclusive) lock on the stream \f3f\fP.
-It can be used by a thread to serialize a sequence of I/O operations
-executed together in some critical section.
-\f3sfmutex()\fP is implicitly used by
-all Sfio operations on a stream with the flag \f3SF_MTSAFE\fP to
-protect it from concurrent accesses via multiple threads.
-\f3sfmutex()\fP returns \f30\fP on success and some non-zero value on failure.
-
-Each stream has a lock count which starts at \f30\fP.
-When the count is positive, a single thread holds the stream.
-Only this thread can further lock or unlock the stream.
-A different thread attempting to acquire such a locked stream will suspend
-until the lock count returns to \f30\fP.
-Each successful locking operation increases the lock count
-while each successful unlocking operation decreases it,
-thus, allowing nesting of matching lock/unlock operations.
-
-The \f3type\fP argument of \f3sfmutex()\fP takes on the below values:
-.Tp
-\f3SFMTX_LOCK\fP:
-Locking a stream if it is unlocked or increasing the lock count of the stream
-if it is already locked by the same thread. This call will block until it is
-possible to lock the stream.
-.Tp
-\f3SFMTX_TRYLOCK\fP:
-This is the non-blocking version of \f3SFMTX_LOCK\fP.
-If the stream is already locked by a different thread, \f3sfmutex()\fP will
-immediately return with an error status.
-.Tp
-\f3SFMTX_UNLOCK\fP:
-Decreasing the lock count and releasing the stream when the lock count reaches 0.
-An attempt to unlock a stream without a previously successful lock may
-result in undefined behavior in certain implementations.
-The current Sfio implementation returns an error status.
-.Tp
-\f3SFMTX_CLRLOCK\fP:
-Resetting the lock count to \f30\fP and releasing the stream.
-As with \f3SFMTX_LOCK\fP,
-an attempt to clear the lock count without a previously successful lock
-may result in undefined behavior.
 .Ss "INPUT/OUTPUT OPERATIONS"
 .Ss "  int sfgetc(Sfio_t* f)"
 .Ss "  int sfputc(Sfio_t* f, int c)"
@@ -1767,12 +1656,8 @@ The argument \f3type\fP of \f3(*exceptf)()\fP
 identifies the particular exceptional event:
 .Tp
 \f3SF_LOCKED\fP:
-The stream cannot be accessed.
-Note that this lock state is not related to the mutex lock
-that protects a stream from multiple accesses by different threads
-(see section THREAD SAFETY). Rather, the stream was frozen by
+The stream cannot be accessed because it was frozen by
 certain operations such as \f3sfreserve()\fP or \f3sfstack()\fP.
-Thus, a stream can be in this state even if the application is single-threaded.
 .Tp
 \f3SF_READ\fP, \f3SF_WRITE\fP:
 These events are raised around reading and writing operations.
@@ -2018,21 +1903,6 @@ An attempt to change \f3f\fP to read mode failed.
 \f3SF_WRITE\fP:
 An attempt to change \f3f\fP to write mode failed.
 \f3data\fP is the file descriptor of the stream.
-.Tp
-\f3SF_MTACCESS\fP:
-When a notifying function was registered (see \f3sfnotify()\fP),
-every Sfio call on a stream with flag \f3SF_MTSAFE\fP will
-invoke the notifying function
-once on entry after the stream is locked
-as \f3(*notify)(f, SF_MTACCESS, Sfio_t** fp), and
-once on return before unlocking as
-as \f3(*notify)(f, SF_MTACCESS, (Sfio_t**)0).
-In the call entry case,
-the notification function could use the argument \f3fp\fP
-to set a stream that would be used for performing the actual I/O operation.
-In this way, certain global streams such as the standard streams \f3sfstdin\fP,
-\f3sfstdout\fP and \f3sfstderr\fP could be made to act differently when used
-in different streams.
 
 .Ss "  int sfwalk(Sfwalk_f walkf, void* data, int type)"
 This function invokes \f3(*walkf)(f, data)\fP on every open stream \f3f\fP
@@ -2172,18 +2042,18 @@ the Unix \fBcompress\fP program.
 This creates a discipline for reading/writing data compressed by zlib.
 The argument \f3opt\fP defines the optimization level.
 
-.Ss "STDIO-COMPATIBILITY"
+.Ss "STDIO COMPATIBILITY"
 .PP
 Sfio provides compatibility functions for all various popular
 Stdio implementations at source and binary level.
-The source Stdio-compatibility interface
+The source Stdio compatibility interface
 provides the header file \f3stdio.h\fP that defines
 a set of macros or inlined functions to map Stdio calls to Sfio ones.
 This mapping may benignly extend or change the meaning of certain
-original Stdio operations. For example, the Sfio's version of
+original Stdio operations. For example, Sfio's version of
 \f3popen()\fP allows a coprocess to be opened for both reading and writing
 unlike the original call which only allows a coprocess to be opened for a single mode.
-Similarly, the Sfio's \f3fopen()\fP call can be used to create
+Similarly, Sfio's \f3fopen()\fP call can be used to create
 string streams in addition to file streams.
 .PP
 The standard streams \f3stdin\fP, \f3stdout\fP and \f3stderr\fP
@@ -2270,69 +2140,6 @@ int    ferror(FILE* stream);
 int    clearerr(FILE* stream);
 .ft 1
 .fi
-
-.Ss "RECENT CHANGES"
-.PP
-A few exception types have been added. In particular, exception handlers shall
-be raised with \f3SF_LOCKED\fP on accessing a stream frozen either by
-an ongoing operation or a previous operation (e.g., \f3sfgetr()\fP).
-Before a process exits, the event \f3SF_ATEXIT\fP is raised for each open stream.
-.PP
-A number of disciplines were added for various processing functions.
-Of interests are disciplines to use the direct I/O feature on IRIX 6.2,
-read DOS text files, and decompress files compressed by Unix \fIcompress\fP.
-.PP
-Various new stream and function flags have been added. For example,
-the third argument of \f3sfgetr()\fP is now a set of bit flags and not
-just a three-value object. However, the old semantics of this argument
-of \f3sfgetr()\fP is still supported.
-.PP
-The \f3sfopen()\fP call has been extended so that sfopen(f,NULL,mode) can be
-used to changed the mode of a file stream before any I/O operations.
-This is most useful for changing the modes of the standard streams.
-.PP
-The buffering strategy has been significantly enhanced for streams
-that perform many seek operations. Also, the handling of stream and
-file positions have been better clarified so that applications that
-share file descriptors across streams and/or processes can be sure that
-the file states will be consistent.
-.PP
-The strategy for mapping between Sfio and Stdio streams in the binary
-compatibility package has been significantly enhanced for efficiency.
-For most platforms, the mapping is now constant time per look-up.
-.PP
-The \f3SF_BUFCONST\fP flag was deleted. This is largely unused anyway.
-.PP
-The library can be built for thread-safety. This is based largely on
-POSIX pthread mutexes except for on UWIN where native Windows APIs
-are used.
-.PP
-The functions \f3sfgetm()\fP and \f3sfputm()\fP were added to encode
-unsigned integer values with known ranges.
-.PP
-The flag \f3SF_APPEND\fP is identical to \f3SF_APPENDWR\fP.
-However it conflicts with a different token of the same name
-defined in the system header \f3stat.h\fP of BSDI Unix systems.
-On such systems, we shall not define \f3SF_APPEND\fP and this
-symbol may be removed in a future release.
-.PP
-Similarly, the exception \f3SF_CLOSE\fP is identical to \f3SF_CLOSING\fP.
-However it conflicts with a different token of the same name
-defined in the system header \f3socket.h\fP of AIX Unix systems.
-On such systems, we shall not define \f3SF_CLOSE\fP and this
-symbol may be removed in a future release.
-.PP
-The printing and scanning functions were extended to handle multibyte characters
-and to conform to the C99 standard.
-.PP
-The function \f3sfpoll()\fP was overhauled to make it useful
-for writing servers that must communicate with multiple streams
-without blocking.
-.PP
-The formatting pattern \f3%c\fP for \f3sf*printf\fP was extended
-to allow the flag \f3#\fP to print unprintable character values
-using the C convention. For example, \f3%#c\fP prints the octal value 012
-as \f3\\n\fP.
 
 .SH AUTHORS
 Kiem-Phong Vo, kpv@research.att.com,

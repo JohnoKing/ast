@@ -136,7 +136,7 @@ int    b_exec(int argc,char *argv[], Shbltin_t *context)
 				(*cp=0,np=nv_search(arg->argval,sh.var_tree,0)))
 			{
 				nv_onattr(np,NV_EXPORT);
-				sh_envput(sh.env,np);
+				env_change();
 			}
 			if(cp)
 				*cp = '=';

@@ -878,7 +878,6 @@ static char **genvalue(char **argv, const char *prefix, int n, struct Walk *wp)
 				if(wp->indent>0)
 					sfnputc(outfile,'\t',wp->indent);
 				nv_attribute(np,outfile,"typeset",1);
-				nv_close(np);
 				sfputr(outfile,arg+m+r+(n?n:0),(k?'=':'\n'));
 				if(!k)
 				{

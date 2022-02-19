@@ -32,16 +32,16 @@ Sfoff_t sfsk(Sfio_t* f, Sfoff_t addr, int type, Sfdisc_t* disc)
 	reg Sfdisc_t*	dc;
 	reg ssize_t	s;
 	reg int		local, mode;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f, (Sfoff_t)(-1));
+	if(!f)
+		return (Sfoff_t)(-1);
 
 	GETLOCAL(f,local);
 	if(!local && !(f->bits&SF_DCDOWN))
 	{	if((mode = f->mode&SF_RDWR) != (int)f->mode && _sfmode(f,mode,0) < 0)
-			SFMTXRETURN(f, (Sfoff_t)(-1));
+			return (Sfoff_t)(-1);
 		if(SFSYNC(f) < 0)
-			SFMTXRETURN(f, (Sfoff_t)(-1));
+			return (Sfoff_t)(-1);
 #ifdef MAP_TYPE
 		if(f->mode == SF_READ && (f->bits&SF_MMAP) && f->data)
 		{	SFMUNMAP(f, f->data, f->endb-f->data);
@@ -52,7 +52,7 @@ Sfoff_t sfsk(Sfio_t* f, Sfoff_t addr, int type, Sfdisc_t* disc)
 	}
 
 	if((type &= (SEEK_SET|SEEK_CUR|SEEK_END)) > SEEK_END)
-		SFMTXRETURN(f, (Sfoff_t)(-1));
+		return (Sfoff_t)(-1);
 
 	for(;;)
 	{	dc = disc;
@@ -73,7 +73,7 @@ Sfoff_t sfsk(Sfio_t* f, Sfoff_t addr, int type, Sfdisc_t* disc)
 			{	p = lseek(f->file,(off_t)addr,type);
 			}
 			if(p >= 0)
-				SFMTXRETURN(f,p);
+				return p;
 			s = -1;
 		}
 
@@ -84,10 +84,10 @@ Sfoff_t sfsk(Sfio_t* f, Sfoff_t addr, int type, Sfdisc_t* disc)
 		case SF_EDISC:
 		case SF_ECONT:
 			if(f->flags&SF_STRING)
-				SFMTXRETURN(f, (Sfoff_t)s);
+				return (Sfoff_t)s;
 			goto do_continue;
 		default:
-			SFMTXRETURN(f, (Sfoff_t)(-1));
+			return (Sfoff_t)(-1);
 		}
 
 	do_continue:

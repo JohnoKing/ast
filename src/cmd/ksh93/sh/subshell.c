@@ -381,12 +381,12 @@ static void nv_restore(struct subshell *sp)
 		if(nv_isattr(mp,NV_EXPORT))
 		{
 			char *name = nv_name(mp);
-			sh_envput(sh.env,mp);
+			env_change();
 			if(*name=='_' && strcmp(name,"_AST_FEATURES")==0)
 				astconf(NiL, NiL, NiL);
 		}
 		else if(nv_isattr(np,NV_EXPORT))
-			env_delete(sh.env,nv_name(mp));
+			env_change();
 		nv_onattr(mp,flags);
 	skip:
 		for(mp=lp->child; mp; mp=mpnext)
@@ -442,7 +442,7 @@ int sh_subsavefd(register int fd)
 {
 	register struct subshell *sp = subshell_data;
 	register int old=0;
-	if(sp)
+	if(sh.subshell && !sh.subshare)
 	{
 		old = !(sp->fdsaved&(1<<fd));
 		sp->fdsaved |= (1<<fd);

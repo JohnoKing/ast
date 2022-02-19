@@ -110,18 +110,17 @@ void* sfsetbuf(Sfio_t*	f,	/* stream to be buffered */
 	struct stat	st;
 	uchar*		obuf = NIL(uchar*);
 	ssize_t		osize = 0;
-	SFMTXDECL(f);
 
-	SFONCE();
 
-	SFMTXENTER(f,NIL(void*));
+	if(!f)
+		return NIL(void*);
 
 	GETLOCAL(f,local);
 
 	if(size == 0 && buf)
 	{	/* special case to get buffer info */
 		_Sfi = f->val = (f->bits&SF_MMAP) ? (f->endb-f->data) : f->size;
-		SFMTXRETURN(f, (void*)f->data);
+		return (void*)f->data;
 	}
 
 	/* cleanup actions already done, don't allow write buffering any more */
@@ -132,10 +131,10 @@ void* sfsetbuf(Sfio_t*	f,	/* stream to be buffered */
 
 	if((init = f->mode&SF_INIT) )
 	{	if(!f->pool && _sfsetpool(f) < 0)
-			SFMTXRETURN(f, NIL(void*));
+			return NIL(void*);
 	}
 	else if((f->mode&SF_RDWR) != SFMODE(f,local) && _sfmode(f,0,local) < 0)
-		SFMTXRETURN(f, NIL(void*));
+		return NIL(void*);
 
 	if(init)
 		f->mode = (f->mode&SF_RDWR)|SF_LOCK;
@@ -145,12 +144,12 @@ void* sfsetbuf(Sfio_t*	f,	/* stream to be buffered */
 		/* make sure there is no hidden read data */
 		if(f->proc && (f->flags&SF_READ) && (f->mode&SF_WRITE) &&
 		   _sfmode(f,SF_READ,local) < 0)
-			SFMTXRETURN(f, NIL(void*));
+			return NIL(void*);
 
 		/* synchronize first */
 		SFLOCK(f,local); rv = SFSYNC(f); SFOPEN(f,local);
 		if(rv < 0)
-			SFMTXRETURN(f, NIL(void*));
+			return NIL(void*);
 
 		/* turn off the SF_SYNCED bit because buffer is changing */
 		f->mode &= ~SF_SYNCED;
@@ -416,5 +415,5 @@ done:
 
 	SFOPEN(f,local);
 
-	SFMTXRETURN(f, (void*)obuf);
+	return (void*)obuf;
 }

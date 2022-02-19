@@ -130,9 +130,11 @@ function test_xmlfragment1
 	typeset -r testscript='test1_script.sh'
 cat >"${testscript}" <<-TEST1SCRIPT
 	# memory safeguards to prevent out-of-control memory consumption
-	ulimit -M \$(( 1024 * 1024 ))
-	ulimit -v \$(( 1024 * 1024 ))
-	ulimit -d \$(( 1024 * 1024 ))
+	{
+		ulimit -M \$(( 1024 * 1024 ))
+		ulimit -v \$(( 1024 * 1024 ))
+		ulimit -d \$(( 1024 * 1024 ))
+	} 2>/dev/null
 
 	# input text
 	xmltext="\$( < "\$1" )"
@@ -149,7 +151,7 @@ cat >"${testscript}" <<-TEST1SCRIPT
 		nameref ar="\$1"
 
 		# fixme:
-		# - We want to enforce standard conformance - does ~(Exp) or ~(Ex-p) does that ?
+		# - We want to enforce standard conformance - does ~(Exp) or ~(Ex-p) do that ?
 		dummy="\${xmltext//~(Ex-p)(?:
 			(<!--.*-->)+?|			# xml comments
 			(<[:_[:alnum:]-]+

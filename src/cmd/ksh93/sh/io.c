@@ -1468,7 +1468,7 @@ int	sh_redirect(struct ionod *iop, int flag)
 				}
 				else if(sh_subsavefd(fn))
 				{
-					if(fd==fn && !sh.subshare)
+					if(fd==fn)
 					{
 						if((r=sh_fcntl(fd,F_DUPFD,10)) > 0)
 						{

@@ -870,9 +870,7 @@ int sh_lex(Lex_t* lp)
 							poplevel(lp);
 						}
 						break;
-#if SHOPT_TYPEDEF
 					case '@':
-#endif /* SHOPT_TYPEDEF */
 					case '!':
 						if(n!=S_ALP && n!=S_DIG)
 							goto dolerr;

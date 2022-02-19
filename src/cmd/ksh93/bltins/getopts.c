@@ -180,7 +180,6 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	sh.st.optindex = opt_info.index;
 	sh.st.optchar = opt_info.offset;
 	nv_putval(np, options, 0);
-	nv_close(np);
 	np = nv_open(nv_name(OPTARGNOD),sh.var_tree,0);
 	if(opt_info.num == LONG_MIN)
 		nv_putval(np, opt_info.arg, NV_RDONLY);
@@ -198,7 +197,6 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	}
 	else
 		nv_putval(np, opt_info.arg, NV_RDONLY);
-	nv_close(np);
 	sh_popcontext(&buff);
         opt_info.disc = 0;
 	return(r);

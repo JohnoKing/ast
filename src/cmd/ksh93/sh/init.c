@@ -131,10 +131,6 @@ char e_version[]	= "\n@(#)$Id: Version "
 #define ATTRS		1
 			"M"
 #endif
-#if SHOPT_PFSH && _hdr_exec_attr
-#define ATTRS		1
-			"P"
-#endif
 #if SHOPT_REGRESS
 #define ATTRS		1
 			"R"
@@ -1200,14 +1196,6 @@ int sh_type(register const char *path)
 		}
 		if (!(t & (SH_TYPE_PROFILE|SH_TYPE_RESTRICTED)))
 		{
-#if SHOPT_PFSH
-			if (*s == 'p' && *(s+1) == 'f')
-			{
-				s += 2;
-				t |= SH_TYPE_PROFILE;
-				continue;
-			}
-#endif
 			if (*s == 'r')
 			{
 				s++;
@@ -1406,11 +1394,6 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 		/* check for restricted shell */
 		if(type&SH_TYPE_RESTRICTED)
 			sh_onoption(SH_RESTRICTED);
-#if SHOPT_PFSH
-		/* check for profile shell */
-		else if(type&SH_TYPE_PROFILE)
-			sh_onoption(SH_PFSH);
-#endif
 		/* look for options */
 		/* sh.st.dolc is $#	*/
 		if((sh.st.dolc = sh_argopts(-argc,argv)) < 0)
@@ -1468,15 +1451,6 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 	/* import variable attributes from environment */
 	if(!sh_isoption(SH_POSIX))
 		env_import_attributes(save_envmarker);
-#if SHOPT_PFSH
-	if (sh_isoption(SH_PFSH))
-	{
-		struct passwd *pw = getpwuid(sh.userid);
-		if(pw)
-			sh.user = sh_strdup(pw->pw_name);
-		
-	}
-#endif
 	/* set[ug]id scripts require the -p flag */
 	if(sh.userid!=sh.euserid || sh.groupid!=sh.egroupid)
 	{
@@ -2054,7 +2028,6 @@ static char *env_init(void)
 			{
 				nv_onattr(np,NV_IMPORT);
 				np->nvenv = cp;
-				nv_close(np);
 			}
 			else  /* swap with front */
 			{

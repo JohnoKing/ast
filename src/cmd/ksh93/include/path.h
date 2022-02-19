@@ -97,9 +97,6 @@ extern int		path_complete(const char*, const char*,struct argnod**);
 #if SHOPT_BRACEPAT
     extern int 		path_generate(struct argnod*,struct argnod**);
 #endif /* SHOPT_BRACEPAT */
-#if SHOPT_PFSH
-    extern int		path_xattr(const char*, char*);
-#endif /* SHOPT_PFSH */
 
 #if SHOPT_DYNAMIC
 /* builtin/plugin routines */
@@ -112,9 +109,6 @@ extern const char e_timeformat[];
 extern const char e_badtformat[];
 extern const char e_dot[];
 extern const char e_funload[];
-#if SHOPT_PFSH
-extern const char e_pfsh[];
-#endif
 extern const char e_pwd[];
 extern const char e_logout[];
 extern const char e_alphanum[];

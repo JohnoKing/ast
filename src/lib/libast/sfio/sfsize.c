@@ -31,16 +31,13 @@ Sfoff_t sfsize(Sfio_t* f)
 	Sfdisc_t*	disc;
 	reg int		mode;
 	Sfoff_t		s;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f, (Sfoff_t)(-1));
-
-	if((mode = f->mode&SF_RDWR) != (int)f->mode && _sfmode(f,mode,0) < 0)
-		SFMTXRETURN(f, (Sfoff_t)(-1));
+	if(!f || ((mode = f->mode&SF_RDWR) != (int)f->mode && _sfmode(f,mode,0) < 0))
+		return (Sfoff_t)(-1);
 
 	if(f->flags&SF_STRING)
 	{	SFSTRSIZE(f);
-		SFMTXRETURN(f, f->extent);
+		return f->extent;
 	}
 
 	SFLOCK(f,0);
@@ -101,5 +98,5 @@ Sfoff_t sfsize(Sfio_t* f)
 	}
 
 	SFOPEN(f,0);
-	SFMTXRETURN(f, s);
+	return s;
 }

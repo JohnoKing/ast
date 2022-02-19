@@ -404,7 +404,9 @@ static Namval_t *array_find(Namval_t *np,Namarr_t *arp, int flag)
 	return(np);
 }
 
-#if SHOPT_TYPEDEF
+/*
+ * for 'typeset -T' types
+ */
 int nv_arraysettype(Namval_t *np, Namval_t *tp, const char *sub, int flags)
 {
 	Namval_t	*nq;
@@ -431,7 +433,6 @@ int nv_arraysettype(Namval_t *np, Namval_t *tp, const char *sub, int flags)
 	}
 	return(0);
 }
-#endif /* SHOPT_TYPEDEF */
 
 
 static Namfun_t *array_clone(Namval_t *np, Namval_t *mp, int flags, Namfun_t *fp)
@@ -622,10 +623,8 @@ static void array_putval(Namval_t *np, const char *string, int flags, Namfun_t *
 				nv_putval(mp, string, flags);
 			if(string)
 			{
-#if SHOPT_TYPEDEF
 				if(ap->hdr.type && ap->hdr.type!=nv_type(mp))
 					nv_arraysettype(np,ap->hdr.type,nv_getsub(np),0);
-#endif /* SHOPT_TYPEDEF */
 				continue;
 			}
 			ap->nelem |= scan;
@@ -713,10 +712,8 @@ static void array_putval(Namval_t *np, const char *string, int flags, Namfun_t *
 			else if(mp==np)
 				aq->val[aq->cur].cp = 0;
 		}
-#if SHOPT_TYPEDEF
 		if(string && ap->hdr.type && nv_isvtree(np))
 			nv_arraysettype(np,ap->hdr.type,nv_getsub(np),0);
-#endif /* SHOPT_TYPEDEF */
 	}
 	while(!string && nv_nextsub(np));
 	if(ap)

@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -36,12 +36,9 @@ char* sfgetr(Sfio_t*	f,	/* stream to read from	*/
 	uchar		*s, *ends, *us;
 	int		found;
 	Sfrsrv_t*	rsrv;
-	SFMTXDECL(f); /* declare a local stream variable for multithreading */
 
-	SFMTXENTER(f, NIL(char*));
-
-	if(rc < 0 || (f->mode != SF_READ && _sfmode(f,SF_READ,0) < 0) )
-		SFMTXRETURN(f, NIL(char*));
+	if(!f || rc < 0 || (f->mode != SF_READ && _sfmode(f,SF_READ,0) < 0))
+		return NIL(char*);
 	SFLOCK(f,0);
 
 	/* buffer to be returned */
@@ -161,5 +158,5 @@ done:
 		f->endr = f->data;
 	}
 
-	SFMTXRETURN(f, (char*)us);
+	return (char*)us;
 }

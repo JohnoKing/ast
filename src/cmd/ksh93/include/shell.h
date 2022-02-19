@@ -99,9 +99,6 @@ typedef union Shnode_u Shnode_t;
 #define SH_NOUNSET	9
 #define SH_NOGLOB	10
 #define SH_ALLEXPORT	11
-#if SHOPT_PFSH
-#define SH_PFSH		12
-#endif
 #define SH_IGNOREEOF	13
 #define SH_NOCLOBBER	14
 #define SH_MARKDIRS	15
@@ -346,13 +343,11 @@ struct Shell_s
 	int		xargexit;
 	int		nenv;
 	mode_t		mask;
-	void		*env;		/* environment */
 	void		*init_context;
 	void		*mac_context;
 	void		*lex_context;
 	void		*arg_context;
 	void		*pathlist;
-	void		*defpathlist;
 	void		*cdpathlist;
 	char		**argaddr;
 	char		cond_expan;	/* set while processing ${var=val}, ${var:=val}, ${var?err}, ${var:?err} */
@@ -362,7 +357,6 @@ struct Shell_s
 	Shinit_f	userinit;
 	Shbltin_f	bltinfun;
 	Shbltin_t	bltindata;
-	char		*cur_line;
 	int		offsets[10];
 	Sfio_t		**sftable;
 	unsigned char	*fdstatus;
@@ -389,6 +383,9 @@ struct Shell_s
 	char 		exittrap;
 	char 		errtrap;
 	char 		end_fn;
+#if SHOPT_FILESCAN
+	char		*cur_line;
+#endif
 #if !SHOPT_DEVFD
 	char		*fifo;		/* FIFO name for current process substitution */
 	Dt_t		*fifo_tree;	/* for cleaning up process substitution FIFOs */

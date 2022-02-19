@@ -952,13 +952,16 @@ w exit
 
 touch "$tmp/foo bar"
 ((SHOPT_VSH || SHOPT_ESH)) && tst $LINENO <<!
-L tab completion with space in string
+L tab completion with space in string and -o noglob on
 # https://github.com/ksh93/ksh/pull/413
+# Amended to test that completion keeps working after -o noglob
 
 d 15
 p :test-1:
+w set -o noglob
+p :test-2:
 w echo $tmp/foo\\\\ \\t
-r ^:test-1: echo $tmp/foo\\\\ bar \\r\\n$
+r ^:test-2: echo $tmp/foo\\\\ bar \\r\\n$
 r ^$tmp/foo bar\\r\\n$
 !
 
@@ -972,6 +975,27 @@ p :test-2:
 w echo "!99"
 r !99
 r : !99: event not found\r\n$
+!
+
+mkfifo testfifo
+tst $LINENO <<"!"
+L suspend a blocked write to a FIFO
+# https://github.com/ksh93/ksh/issues/464
+
+d 15
+p :test-1:
+w echo >testfifo
+r echo
+# untrapped SIGTSTP (Ctrl+Z) should be ineffective here and just print ^Z
+c \cZ
+r ^\^Z$
+# Ctrl+C should interrupt it and trigger an error message
+c \cC
+r ^\^C.*: testfifo: cannot create \[.*\]\r\n$
+p :test-2:
+w echo ok
+r echo
+r ^ok\r\n$
 !
 
 # ======

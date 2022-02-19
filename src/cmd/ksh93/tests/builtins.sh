@@ -1530,4 +1530,19 @@ fi
 got=$(sleep 1U 2>&1) || err_exit "sleep builtin cannot handle microseconds in the form of <num>U (got $(printf %q "$got"))"
 
 # ======
+# Tests to avoid backporting an inherently broken 'read -p' compat hack from ksh 93v- or ksh2020
+# Discussion: https://github.com/ksh93/ksh/issues/463
+# ...It hangs in an infinite option parsing loop on encountering a stacked 'p' option
+(echo ok |& read -pt1 && [[ $REPLY == ok ]]) &
+test_pid=$!
+(sleep 1; kill -s KILL "$test_pid" 2>/dev/null) &	# another bg job to kill frozen test job
+sleep_pid=$!
+{ wait "$test_pid"; } 2>/dev/null			# get job's exit status, suppressing signal messages
+((!(e = $?))) || err_exit "'read -pt1' hangs (got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
+kill "$sleep_pid" 2>/dev/null
+# ...It failed to implement co-process compatibility for 'read -p .dot.varname' or 'read -p varname?prompt'
+(echo ok |& read -p .sh.foo"?dummy prompt: " && [[ ${.sh.foo} == ok ]]) </dev/null \
+|| err_exit "'read -p' co-process usage is not fully backward compatible with ksh 93u+"
+
+# ======
 exit $((Errors<125?Errors:125))

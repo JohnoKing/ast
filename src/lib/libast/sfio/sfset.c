@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -30,12 +30,12 @@
 int sfset(Sfio_t* f, int flags, int set)
 {
 	reg int	oflags, tflags, rv;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f,0);
+	if(!f)
+		return 0;
 
 	if(flags == 0 && set == 0)
-		SFMTXRETURN(f, (f->flags&SFIO_FLAGS));
+		return (f->flags&SFIO_FLAGS);
 
 	if((oflags = (f->mode&SF_RDWR)) != (int)f->mode)
 	{	/* avoid sfsetbuf() isatty() call if user sets (SF_LINE|SF_WCWIDTH) */
@@ -48,10 +48,10 @@ int sfset(Sfio_t* f, int flags, int set)
 		if(tflags)
 			f->flags &= ~tflags;
 		if(rv < 0)
-			SFMTXRETURN(f, 0);
+			return 0;
 	}
 	if(flags == 0)
-		SFMTXRETURN(f, (f->flags&SFIO_FLAGS));
+		return (f->flags&SFIO_FLAGS);
 
 	SFLOCK(f,0);
 
@@ -89,5 +89,5 @@ int sfset(Sfio_t* f, int flags, int set)
 		f->flags &= ~SF_PUBLIC;
 
 	SFOPEN(f,0);
-	SFMTXRETURN(f, (oflags&SFIO_FLAGS));
+	return (oflags&SFIO_FLAGS);
 }

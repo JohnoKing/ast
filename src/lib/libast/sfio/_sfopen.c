@@ -40,17 +40,14 @@ Sfio_t* _sfopen(Sfio_t*		f,		/* old stream structure */
 		const char*	mode)		/* mode of the stream */
 {
 	int	fd, oldfd, oflags, fflags, sflags;
-	SFMTXDECL(f);
 
 	/* get the control flags */
-	if((sflags = _sftype(mode,&oflags,&fflags,NIL(int*))) == 0)
+	if((sflags = _sftype(mode,&oflags,&fflags)) == 0)
 		return NIL(Sfio_t*);
 
 	/* changing the control flags */
 	if(f && !file && !((f->flags|sflags)&SF_STRING) )
-	{	SFMTXENTER(f, NIL(Sfio_t*));
-
-		if(f->mode&SF_INIT ) /* stream uninitialized, ok to set flags */
+	{	if(f->mode&SF_INIT ) /* stream uninitialized, ok to set flags */
 		{	f->flags |= (sflags & (SFIO_FLAGS & ~SF_RDWR));
 
 			if((sflags &= SF_RDWR) != 0) /* reset read/write modes */
@@ -67,7 +64,7 @@ Sfio_t* _sfopen(Sfio_t*		f,		/* old stream structure */
 		}
 		else /* make sure there is no buffered data */
 		{	if(sfsync(f) < 0)
-				SFMTXRETURN(f,NIL(Sfio_t*));
+				return NIL(Sfio_t*);
 		}
 
 		if(f->file >= 0 )
@@ -83,7 +80,7 @@ Sfio_t* _sfopen(Sfio_t*		f,		/* old stream structure */
 #endif
 		}
 
-		SFMTXRETURN(f,f);
+		return f;
 	}
 
 	if(sflags&SF_STRING)
@@ -138,15 +135,15 @@ Sfio_t* _sfopen(Sfio_t*		f,		/* old stream structure */
 	return f;
 }
 
-int _sftype(reg const char* mode, int* oflagsp, int* fflagsp, int* uflagp)
+int _sftype(reg const char* mode, int* oflagsp, int* fflagsp)
 {
-	reg int	sflags, oflags, fflags, uflag;
+	reg int	sflags, oflags, fflags;
 
 	if(!mode)
 		return 0;
 
 	/* construct the open flags */
-	sflags = oflags = fflags = uflag = 0;
+	sflags = oflags = fflags = 0;
 	while(1) switch(*mode++)
 	{
 	case 'a' :
@@ -160,10 +157,6 @@ int _sftype(reg const char* mode, int* oflagsp, int* fflagsp, int* uflagp)
 		oflags |= O_cloexec;
 		fflags |= SF_FD_CLOEXEC;
 		continue;
-	case 'm' :
-		sflags |= SF_MTSAFE;
-		uflag = 0;
-		continue;
 	case 'r' :
 		sflags |= SF_READ;
 		oflags |= O_RDONLY;
@@ -173,10 +166,6 @@ int _sftype(reg const char* mode, int* oflagsp, int* fflagsp, int* uflagp)
 		continue;
 	case 't' :
 		oflags |= O_TEXT;
-		continue;
-	case 'u' :
-		sflags &= ~SF_MTSAFE;
-		uflag = 1;
 		continue;
 	case 'w' :
 		sflags |= SF_WRITE;
@@ -192,7 +181,6 @@ int _sftype(reg const char* mode, int* oflagsp, int* fflagsp, int* uflagp)
 		continue;
 	case 'W' :
 		sflags |= SF_WCWIDTH;
-		uflag = 0;
 		continue;
 	case '+' :
 		if(sflags)
@@ -211,8 +199,6 @@ int _sftype(reg const char* mode, int* oflagsp, int* fflagsp, int* uflagp)
 			*oflagsp = oflags;
 		if(fflagsp)
 			*fflagsp = fflags;
-		if(uflagp)
-			*uflagp = uflag;
 		if((sflags&(SF_STRING|SF_RDWR)) == SF_STRING)
 			sflags |= SF_READ;
 		return sflags;

@@ -34,10 +34,6 @@ tst	note{ SHOPT_* option probe }end cross{
 	*1*)	option MULTIBYTE 0 ;;
 	esac
 
-	# deprecated: Solaris disabled SHOPT_PFSH in its build
-	#test -x /bin/pfexec -o -x /usr/bin/pfexec
-	#option PFSH $?
-
 	# if external 'test' supports lowercase -l as equivalent to -L, enable
 	# SHOPT_TEST_L so ksh supports it for compatibility with local scripts
 	ln -s /dev/null "$EXECROOT/link$$"

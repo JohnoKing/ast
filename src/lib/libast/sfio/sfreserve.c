@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -35,9 +35,9 @@ void* sfreserve(Sfio_t*	f,	/* file to peek */
 	reg Sfrsrv_t*	rsrv;
 	reg void*	data;
 	reg int		mode, local;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f,NIL(void*));
+	if(!f)
+		return NIL(void*);
 
 	sz = size < 0 ? -size : size;
 
@@ -63,19 +63,19 @@ void* sfreserve(Sfio_t*	f,	/* file to peek */
 			data = NIL(void*);
 		}
 
-		SFMTXRETURN(f, data);
+		return data;
 	}
 
 	if(type > 0)
 	{	if(type == 1 ) /* upward compatibility mode */
 			type = SF_LOCKR;
 		else if(type != SF_LOCKR)
-			SFMTXRETURN(f, NIL(void*));
+			return NIL(void*);
 	}
 
 	if(size == 0 && (type < 0 || type == SF_LOCKR) )
 	{	if((f->mode&SF_RDWR) != f->mode && _sfmode(f,0,0) < 0)
-			SFMTXRETURN(f, NIL(void*));
+			return NIL(void*);
 
 		SFLOCK(f,0);
 		if((n = f->endb - f->next) < 0)
@@ -92,7 +92,7 @@ void* sfreserve(Sfio_t*	f,	/* file to peek */
 			mode = SF_WRITE;
 		if((int)f->mode != mode && _sfmode(f,mode,local) < 0)
 		{	SFOPEN(f,0);
-			SFMTXRETURN(f, NIL(void*));
+			return NIL(void*);
 		}
 
 		SFLOCK(f,local);
@@ -202,5 +202,5 @@ done:	/* compute the buffer to be returned */
 
 	_Sfi = f->val = n; /* return true buffer size */
 
-	SFMTXRETURN(f, data);
+	return data;
 }

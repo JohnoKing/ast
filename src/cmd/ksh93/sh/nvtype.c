@@ -450,10 +450,8 @@ static Namfun_t *clone_type(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
 				}
 				else
 					nv_putval(nq,nv_getval(nr),NV_RDONLY);
-#if SHOPT_TYPEDEF
 				if(sh.mktype)
 					nv_addnode(nr,1);
-#endif /* SHOPT_TYPEDEF */
 				if(pp->strsize<0)
 					continue;
 				_nv_unset(nr,0);
@@ -1303,7 +1301,6 @@ int nv_settype(Namval_t* np, Namval_t *tp, int flags)
 	Namarr_t	*ap=0;
 	int		nelem = 0;
 	unsigned int	subshell = sh.subshell;
-#if SHOPT_TYPEDEF
 	Namval_t	*tq;
 	if(nv_type(np)==tp)
 		return(0);
@@ -1341,8 +1338,8 @@ int nv_settype(Namval_t* np, Namval_t *tp, int flags)
 		}
 	}
 	else
-#endif /* SHOPT_TYPEDEF */
 	{
+		/* non-typeset -T type */
 		if(isnull)
 			flags &= ~NV_APPEND;
 		else if(!nv_isvtree(np))
@@ -1473,7 +1470,7 @@ int	sh_outtype(Sfio_t *out)
 	{
 		if(nv_isnull(tp) || !nv_isvtree(tp))
 			continue;
-		if(indent && (memcmp(tp->nvname,sh.prefix,n-1) || tp->nvname[n-1]!='.' || strchr(tp->nvname+n,'.')))
+		if(indent && (strncmp(tp->nvname,sh.prefix,n-1) || tp->nvname[n-1]!='.' || strchr(tp->nvname+n,'.')))
 			continue;
 		nv_settype(L_ARGNOD,tp,0);
 		if(indent)

@@ -67,9 +67,6 @@ const char e_subst[]		= "%s: bad substitution";
 const char e_create[]		= "%s: cannot create";
 const char e_tmpcreate[]	= "cannot create temporary file";
 const char e_restricted[]	= "%s: restricted";
-#if SHOPT_PFSH
-const char e_pfsh[]		= "%s: disabled in profile shell";
-#endif
 const char e_copexists[]	= "coprocess is running; cannot create a new coprocess";
 const char e_exists[]		= "%s: file already exists";
 const char e_pipe[]		= "cannot create pipe";
@@ -81,7 +78,7 @@ const char e_badpattern[]	= "%s: invalid shell pattern";
 const char e_noread[]		= "%s: pattern seek requires read access";
 const char e_logout[]		= "Use 'exit' to terminate this shell";
 const char e_exec[]		= "%s: cannot execute";
-const char e_pwd[]		= "cannot access parent directories";
+const char e_pwd[]		= "cannot determine present working directory";
 const char e_found[]		= "%s: not found";
 #ifdef ENAMETOOLONG
 const char e_toolong[]		= "%s: file name too long";

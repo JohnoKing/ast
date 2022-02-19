@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -242,11 +242,7 @@ static const char sh_lexstate6[256] =
 	S_DIG,	S_DIG,	S_DIG,	S_DIG,	S_DIG,	S_DIG,	S_DIG,	S_DIG,
 	S_DIG,	S_DIG,	S_ERR,	S_ERR,	S_ERR,	S_SPC2,	S_ERR,	S_SPC2,
 
-#if SHOPT_TYPEDEF
 	S_SPC1,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,
-#else
-	S_SPC2,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,
-#endif
 	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,
 	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,	S_ALP,
 	S_ALP,	S_ALP,	S_ALP,	S_ERR,	S_ERR,	S_ERR,	S_ERR,	S_ALP,

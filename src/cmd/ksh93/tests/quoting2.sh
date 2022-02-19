@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 1.0                  #
 #                    by AT&T Intellectual Property                     #
@@ -277,6 +277,17 @@ got=$(unset var; set +x; eval 'echo ${var-'\''{}'\''}' 2>&1)
 exp=''
 got=$(unset var; set +x; eval 'echo ${var+'\''{}'\''}' 2>&1)
 [[ $got == "$exp" ]] || err_exit "Single quotes misparsed in expansion operator string (6)" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+# https://github.com/ksh93/ksh/commit/5ed4c71
+unset var
+exp='text between expansions'
+got="${var:+'}text between expansions${var:+'}"
+[[ $got == "$exp" ]] || err_exit "Single quotes misparsed in expansion operator string (7)" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+var=foo
+exp=\''text between expansions'\'
+got="${var:+'}text between expansions${var:+'}"
+[[ $got == "$exp" ]] || err_exit "Single quotes misparsed in expansion operator string (8)" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======

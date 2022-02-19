@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -23,7 +23,7 @@
 #ifndef _SFIO_H
 #define _SFIO_H	1
 
-#define SFIO_VERSION	20090915L
+#define SFIO_VERSION	20220212L
 
 /*	Public header file for the sfio library
 **
@@ -72,7 +72,7 @@ struct _sffmt_s
 	Sffmtevent_f	eventf;	/* process events			*/
 
 	char*		form;	/* format string to stack		*/
-	va_list	args;	/* corresponding arg list		*/
+	va_list		args;	/* corresponding arg list		*/
 
 	int		fmt;	/* format character			*/
 	ssize_t		size;	/* object size				*/
@@ -92,7 +92,7 @@ struct _sffmt_s
 		((type) ? ((fe)->version = SFIO_VERSION) : (fe)->version)
 
 #define SFFMT_SSHORT	000000010 /* 'hh' flag, char			*/
-#define SFFMT_TFLAG	000000020 /* 't' flag, ptrdiff_t			*/
+#define SFFMT_TFLAG	000000020 /* 't' flag, ptrdiff_t		*/
 #define SFFMT_ZFLAG	000000040 /* 'z' flag, size_t			*/
 
 #define SFFMT_LEFT	000000100 /* left-justification			*/
@@ -113,12 +113,6 @@ struct _sffmt_s
 #define SFFMT_CENTER	010000000 /* '=' flag, center justification	*/
 #define SFFMT_CHOP	020000000 /* chop long string values from left	*/
 #define SFFMT_SET	037777770 /* flags settable on calling extf	*/
-
-/* for sfmutex() call */
-#define SFMTX_LOCK	0	/* up mutex count			*/
-#define SFMTX_TRYLOCK	1	/* try to up mutex count		*/
-#define SFMTX_UNLOCK	2	/* down mutex count			*/
-#define SFMTX_CLRLOCK	3	/* clear mutex count			*/
 
 /* various constants */
 #ifndef NULL
@@ -146,7 +140,6 @@ struct _sffmt_s
 #define SF_STATIC	0001000	/* a stream that cannot be freed	*/
 #define SF_IOCHECK	0002000	/* call exceptf before doing IO		*/
 #define SF_PUBLIC	0004000	/* SF_SHARE and follow physical seek	*/
-#define SF_MTSAFE	0010000	/* need thread safety			*/
 #define SF_WHOLE	0020000	/* preserve wholeness of sfwrite/sfputr */
 #define SF_IOINTR	0040000	/* return on interrupts			*/
 #define SF_WCWIDTH	0100000	/* wcwidth display stream		*/
@@ -187,7 +180,6 @@ struct _sffmt_s
 /* for the notify function and discipline exception */
 #define SF_NEW		0	/* new stream				*/
 #define SF_SETFD	(-1)	/* about to set the file descriptor 	*/
-#define SF_MTACCESS	(-2)	/* starting a multi-threaded stream	*/
 
 #define SF_BUFSIZE	8192	/* default buffer size			*/
 #define SF_UNBOUND	(-1)	/* unbounded buffer size		*/
@@ -270,9 +262,6 @@ extern int		sfscanf(Sfio_t*, const char*, ...);
 extern int		sfsscanf(const char*, const char*, ...);
 extern int		sfvsscanf(const char*, const char*, va_list);
 extern int		sfvscanf(Sfio_t*, const char*, va_list);
-
-/* mutex locking for thread-safety */
-extern int		sfmutex(Sfio_t*, int);
 
 /* io functions with discipline continuation */
 extern ssize_t		sfrd(Sfio_t*, void*, size_t, Sfdisc_t*);

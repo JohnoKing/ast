@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -314,14 +314,11 @@ int sfvscanf(Sfio_t*		f,		/* file to be scanned */
 				(int)(*d++) : -1 )
 #define SFungetc(f,c)	(d -= 1)
 
-	SFMTXDECL(f);
 
 	SFCVINIT();	/* initialize conversion tables */
 
-	SFMTXENTER(f,-1);
-
-	if(!form || f->mode != SF_READ && _sfmode(f,SF_READ,0) < 0)
-		SFMTXRETURN(f, -1);
+	if(!f || !form || (f->mode != SF_READ && _sfmode(f,SF_READ,0) < 0))
+		return -1;
 	SFLOCK(f,0);
 
 	SFinit(f); /* initialize local buffering system */
@@ -1061,5 +1058,5 @@ done:
 	if(n_assign == 0 && inp < 0)
 		n_assign = -1;
 
-	SFMTXRETURN(f,n_assign);
+	return n_assign;
 }

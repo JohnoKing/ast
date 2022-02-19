@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -49,9 +49,9 @@ Sfoff_t sfseek(Sfio_t*	f,	/* seek to a new location in this stream */
 {
 	Sfoff_t	r, s;
 	int	mode, local, hardseek, mustsync;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f, (Sfoff_t)(-1));
+	if(!f)
+		return (Sfoff_t)(-1);
 
 	GETLOCAL(f,local);
 
@@ -73,7 +73,7 @@ Sfoff_t sfseek(Sfio_t*	f,	/* seek to a new location in this stream */
 			f->flags = flags;
 
 		if(mode < 0)
-			SFMTXRETURN(f, (Sfoff_t)(-1));
+			return (Sfoff_t)(-1);
 	}
 
 	mustsync = (type&SF_SHARE) && !(type&SF_PUBLIC) &&
@@ -83,13 +83,13 @@ Sfoff_t sfseek(Sfio_t*	f,	/* seek to a new location in this stream */
 	if((type &= (SEEK_SET|SEEK_CUR|SEEK_END)) != SEEK_SET &&
 	   type != SEEK_CUR && type != SEEK_END )
 	{	errno = EINVAL;
-		SFMTXRETURN(f, (Sfoff_t)(-1));
+		return (Sfoff_t)(-1);
 	}
 
 	if(f->extent < 0)
 	{	/* let system call set errno */
 		(void)SFSK(f,(Sfoff_t)0,SEEK_CUR,f->disc);
-		SFMTXRETURN(f, (Sfoff_t)(-1));
+		return (Sfoff_t)(-1);
 	}
 
 	/* throw away ungetc data */
@@ -267,5 +267,5 @@ done :
 
 	if(mustsync)
 		sfsync(f);
-	SFMTXRETURN(f, p);
+	return p;
 }

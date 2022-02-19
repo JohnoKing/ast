@@ -34,23 +34,23 @@ ssize_t sfwrite(Sfio_t*		f,	/* write to this stream. 	*/
 	reg uchar	*s, *begs, *next;
 	reg ssize_t	w;
 	reg int		local;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f, (ssize_t)(-1));
+	if(!f)
+		return (ssize_t)(-1);
 
 	GETLOCAL(f,local);
 
 	if(!buf)
-		SFMTXRETURN(f, (ssize_t)(n == 0 ? 0 : -1) );
+		return (ssize_t)(n == 0 ? 0 : -1) ;
 
 	/* release peek lock */
 	if(f->mode&SF_PEEK)
 	{	if(!(f->mode&SF_WRITE) && (f->flags&SF_RDWR) != SF_RDWR)
-			SFMTXRETURN(f, (ssize_t)(-1));
+			return (ssize_t)(-1);
 
 		if((uchar*)buf != f->next &&
 		   (!f->rsrv || f->rsrv->data != (uchar*)buf) )
-			SFMTXRETURN(f, (ssize_t)(-1));
+			return (ssize_t)(-1);
 
 		f->mode &= ~SF_PEEK;
 
@@ -83,7 +83,7 @@ ssize_t sfwrite(Sfio_t*		f,	/* write to this stream. 	*/
 	{	/* check stream mode */
 		if(SFMODE(f,local) != SF_WRITE && _sfmode(f,SF_WRITE,local) < 0 )
 		{	w = s > begs ? s-begs : -1;
-			SFMTXRETURN(f,w);
+			return w;
 		}
 
 		SFLOCK(f,local);
@@ -163,5 +163,5 @@ ssize_t sfwrite(Sfio_t*		f,	/* write to this stream. 	*/
 	SFOPEN(f,local);
 
 	w = s-begs;
-	SFMTXRETURN(f,w);
+	return w;
 }

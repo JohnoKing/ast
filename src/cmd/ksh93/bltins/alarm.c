@@ -153,10 +153,7 @@ void	sh_timetraps(void)
 					sh_fun(tp->action,tp->node,(char**)0);
 				tp->flags &= ~L_FLAG;
 				if(!tp->flags)
-				{
 					nv_unset(tp->node);
-					nv_close(tp->node);
-				}
 			}
 		}
 		if(!(sh.sigflag[SIGALRM]&SH_SIGALRM))
@@ -221,8 +218,6 @@ static void putval(Namval_t* np, const char* val, int flag, Namfun_t* fp)
 	{
 		tp = (struct tevent*)nv_stack(np, (Namfun_t*)0);
 		sh.st.timetrap = time_delete(tp,sh.st.timetrap);
-		if(tp->action)
-			nv_close(tp->action);
 		nv_unset(np);
 		free((void*)fp);
 	}

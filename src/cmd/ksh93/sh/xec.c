@@ -60,7 +60,6 @@
 #endif
 
 #define SH_NTFORK	SH_TIMING
-#define NV_BLTPFSH	NV_ARRAY
 
 #if _lib_nice
     extern int	nice(int);
@@ -850,13 +849,14 @@ static void unset_instance(Namval_t *nq, Namval_t *node, struct Namref *nr,long 
 #if SHOPT_FILESCAN
     static Sfio_t *openstream(struct ionod *iop, int *save)
     {
-	int savein, fd = sh_redirect(iop,3);
+	int err = errno, savein, fd = sh_redirect(iop,3);
 	Sfio_t	*sp;
 	savein = dup(0);
 	if(fd==0)
 		fd = savein;
 	sp = sfnew(NULL,NULL,SF_UNBOUND,fd,SF_READ);
-	close(0);
+	while(close(0)<0 && errno==EINTR)
+		errno = err;
 	open(e_devnull,O_RDONLY);
 	sh.offsets[0] = -1;
 	sh.offsets[1] = 0;
@@ -1040,19 +1040,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 #endif /* SHOPT_NAMESPACE */
 					np = dtsearch(sh.fun_tree,np);
 				}
-#if SHOPT_PFSH
-				if(sh_isoption(SH_PFSH) && nv_isattr(np,NV_BLTINOPT) && !nv_isattr(np,NV_BLTPFSH)) 
-				{
-					if(path_xattr(np->nvname,(char*)0))
-					{
-						dtdelete(sh.bltin_tree,np);
-						np = 0;
-					}
-					else
-						nv_onattr(np,NV_BLTPFSH);
-					
-				}
-#endif /* SHOPT_PFSH */
 			}
 			if(com0)
 			{
@@ -1098,12 +1085,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 							flgs |= NV_MOVE;
 						if(np==SYSNAMEREF || checkopt(com,'n'))
 							flgs |= NV_NOREF;
-#if SHOPT_TYPEDEF
 						else if(argn>=3 && checkopt(com,'T'))
 						{
 							if(sh.subshell && !sh.subshare)
 								sh_subfork();
-#   if SHOPT_NAMESPACE
+#if SHOPT_NAMESPACE
 							if(sh.namespace)
 							{
 								if(!sh.strbuf2)
@@ -1113,12 +1099,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 								nv_open(sh.prefix,sh.var_base,NV_VARNAME);
 							}
 							else
-#   endif /* SHOPT_NAMESPACE */
+#endif /* SHOPT_NAMESPACE */
 							sh.prefix = NV_CLASS;
 							flgs |= NV_TYPE;
 			
 						}
-#endif /* SHOPT_TYPEDEF */
 						if(sh.fn_depth && !sh.prefix)
 							flgs |= NV_NOSCOPE;
 					}
@@ -1851,6 +1836,22 @@ int sh_exec(register const Shnode_t *t, int flags)
 			int 	jmpval, waitall = 0;
 			int 	simple = (t->fork.forktre->tre.tretyp&COMMSK)==TCOM;
 			struct checkpt *buffp = (struct checkpt*)stkalloc(sh.stk,sizeof(struct checkpt));
+			if(sh.subshell && !sh.subshare && t->fork.forkio)
+			{
+				/* Subshell forking workaround for https://github.com/ksh93/ksh/issues/161
+				 * Check each redirection for >&- or <&-
+				 * TODO: find the elusive real fix */
+				struct ionod *i = t->fork.forkio;
+				do
+				{
+					if((i->iofile & ~(IOUFD|IOPUT)) == (IOMOV|IORAW) && !strcmp(i->ioname,"-"))
+					{
+						sh_subfork();
+						break;
+					}
+				}
+				while(i = i->ionxt);
+			}
 			sh_pushcontext(buffp,SH_JMPIO);
 			if(type&FPIN)
 			{
@@ -2081,7 +2082,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 
 		    case TLST:
 		    {
-			/* a list of commands are executed here */
+			/* a list of commands is executed here */
 			do
 			{
 				sh_exec(t->lst.lstlef,errorflg|OPTIMIZE);
@@ -2229,7 +2230,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 				sh.st.execbrk = (--sh.st.breakcnt !=0);
 			sh.st.loopcnt--;
 			sh_argfree(argsav,0);
-			nv_close(np);
 			break;
 		    }
 
@@ -2257,11 +2257,17 @@ int sh_exec(register const Shnode_t *t, int flags)
 				goto endwhile;
 #endif /* SHOPT_OPTIMIZE */
 #if SHOPT_FILESCAN
-			if(type==TWH && tt->tre.tretyp==TCOM && !tt->com.comarg && tt->com.comio)
+			/* Recognize filescan loop for a lone input redirection following 'while' */
+			if(type==TWH					/* 'while' (not 'until') */
+			&& tt->tre.tretyp==TCOM 			/* one simple command follows 'while'... */
+			&& !tt->com.comarg				/* ...with no command name or arguments... */
+			&& !tt->com.comset				/* ...and no variable assignments list... */
+			&& tt->com.comio				/* ...and one I/O redirection... */
+			&& !tt->com.comio->ionxt			/* ...but not more than one... */
+			&& !(tt->com.comio->iofile & (IOPUT|IOAPP))	/* ...and not > or >> */
+			&& !sh_isoption(SH_POSIX))			/* not in POSIX compilance mode */
 			{
 				iop = openstream(tt->com.comio,&savein);
-				if(tt->com.comset)
-					nv_setlist(tt->com.comset,NV_IDENT|NV_ASSIGN,0);
 			}
 #endif /* SHOPT_FILESCAN */
 			sh.st.loopcnt++;
@@ -2306,8 +2312,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 #if SHOPT_FILESCAN
 			if(iop)
 			{
+				int err=errno;
 				sfclose(iop);
-				close(0);
+				while(close(0)<0 && errno==EINTR)
+					errno = err;
 				dup(savein);
 				sh.cur_line = 0;
 			}
@@ -2467,10 +2475,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 			{
 				Namval_t *np = nv_open("TIMEFORMAT",sh.var_tree,NV_NOADD);
 				if(np)
-				{
 					format = nv_getval(np);
-					nv_close(np);
-				}
 				if(!format)
 					format = e_timeformat;
 			}

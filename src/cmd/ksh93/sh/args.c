@@ -48,9 +48,6 @@ static	char		*null;
 
 /* The following order is determined by sh_optset */
 static  const char optksh[] =
-#if SHOPT_PFSH
-	"P"
-#endif
 	"Dircabefhkmnpstuvx"
 #if SHOPT_BRACEPAT
 	"B"
@@ -62,9 +59,6 @@ static  const char optksh[] =
 	;
 static const int flagval[]  =
 {
-#if SHOPT_PFSH
-	SH_PFSH,
-#endif
 	SH_DICTIONARY, SH_INTERACTIVE, SH_RESTRICTED, SH_CFLAG,
 	SH_ALLEXPORT, SH_NOTIFY, SH_ERREXIT, SH_NOGLOB, SH_TRACKALL,
 	SH_KEYWORD, SH_MONITOR, SH_NOEXEC, SH_PRIVILEGED, SH_SFLAG, SH_TFLAG,
@@ -306,10 +300,7 @@ int sh_argopts(int argc,register char *argv[])
 				strsort(sh.st.dolv+1,sh.st.dolc,strcoll);
 		}
 		if(np)
-		{
 			nv_setvec(np,0,argc,argv);
-			nv_close(np);
-		}
 		else if(argc>0 || ((cp=argv[-1]) && strcmp(cp,"--")==0))
 			argset(ap,argv-1);
 	}

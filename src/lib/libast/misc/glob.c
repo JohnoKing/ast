@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -544,7 +544,7 @@ skip:
 			{
 				/*
 				 * For security and usability, only match '..' or '.' as the final element if:
-				 *	- its' specified literally, or
+				 *	- it's specified literally, or
 				 *	- we're in file name completion mode.
 				 * To avoid breaking globstar, make sure that '.' or '..' is skipped if, and only if, it is the
 				 * final element in the pattern (i.e., if 'pat' does not contain a slash) and is not specified

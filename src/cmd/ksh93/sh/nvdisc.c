@@ -246,8 +246,7 @@ static void	assign(Namval_t *np,const char* val,int flags,Namfun_t *handle)
 	struct blocked	block, *bp = block_info(np, &block);
 	Namval_t	node;
 	union Value	*up = np->nvalue.up;
-#if SHOPT_TYPEDEF
-	Namval_t	*tp, *nr;
+	Namval_t	*tp, *nr;  /* for 'typeset -T' types */
 	if(val && (tp=nv_type(np)) && (nr=nv_open(val,sh.var_tree,NV_VARNAME|NV_ARRAY|NV_NOADD|NV_NOFAIL)) && tp==nv_type(nr)) 
 	{
 		char *sub = nv_getsub(np);
@@ -261,7 +260,6 @@ static void	assign(Namval_t *np,const char* val,int flags,Namfun_t *handle)
 			nv_clone(nr,np,0);
 		goto done;
 	}
-#endif /* SHOPT_TYPEDEF */
 	if(val || isblocked(bp,type))
 	{
 		if(!nq || isblocked(bp,type))
@@ -1278,7 +1276,6 @@ Namval_t *sh_addbuiltin(const char *path, Shbltin_f bltin, void *extra)
 	if(nq)
 	{
 		cp=nv_setdisc(nq,cp+1,np,(Namfun_t*)nq);
-		nv_close(nq);
 		if(!cp)
 		{
 			errormsg(SH_DICT,ERROR_exit(1),e_baddisc,name);

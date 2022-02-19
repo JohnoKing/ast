@@ -74,9 +74,10 @@ The options have the following defaults and meanings:
     ESH          on  Compile with emacs command line editing.  The original
                      emacs line editor code was provided by Mike Veach at IH.
 
-    FILESCAN     on  Experimental option that allows fast reading of files
-                     using while < file;do ...; done and allowing fields in
-                     each line to be accessed as positional parameters.
+    FILESCAN     on  Allows fast reading of files using:
+                         while < file; do ...; done
+                     Each line is stored in $REPLY and fields in each
+                     line can be accessed as positional parameters.
 
     FIXEDARRAY   on  When using typeset, a name in the format NAME[N]
                      creates a fixed-size array and any attempt to access a
@@ -124,8 +125,6 @@ The options have the following defaults and meanings:
 
     OPTIMIZE     on  Optimize loop invariants for with for and while loops.
 
-    PFSH         off Compile with support for profile shell. (Solaris; obsolete)
-
     P_SUID       off If set, all real UIDs, greater than or equal to this
                      value will require the -p flag to run SUID/SGID scripts.
 
@@ -155,8 +154,6 @@ The options have the following defaults and meanings:
     TIMEOUT      off Set this to the number of seconds for timing out and
                      exiting the shell when you don't enter a command.  If
                      non-zero, TMOUT can not be set larger than this value.
-
-    TYPEDEF      on  Enable typeset type definitions.
 
     VSH          on  Compile with vi command line editing.  The original vi
                      line editor code was provided by Pat Sullivan at CB.

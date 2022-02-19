@@ -57,9 +57,6 @@
 
 #include	"sfio_t.h"
 
-/* note that the macro vt_threaded has effect on vthread.h */
-#include	<vthread.h>
-
 /* file system info */
 #if _PACKAGE_ast
 
@@ -242,77 +239,6 @@
 #define SFMBLEN(s,mb)		(*(s) ? 1 : 0)
 #endif /* _has_multibyte */
 
-/* dealing with streams that might be accessed concurrently */
-#if vt_threaded
-
-#define SFMTXdecl(ff,_mf_)	Sfio_t* _mf_ = (ff)
-#define SFMTXbegin(ff,_mf_,rv) \
-	{	if((ff)->_flags&SF_MTSAFE) \
-		{	(_mf_) = (ff); \
-			if(sfmutex((ff), SFMTX_LOCK) != 0) return(rv); \
-			if(_Sfnotify) \
-			{	(*_Sfnotify)((_mf_), SF_MTACCESS, (void*)(&(ff)) ); \
-				if(!(ff)) (ff) = (_mf_); \
-			} \
-		} \
-	}
-#define SFMTXend(ff,_mf_) \
-	{	if((ff)->_flags&SF_MTSAFE) \
-		{	if(_Sfnotify) \
-				(*_Sfnotify)((_mf_), SF_MTACCESS, NIL(void*) ); \
-			sfmutex((ff), SFMTX_UNLOCK); \
-			(ff) = (_mf_); \
-		} \
-	}
-
-#define SFONCE()		(_Sfdone ? 0 : vtonce(_Sfonce,_Sfoncef))
-
-#define SFMTXLOCK(f)		(((f)->flags&SF_MTSAFE) ? sfmutex(f,SFMTX_LOCK) : 0)
-#define SFMTXUNLOCK(f)		(((f)->flags&SF_MTSAFE) ? sfmutex(f,SFMTX_UNLOCK) : 0)
-
-#define SFMTXDECL(ff)		SFMTXdecl((ff), _mtxf1_)
-#define SFMTXBEGIN(ff,v) 	{ SFMTXbegin((ff), _mtxf1_, (v) ); }
-#define SFMTXEND(ff)		{ SFMTXend(ff, _mtxf1_); }
-#define SFMTXENTER(ff,v) 	{ if(!(ff)) return(v); SFMTXBEGIN((ff), (v)); }
-#define SFMTXRETURN(ff,v)	{ SFMTXEND(ff); return(v); }
-
-#define SFMTXDECL2(ff)		SFMTXdecl((ff), _mtxf2_)
-#define SFMTXBEGIN2(ff,v) 	{ SFMTXbegin((ff), _mtxf2_, (v) ); }
-#define SFMTXEND2(ff)		{ SFMTXend((ff), _mtxf2_); }
-
-#define POOLMTXLOCK(p)		( vtmtxlock(&(p)->mutex) )
-#define POOLMTXUNLOCK(p)	( vtmtxunlock(&(p)->mutex) )
-#define POOLMTXENTER(p)		{ POOLMTXLOCK(p); }
-#define POOLMTXRETURN(p,rv)	{ POOLMTXUNLOCK(p); return(rv); }
-
-#else /*!vt_threaded*/
-
-#undef SF_MTSAFE /* no need to worry about thread-safety */
-#define SF_MTSAFE		0
-
-#define SFONCE()		/*(0)*/
-
-#define SFMTXLOCK(f)		/*(0)*/
-#define SFMTXUNLOCK(f)		/*(0)*/
-
-#define	SFMTXDECL(ff)		/*(0)*/
-#define SFMTXBEGIN(ff,v) 	/*(0)*/
-#define SFMTXEND(ff)		/*(0)*/
-#define SFMTXENTER(ff,v)	{ if(!(ff)) return(v); }
-#define SFMTXRETURN(ff,v)	{ return(v); }
-
-#define SFMTXDECL2(ff)		/*(0)*/
-#define SFMTXBEGIN2(ff,v) 	/*(0)*/
-#define SFMTXEND2(ff)		/*(0)*/
-
-#define POOLMTXLOCK(p)
-#define POOLMTXUNLOCK(p)
-#define POOLMTXENTER(p)
-#define POOLMTXRETURN(p,v)	{ return(v); }
-
-#endif /*vt_threaded*/
-
-
 /* functions for polling readiness of streams */
 #if _lib_select
 #undef _lib_poll
@@ -375,7 +301,7 @@
 #define SF_NULL		00000010	/* stream is /dev/null			*/
 #define SF_SEQUENTIAL	00000020	/* sequential access			*/
 #define SF_JUSTSEEK	00000040	/* just did a sfseek			*/
-#define SF_PRIVATE	00000100	/* private stream to Sfio, no mutex	*/
+#define SF_PRIVATE	00000100	/* private stream to Sfio		*/
 #define SF_ENDING	00000200	/* no re-io on interrupts at closing	*/
 #define SF_WIDE		00000400	/* in wide mode - stdio only		*/
 #define SF_PUTR		00001000	/* in sfputr()				*/
@@ -541,7 +467,6 @@ struct _sfpool_s
 	int		n_sf;		/* number currently in pool	*/
 	Sfio_t**	sf;		/* array of streams		*/
 	Sfio_t*		array[3];	/* start with 3			*/
-	Vtmutex_t	mutex;		/* mutex lock object		*/
 };
 
 /* reserve buffer structure */
@@ -669,9 +594,6 @@ typedef void  (*Sfnotify_f)(Sfio_t*, int, void*);
 #define _Sfcleanup	(_Sfextern.sf_cleanup)
 #define _Sfexiting	(_Sfextern.sf_exiting)
 #define _Sfdone		(_Sfextern.sf_done)
-#define _Sfonce		(_Sfextern.sf_once)
-#define _Sfoncef	(_Sfextern.sf_oncef)
-#define _Sfmutex	(_Sfextern.sf_mutex)
 typedef struct _sfextern_s
 {	ssize_t			sf_page;
 	struct _sfpool_s	sf_pool;
@@ -683,9 +605,6 @@ typedef struct _sfextern_s
 	void			(*sf_cleanup)(void);
 	int			sf_exiting;
 	int			sf_done;
-	Vtonce_t*		sf_once;
-	void			(*sf_oncef)(void);
-	Vtmutex_t*		sf_mutex;
 } Sfextern_t;
 
 /* get the real value of a byte in a coded long or ulong */
@@ -780,8 +699,8 @@ typedef struct _sfextern_s
 /* lock/open a stream */
 #define SFMODE(f,l)	((f)->mode & ~(SF_RV|SF_RC|((l) ? SF_LOCK : 0)) )
 #define SFLOCK(f,l)	(void)((f)->mode |= SF_LOCK, (f)->endr = (f)->endw = (f)->data)
-#define _SFOPENRD(f)	((f)->endr = ((f)->flags&SF_MTSAFE) ? (f)->data : (f)->endb)
-#define _SFOPENWR(f)	((f)->endw = ((f)->flags&(SF_MTSAFE|SF_LINE)) ? (f)->data : (f)->endb)
+#define _SFOPENRD(f)	((f)->endr = (f)->endb)
+#define _SFOPENWR(f)	((f)->endw = ((f)->flags&SF_LINE) ? (f)->data : (f)->endb)
 #define _SFOPEN(f)	((f)->mode == SF_READ  ? _SFOPENRD(f) : \
 			 (f)->mode == SF_WRITE ? _SFOPENWR(f) : \
 			 ((f)->endw = (f)->endr = (f)->data) )
@@ -1064,7 +983,7 @@ extern char**		_sfgetpath(char*);
 extern Sfextern_t	_Sfextern;
 
 extern int		_sfmode(Sfio_t*, int, int);
-extern int		_sftype(const char*, int*, int*, int*);
+extern int		_sftype(const char*, int*, int*);
 
 #undef	extern
 

@@ -53,22 +53,22 @@ static int _sfdup(int fd, int newfd)
 int sfsetfd(Sfio_t* f, int newfd)
 {
 	reg int		oldfd;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f, -1);
+	if(!f)
+		return -1;
 
 	if(f->flags&SF_STRING)
-		SFMTXRETURN(f, -1);
+		return -1;
 
 	if((f->mode&SF_INIT) && f->file < 0)
 	{	/* restoring file descriptor after a previous freeze */
 		if(newfd < 0)
-			SFMTXRETURN(f, -1);
+			return -1;
 	}
 	else
 	{	/* change file descriptor */
 		if((f->mode&SF_RDWR) != f->mode && _sfmode(f,0,0) < 0)
-			SFMTXRETURN(f, -1);
+			return -1;
 		SFLOCK(f,0);
 
 		oldfd = f->file;
@@ -76,7 +76,7 @@ int sfsetfd(Sfio_t* f, int newfd)
 		{	if(newfd >= 0)
 			{	if((newfd = _sfdup(oldfd,newfd)) < 0)
 				{	SFOPEN(f,0);
-					SFMTXRETURN(f, -1);
+					return -1;
 				}
 				CLOSE(oldfd);
 			}
@@ -86,7 +86,7 @@ int sfsetfd(Sfio_t* f, int newfd)
 				   (f->mode&SF_READ) || f->disc == _Sfudisc)
 				{	if(SFSYNC(f) < 0)
 					{	SFOPEN(f,0);
-						SFMTXRETURN(f, -1);
+						return -1;
 					}
 				}
 
@@ -94,7 +94,7 @@ int sfsetfd(Sfio_t* f, int newfd)
 				   ((f->mode&SF_READ) && f->extent < 0 &&
 				    f->next < f->endb) )
 				{	SFOPEN(f,0);
-					SFMTXRETURN(f, -1);
+					return -1;
 				}
 
 #ifdef MAP_TYPE
@@ -121,5 +121,5 @@ int sfsetfd(Sfio_t* f, int newfd)
 
 	f->file = newfd;
 
-	SFMTXRETURN(f,newfd);
+	return newfd;
 }

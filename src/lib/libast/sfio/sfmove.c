@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -43,12 +43,9 @@ Sfoff_t sfmove(Sfio_t*	fr,	/* moving data from this stream */
 	Sfoff_t		n_move, sk, cur;
 	uchar		*rbuf = NIL(uchar*);
 	ssize_t		rsize = 0;
-	SFMTXDECL(fr);	/* declare a shadow stream variable for from stream */
-	SFMTXDECL2(fw);	/* declare a shadow stream variable for to stream */
 
-	SFMTXENTER(fr, (Sfoff_t)0);
+	if(!(fr)) return (Sfoff_t)0;
 	if(fw)
-		SFMTXBEGIN2(fw, (Sfoff_t)0);
 
 	for(n_move = 0; n != 0; )
 	{
@@ -234,9 +231,8 @@ Sfoff_t sfmove(Sfio_t*	fr,	/* moving data from this stream */
 
 	if(fw)
 	{	SFOPEN(fw,0);
-		SFMTXEND2(fw);
 	}
 
 	SFOPEN(fr,0);
-	SFMTXRETURN(fr, n_move);
+	return n_move;
 }

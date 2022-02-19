@@ -43,7 +43,6 @@
 	struct _sfpool_s*	pool;	/* the pool containing this	*/ \
 	struct _sfrsrv_s*	rsrv;	/* reserved buffer		*/ \
 	struct _sfproc_s*	proc;	/* coprocess ID, etc.		*/ \
-	void*			mutex;	/* mutex for thread-safety	*/ \
 	void*			stdio;	/* stdio FILE if any		*/ \
 	Sfoff_t			lpos;	/* last seek position		*/ \
 	size_t			iosz;	/* preferred size for I/O	*/ \
@@ -70,7 +69,7 @@
 #define SF_RDWRSTR	(SF_RDWR|SF_STRING)
 
 /* for static initialization of an Sfio_t structure */
-#define SFNEW(data,size,file,type,disc,mutex)	\
+#define SFNEW(data,size,file,type,disc)	\
 	{ (unsigned char*)(data),			/* next		*/ \
 	  (unsigned char*)(data),			/* endw		*/ \
 	  (unsigned char*)(data),			/* endr		*/ \
@@ -91,7 +90,6 @@
 	  (struct _sfpool_s*)0,				/* pool		*/ \
 	  (struct _sfrsrv_s*)0,				/* rsrv		*/ \
 	  (struct _sfproc_s*)0,				/* proc		*/ \
-	  (mutex),					/* mutex	*/ \
 	  (void*)0,					/* stdio	*/ \
 	  (Sfoff_t)0,					/* lpos		*/ \
 	  (size_t)0,					/* iosz		*/ \
@@ -99,7 +97,7 @@
 	}
 
 /* function to clear an Sfio_t structure */
-#define SFCLEAR(f,mtx) \
+#define SFCLEAR(f) \
 	( (f)->next = (unsigned char*)0,		/* next		*/ \
 	  (f)->endw = (unsigned char*)0,		/* endw		*/ \
 	  (f)->endr = (unsigned char*)0,		/* endr		*/ \
@@ -120,7 +118,6 @@
 	  (f)->pool = (struct _sfpool_s*)0,		/* pool		*/ \
 	  (f)->rsrv = (struct _sfrsrv_s*)0,		/* rsrv		*/ \
 	  (f)->proc = (struct _sfproc_s*)0,		/* proc		*/ \
-	  (f)->mutex = (mtx),				/* mutex	*/ \
 	  (f)->stdio = (void*)0,			/* stdio	*/ \
 	  (f)->lpos = (Sfoff_t)0,			/* lpos		*/ \
 	  (f)->iosz = (size_t)0,			/* iosz		*/ \

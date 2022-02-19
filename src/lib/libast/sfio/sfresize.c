@@ -28,13 +28,10 @@
 
 int sfresize(Sfio_t* f, Sfoff_t size)
 {
-	SFMTXDECL(f);
-
-	SFMTXENTER(f, -1);
 
 	if(size < 0 || f->extent < 0 ||
-	   (f->mode != SF_WRITE && _sfmode(f,SF_WRITE,0) < 0) )
-		SFMTXRETURN(f, -1);
+	   !f || (f->mode != SF_WRITE && _sfmode(f,SF_WRITE,0) < 0))
+		return -1;
 
 	SFLOCK(f,0);
 
@@ -55,7 +52,7 @@ int sfresize(Sfio_t* f, Sfoff_t size)
 		}
 		else
 		{	if(SFSK(f, size, SEEK_SET, f->disc) != size)
-				SFMTXRETURN(f, -1);
+				return -1;
 			memclear((char*)(f->data+f->extent), (int)(size-f->extent));
 		}
 	}
@@ -64,9 +61,9 @@ int sfresize(Sfio_t* f, Sfoff_t size)
 			SFSYNC(f);
 #if _lib_ftruncate
 		if(ftruncate(f->file, (off_t)size) < 0)
-			SFMTXRETURN(f, -1);
+			return -1;
 #else
-		SFMTXRETURN(f, -1);
+		return -1;
 #endif
 	}
 
@@ -74,5 +71,5 @@ int sfresize(Sfio_t* f, Sfoff_t size)
 
 	SFOPEN(f, 0);
 
-	SFMTXRETURN(f, 0);
+	return 0;
 }

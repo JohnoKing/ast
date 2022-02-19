@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -37,13 +37,12 @@
 */
 static int delpool(reg Sfpool_t* p)
 {
-	POOLMTXENTER(p);
 
 	if(p->s_sf && p->sf != p->array)
 		free((void*)p->sf);
 	p->mode = SF_AVAIL;
 
-	POOLMTXRETURN(p,0);
+	return 0;
 }
 
 static Sfpool_t* newpool(reg int mode)
@@ -59,30 +58,22 @@ static Sfpool_t* newpool(reg int mode)
 	}
 
 	if(!p)
-	{	POOLMTXLOCK(last);
-
-		if(!(p = (Sfpool_t*) malloc(sizeof(Sfpool_t))) )
-		{	POOLMTXUNLOCK(last);
+	{	if(!(p = (Sfpool_t*) malloc(sizeof(Sfpool_t))) )
 			return NIL(Sfpool_t*);
-		}
-
-		(void)vtmtxopen(&p->mutex, VT_INIT); /* initialize mutex */
 
 		p->mode = 0;
 		p->n_sf = 0;
 		p->next = NIL(Sfpool_t*);
 		last->next = p;
 
-		POOLMTXUNLOCK(last);
 	}
 
-	POOLMTXENTER(p);
 
 	p->mode = mode&SF_SHARE;
 	p->s_sf = sizeof(p->array)/sizeof(p->array[0]);
 	p->sf = p->array;
 
-	POOLMTXRETURN(p,p);
+	return p;
 }
 
 /* move a stream to head */
@@ -94,14 +85,13 @@ static int _sfphead(Sfpool_t*	p,	/* the pool			*/
 	reg ssize_t	k, w, v;
 	reg int		rv;
 
-	POOLMTXENTER(p);
 
 	if(n == 0)
-		POOLMTXRETURN(p,0);
+		return 0;
 
 	head = p->sf[0];
 	if(SFFROZEN(head) )
-		POOLMTXRETURN(p,-1);
+		return -1;
 
 	SFLOCK(head,0);
 	rv = -1;
@@ -148,7 +138,7 @@ static int _sfphead(Sfpool_t*	p,	/* the pool			*/
 done:
 	head->mode &= ~SF_LOCK; /* partially unlock because it's no longer head */
 
-	POOLMTXRETURN(p,rv);
+	return rv;
 }
 
 /* delete a stream from its pool */
@@ -156,7 +146,6 @@ static int _sfpdelete(Sfpool_t*	p,	/* the pool		*/
 		      Sfio_t*	f,	/* the stream		*/
 		      int	n)	/* position in pool	*/
 {
-	POOLMTXENTER(p);
 
 	p->n_sf -= 1;
 	for(; n < p->n_sf; ++n)
@@ -194,7 +183,7 @@ static int _sfpdelete(Sfpool_t*	p,	/* the pool		*/
 	}
 
 done:
-	POOLMTXRETURN(p,0);
+	return 0;
 }
 
 static int _sfpmove(reg Sfio_t*	f,
@@ -235,35 +224,21 @@ Sfio_t* sfpool(reg Sfio_t* f, reg Sfio_t* pf, reg int mode)
 	}
 
 	if(f)	/* check for permissions */
-	{	SFMTXLOCK(f);
-		if((f->mode&SF_RDWR) != f->mode && _sfmode(f,0,0) < 0)
-		{	SFMTXUNLOCK(f);
+	{	if((f->mode&SF_RDWR) != f->mode && _sfmode(f,0,0) < 0)
 			return NIL(Sfio_t*);
-		}
 		if(f->disc == _Sfudisc)
 			(void)sfclose((*_Sfstack)(f,NIL(Sfio_t*)));
 	}
 	if(pf)
-	{	SFMTXLOCK(pf);
-		if((pf->mode&SF_RDWR) != pf->mode && _sfmode(pf,0,0) < 0)
-		{	if(f)
-				SFMTXUNLOCK(f);
-			SFMTXUNLOCK(pf);
+	{	if((pf->mode&SF_RDWR) != pf->mode && _sfmode(pf,0,0) < 0)
 			return NIL(Sfio_t*);
-		}
 		if(pf->disc == _Sfudisc)
 			(void)sfclose((*_Sfstack)(pf,NIL(Sfio_t*)));
 	}
 
 	/* f already in the same pool with pf */
 	if(f == pf || (pf && f->pool == pf->pool && f->pool != &_Sfpool) )
-	{
-		if(f)
-			SFMTXUNLOCK(f);
-		if(pf)
-			SFMTXUNLOCK(pf);
 		return pf;
-	}
 
 	/* lock streams before internal manipulations */
 	rv = NIL(Sfio_t*);
@@ -329,11 +304,9 @@ Sfio_t* sfpool(reg Sfio_t* f, reg Sfio_t* pf, reg int mode)
 done:
 	if(f)
 	{	SFOPEN(f,0);
-		SFMTXUNLOCK(f);
 	}
 	if(pf)
 	{	SFOPEN(pf,0);
-		SFMTXUNLOCK(pf);
 	}
 	return rv;
 }

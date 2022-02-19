@@ -31,9 +31,9 @@ int sfclose(Sfio_t* f)
 {
 	reg int		local, ex, rv;
 	void*		data = NIL(void*);
-	SFMTXDECL(f); /* declare a local stream variable for multithreading */
 
-	SFMTXENTER(f, -1);
+	if(!f)
+		return -1;
 
 	GETLOCAL(f,local);
 
@@ -41,18 +41,18 @@ int sfclose(Sfio_t* f)
 	   SFMODE(f,local) != (f->mode&SF_RDWR) &&
 	   SFMODE(f,local) != (f->mode&(SF_READ|SF_SYNCED)) &&
 	   _sfmode(f,SF_SYNCED,local) < 0)
-		SFMTXRETURN(f,-1);
+		return -1;
 
 	/* closing a stack of streams */
 	while(f->push)
 	{	reg Sfio_t*	pop;
 
 		if(!(pop = (*_Sfstack)(f,NIL(Sfio_t*))) )
-			SFMTXRETURN(f,-1);
+			return -1;
 
 		if(sfclose(pop) < 0)
 		{	(*_Sfstack)(f,pop);
-			SFMTXRETURN(f,-1);
+			return -1;
 		}
 	}
 
@@ -68,14 +68,13 @@ int sfclose(Sfio_t* f)
 
 	/* raise discipline exceptions */
 	if(f->disc && (ex = SFRAISE(f,local ? SF_NEW : SF_CLOSING,NIL(void*))) != 0)
-		SFMTXRETURN(f,ex);
+		return ex;
 
 	if(!local && f->pool)
 	{	/* remove from pool */
 		if(f->pool == &_Sfpool)
 		{	reg int	n;
 
-			POOLMTXLOCK(&_Sfpool);
 			for(n = 0; n < _Sfpool.n_sf; ++n)
 			{	if(_Sfpool.sf[n] != f)
 					continue;
@@ -85,13 +84,12 @@ int sfclose(Sfio_t* f)
 					_Sfpool.sf[n] = _Sfpool.sf[n+1];
 				break;
 			}
-			POOLMTXUNLOCK(&_Sfpool);
 		}
 		else
 		{	f->mode &= ~SF_LOCK;	/**/ASSERT(_Sfpmove);
 			if((*_Sfpmove)(f,-1) < 0)
 			{	SFOPEN(f,0);
-				SFMTXRETURN(f,-1);
+				return -1;
 			}
 			f->mode |= SF_LOCK;
 		}
@@ -142,15 +140,6 @@ int sfclose(Sfio_t* f)
 	/* delete any associated sfpopen-data */
 	if(f->proc)
 		rv = _sfpclose(f);
-
-	/* destroy the mutex */
-	if(f->mutex)
-	{	(void)vtmtxclrlock(f->mutex);
-		if(f != sfstdin && f != sfstdout && f != sfstderr)
-		{	(void)vtmtxclose(f->mutex);
-			f->mutex = NIL(Vtmutex_t*);
-		}
-	}
 
 	if(!local)
 	{	if(f->disc && (ex = SFRAISE(f,SF_FINAL,NIL(void*))) != 0 )

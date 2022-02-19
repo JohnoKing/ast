@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -96,21 +96,21 @@ Sfdisc_t* sfdisc(Sfio_t* f, Sfdisc_t* disc)
 	Sfseek_f	oseekf;
 	ssize_t		n;
 	Dccache_t	*dcca = NIL(Dccache_t*);
-	SFMTXDECL(f); /* declare a local stream variable for multithreading */
 
-	SFMTXENTER(f, NIL(Sfdisc_t*));
+	if(!f)
+		return NIL(Sfdisc_t*);
 
 	if((Sfio_t*)disc == f) /* special case to get the top discipline */
-		SFMTXRETURN(f,f->disc);
+		return f->disc;
 
 	if((f->flags&SF_READ) && f->proc && (f->mode&SF_WRITE) )
 	{	/* make sure in read mode to check for read-ahead data */
 		if(_sfmode(f,SF_READ,0) < 0)
-			SFMTXRETURN(f, NIL(Sfdisc_t*));
+			return NIL(Sfdisc_t*);
 	}
 	else
 	{	if((f->mode&SF_RDWR) != f->mode && _sfmode(f,0,0) < 0)
-			SFMTXRETURN(f, NIL(Sfdisc_t*));
+			return NIL(Sfdisc_t*);
 	}
 
 	SFLOCK(f,0);
@@ -246,5 +246,5 @@ Sfdisc_t* sfdisc(Sfio_t* f, Sfdisc_t* disc)
 
 done :
 	SFOPEN(f,0);
-	SFMTXRETURN(f, rdisc);
+	return rdisc;
 }

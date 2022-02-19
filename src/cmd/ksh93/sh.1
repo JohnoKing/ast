@@ -497,6 +497,44 @@ may be used in place of
 to negate
 the loop termination test.
 .TP
+.PD 0
+\f3while\fP \f2inputredirection\^\fP \f3;do\fP \f2list\^\fP \f3;done\fP
+.PD
+Filescan loop. This is defined by a lone input redirection following
+.B while
+(see
+.I Input/Output
+below).
+It is faster than using the
+.B read
+built-in command in a regular
+.B while
+loop.
+The shell reads lines from the file or stream opened by
+.I inputredirection\^
+until the end is reached or the loop is broken.
+For each line read,
+the command
+.I list\^
+is executed with the line's contents assigned to the
+.B REPLY
+variable and the line's fields split into the positional parameters
+(see
+.I Field Splitting\^
+and
+.I Positional Parameters\^
+below).
+Within the
+.IR list\^ ,
+standard input is redirected to
+.BR /dev/null .
+If the
+.B posix
+compatibility shell option is on,
+this loop type is disabled and
+.I inputredirection\^
+is processed like a lone redirection in any other context.
+.TP
 \f3((\fP\f2expression\^\fP\f3))\fP
 .br
 The
@@ -1702,8 +1740,8 @@ element stores the
 submatch.
 For
 .B //
-the array is two dimensional with the first subscript indicating the
-most recent match and subpattern match and the second script indicating
+the array is two-dimensional, with the first subscript indicating the
+most recent match and subpattern match, and the second subscript indicating
 which match with
 .B 0
 representing the first match.
@@ -2506,7 +2544,7 @@ that directory.
 If no file name is found that matches the pattern, then
 that component of the filename is left unchanged unless
 the pattern is prefixed with
-.B \(ap(N)\fP
+.BR \(ap(N)\fP ,
 in which case it is removed as described below.
 The special traversal names
 .B .
@@ -2533,8 +2571,7 @@ will be ignored unless the first character of the pattern
 corresponding to this component is the character
 .BR .
 itself.
-Note, that for other
-uses of pattern matching the
+Note that, for uses of pattern matching other than pathname expansion, the
 .B /
 and
 .B .
@@ -2549,7 +2586,7 @@ When used for filename expansion,
 if the
 .B globstar
 option is on, an isolated pattern of two adjacent
-.BR * 's
+.BR * s
 will match all files and zero or more directories
 and subdirectories.
 If followed by a
@@ -2570,7 +2607,7 @@ If the first character following the opening
 is a
 .B !
 or
-.B ^
+.BR ^ ,
 then any character not enclosed is matched.
 A
 .B \-
@@ -2582,9 +2619,9 @@ Within
 and
 .BR \*(CK\^ ,
 character classes can be specified with the syntax
-\f3[:\fP\f2class\fP\f3:]\fP
-where class is one of the following classes defined in the ANSI C standard:
-(Note that \f3word\fP is equivalent to \f3alnum\fP plus the character \f3_\fP.)
+\f3[:\fP\f2class\fP\f3:]\fP,
+where \f2class\fP is one of the following classes defined in the ANSI C standard
+(note that \f3word\fP is equivalent to \f3alnum\fP plus the character \f3_\fP):
 .br
 .B
 .if n alnum alpha blank cntrl digit graph lower print punct space upper word xdigit
@@ -2607,6 +2644,7 @@ and
 matches the collating symbol \f2symbol\fP.
 .RE
 .PD
+.PP
 A
 .I pattern-list
 is a list of one or more patterns separated from each other
@@ -2638,7 +2676,7 @@ Matches \f2n\^\fP occurrences of the given patterns.
 \f3{\fP\f2m\^\fP\f3,\fP\f2n\^\fP\f3}\fP(\fP\f2pattern-list\^\fP\f3)\fP
 Matches from \f2m\^\fP to \f2n\^\fP occurrences of the given patterns.
 If \f2m\^\fP is omitted, \f30\fP will be used.  If \f2n\^\fP
-is omitted at least \f2m\^\fP occurrences will be matched.
+is omitted, at least \f2m\^\fP occurrences will be matched.
 .TP
 \f3\&@\&(\fP\f2pattern-list\^\fP\f3)\fP
 Matches exactly one of the given patterns.
@@ -2648,19 +2686,19 @@ Matches exactly one of the given patterns.
 Matches anything except one of the given patterns.
 .PD
 .RE
-By default, each pattern, or subpattern will match the
+By default, each pattern or subpattern will match the
 longest string possible consistent with generating
 the longest overall match.  If more than one match is
 possible, the one starting closest to the beginning
 of the string will be chosen.   However, for each of the above
-compound patterns a \f3\-\fP can be inserted in front of the \f3(\fP
+compound patterns, a \f3\-\fP can be inserted in front of the \f3(\fP
 to cause the shortest match to the specified \f2pattern-list\^\fP
 to be used.
 .PP
 When \f2pattern-list\^\fP is contained within parentheses,
 the backslash character \f3\e\fP is treated specially even
 when inside a character class.   All ANSI C character escapes are
-recognized and match the specified character.  In addition
+recognized and match the specified character.  In addition,
 the following escape sequences are recognized:
 .PD 0
 .RS
@@ -2691,7 +2729,7 @@ is a subpattern that
 can be used to match nested character expressions.
 Each
 .I pattern-pair\^
-is a two character sequence which cannot contain
+is a two-character sequence that cannot contain
 .B &
 or
 .BR | .
@@ -2704,7 +2742,7 @@ represents the beginning and ending characters of a nested group that
 will be skipped over when counting starting and ending character matches.
 The behavior is unspecified when the first character of a
 .I pattern-pair\^
-is alphanumeric
+is alphanumeric,
 except for the following:
 .PD 0
 .RS
@@ -2717,11 +2755,11 @@ finding a match.
 Causes the ending character to be interpreted as an escape character.
 .TP
 .B L
-Causes the ending character to be interpreted as a quote character
+Causes the ending character to be interpreted as a quote character,
 causing all characters to be ignored when looking for a match.
 .TP
 .B Q
-Causes the ending character to be interpreted as a quote character
+Causes the ending character to be interpreted as a quote character,
 causing all characters other than any escape character to be ignored
 when looking for a match.
 .PD
@@ -2732,14 +2770,14 @@ matches characters starting at
 .B {
 until the matching
 .B }
-is found not counting any
+is found, not counting any
 .B {
 or
 .B }
-that is inside a double quoted string or preceded by the escape character
+that is inside a double-quoted string or preceded by the escape character
 .BR \e .
 Without the
-.B {\^}
+.BR {\^} ,
 this pattern matches any C language string.
 .PP
 Each subpattern in a composite pattern is numbered,
@@ -2747,10 +2785,10 @@ starting at 1, by the location of the \f3(\fP within
 the pattern.
 The sequence \f3\e\fP\f2n\^\fP, where \f2n\^\fP
 is a single digit and \f3\e\fP\f2n\^\fP comes after
-the \f2n\fP-th. subpattern,
+the \f2n\fPth subpattern,
 matches the same string as the subpattern itself.
 .PP
-Finally a pattern can contain subpatterns of the form
+Finally, a pattern can contain subpatterns of the form
 \f3\(ap(\fP\f2options\^\fP\f3:\fP\f2pattern-list\^\fP\f3)\fP,
 where either \f2options\^\fP or \f3:\fP\f2pattern-list\^\fP
 can be omitted.  Unlike the other compound patterns,
@@ -2758,7 +2796,7 @@ these subpatterns are not counted in the numbered subpatterns.
 \f3:\fP\f2pattern-list\^\fP must be omitted for options
 .BR F ,
 .BR G ,
-.B N ,
+.BR N ,
 and
 .B V
 below.
@@ -2776,33 +2814,41 @@ Disable the following options.
 .B E
 The remainder of the pattern uses extended regular expression syntax
 like the
-.IR egrep (1)
+.B \-E
+option of the
+.IR grep (1)
 command.
 .TP
 .B F
-The remainder of the pattern uses
-.IR fgrep (1)
-expression syntax.
+The remainder of the pattern uses the fixed pattern syntax of the
+.B \-F
+option of the
+.IR grep (1)
+command.
 .TP
 .B G
 The remainder of the pattern uses basic regular expression syntax
 like the
 .IR grep (1)
-command.
+command without options.
 .TP
 .B K
 The remainder of the pattern uses shell pattern syntax.
 This is the default.
 .TP
 .B N
-This is ignored.  However, when it is the first letter and is
+When it is the first letter and is
 used with pathname expansion, and no matches occur,
-the file pattern expands to the empty string.
+the file pattern expands to the empty string
+instead of remaining unexpanded.
+Otherwise, it is ignored.
 .TP
 .B X
 The remainder of the pattern uses augmented regular expression syntax
 like the
-.IR xgrep (1)
+.B \-X
+option of the AT&T AST version of the
+.IR grep (1)
 command.
 .TP
 .B P
@@ -2823,12 +2869,12 @@ shell option.
 File the longest match (greedy).  This is the default.
 .TP
 .B l
-Left anchor the pattern.  This is the default for
+Left-anchor the pattern.  This is the default for
 .B K
 style patterns.
 .TP
 .B r
-Right anchor the pattern.  This is the default for
+Right-anchor the pattern.  This is the default for
 .B K
 style patterns.
 .PD
@@ -7114,8 +7160,7 @@ or
 formats, separates groups of digits with the grouping delimiter
 .RB  ( ,
 on groups of 3 in the C locale).
-.PD
-.TP
+.PP
 The \f3\-v\fP option assigns the output directly to a variable instead of
 writing it to standard output. This is faster than capturing the output using a
 command substitution and avoids the latter's stripping of final linefeed
@@ -7123,6 +7168,7 @@ characters (\fB\\n\fR). The \f2vname\fP argument should be a valid variable
 name, optionally with one or more array subscripts in square brackets.
 Note that square brackets should be quoted to avoid pathname expansion.
 .RE
+
 .TP
 \f3pwd\fP \*(OK \f3\-LP\fP \*(CK
 Outputs the value of the current working
@@ -7141,7 +7187,7 @@ or
 on the command line
 determines which method is used.
 .TP
-\f3read\fP \*(OK \f3\-aACSprsv\^\fP \*(CK \*(OK \f3\-d\fP \f2delim \^\fP\*(CK \*(OK \f3\-n\fP \f2n \^\fP\*(CK \*(OK \*(OK \f3\-N\fP \f2n \^\fP\*(CK \*(OK \f3\-t\fP \f2timeout \^\fP\*(CK \*(OK \f3\-u\fP \f2unit \^\fP\*(CK \*(OK \f2vname\f3?\f2prompt\^\f1 \*(CK \*(OK \f2vname\^\fP .\|.\|. \*(CK
+\f3read\fP \*(OK \f3\-ACSaprsv\^\fP \*(CK \*(OK \f3\-d\fP \f2delim \^\fP\*(CK \*(OK \f3\-n\fP \f2n \^\fP\*(CK \*(OK \f3\-N\fP \f2n \^\fP\*(CK \*(OK \f3\-t\fP \f2timeout \^\fP\*(CK \*(OK \f3\-u\fP \f2unit \^\fP\*(CK \*(OK \f2vname\f3?\f2prompt\^\f1 \*(CK \*(OK \f2vname\^\fP .\|.\|. \*(CK
 The shell input mechanism.
 One line is read and
 is broken up into fields using the characters in
@@ -7152,32 +7198,6 @@ The escape character,
 .BR \e ,
 is used to remove any special meaning for the next
 character and for line continuation.
-The
-.B \-d
-option
-causes the read to continue to the first character of
-.I delim\^
-rather than new-line.
-The
-.B \-n
-option causes at most
-.I n\^
-bytes to read rather a full line
-but will return when reading from a slow device
-as soon as any characters have been read.
-The
-.B \-N
-option causes exactly
-.I n\^
-to be read unless an end-of-file has been encountered or
-the read times out because of the
-.B \-t
-option.
-In raw mode,
-.B \-r,
-the
-.B \e
-character is not treated specially.
 The first
 field is assigned to the first
 .IR vname ,
@@ -7185,6 +7205,13 @@ the second field
 to the second
 .IR vname ,
 etc., with leftover fields assigned to the last
+.IR vname .
+If
+.I vname\^
+is omitted, then
+.SM
+.B REPLY
+is used as the default
 .IR vname .
 When
 .IR vname
@@ -7194,80 +7221,113 @@ or
 .B \-N
 is specified, the bytes that are read are stored directly
 into the variable.
-If the
-.B \-v
-is specified, then the value of the first
-.I vname\^
-will be used as a default value when reading from a terminal device.
-The
+If you append \f3?\fP\f2prompt\fP to the first
+.IR vname\^ ,
+then
+.B read\^
+will display
+.I prompt\^
+on standard error before reading if standard input is a terminal or pipe; the
+.B ?\^
+should be quoted to protect it from pathname expansion.
+The exit status is 0 unless an end-of-file is encountered or
+.B read
+has timed out.
+The options for the
+.B read\^
+command have meaning as follows:
+.RS
+.PD 0
+.TP 8
 .B \-A
-and
-.B \-a
-options cause the variable
+Causes the variable
 .I vname\^
 to be unset and each field that is read to be stored in
 successive elements of the indexed array
 .IR vname.
-The
+.TP 8
 .B \-C
-option causes the variable
+Causes the variable
 .I vname\^
 to be read as a compound variable.  Blanks will be ignored when
 finding the beginning open parenthesis.
-The
+.TP 8
+.B \-N
+Causes
+.I n\^
+bytes to be read unless an end-of-file has been encountered or
+the read times out because of the
+.B \-t
+option.
+.TP 8
 .B \-S
-option causes the line to be treated like a record in a
+Causes the line to be treated like a record in a
 .B .csv
 format file so that double quotes can be used to allow the delimiter
 character and the new-line character to appear within a field.
-The
+.TP 8
+.B \-a
+Same as
+.BR \-A .
+.TP 8
+.B \-d
+Causes the read to continue to the first character of
+.I delim\^
+instead of the newline control character.
+.TP 8
+.B \-n
+Causes at most
+.I n\^
+bytes to be read instead of a full line,
+but will return when reading from a slow device
+as soon as any characters have been read.
+.TP 8
 .B \-p
-option causes the input line
-to be taken from the input pipe
-of a process spawned by the shell
-using
-.BR |& .
-If the
+Input is read from the current co-process spawned by the shell using
+.BR \(bv& .
+An end-of-file causes
+.B read\^
+to disconnect the co-process so that another can be created.
+.TP 8
+.B \-r
+Raw mode. The
+.B \e
+character is not treated specially.
+.TP 8
 .B \-s
-option is present,
-the input will be saved as a command in the history file.
-The option
+The input will be saved as a command in the history file.
+.TP 8
+.B \-t
+Used to specify a timeout in
+seconds when reading from a terminal or pipe.
+.TP 8
 .B \-u
-can be used to specify a one digit file
+This option can be used to specify a one-digit file
 descriptor unit
 .I unit\^
 to read from.
 The file descriptor can be opened with the
 .B exec\^
-special built-in command.
-The default value of unit
-.I n\^
-is 0.
-The option
-.B \-t
-is used to specify a timeout in
-seconds when reading from a terminal or pipe.
-If
-.I vname\^
-is omitted, then
-.SM
-.B REPLY
-is used as the default
-.IR vname .
-An end-of-file with the
-.B \-p
-option causes cleanup for this process
-so that another can be spawned.
-If the first argument contains a
-.BR ? ,
-the remainder of this word is used as a
-.I prompt\^
-on standard error
-when the shell is interactive.
-The exit status is 0 unless an end-of-file is encountered
 or
-.B read
-has timed out.
+.B redirect\^
+built-in command.
+If
+.I unit\^
+is
+.BR p ,
+input is read from the current co-process as with the
+.B \-p
+option.
+The default value of
+.I unit\^
+is 0.
+.TP 8
+.B \-v
+The value of the first
+.I vname\^
+will be used as a default value when reading from a terminal device.
+.RE
+
 .TP
 \(dg\(dd \f3readonly\fP \*(OK \f3\-p\fP \*(CK \*(OK \f2vname\fP\*(OK\f3=\fP\f2value\^\fP\*(CK \*(CK .\|.\|.
 If
@@ -7296,6 +7356,7 @@ does not create a function-local scope and the given
 are marked globally read-only by default.
 When defining a type, if the value of a read-only subvariable is not defined,
 the value is required when creating each instance.
+
 .TP
 \f3redirect\fP
 This command only accepts input/output redirections.
@@ -7314,6 +7375,7 @@ When invoking another program, file descriptors greater than
 that were opened with this mechanism are only passed on if they are explicitly
 redirected to themselves as part of the invocation (e.g. \fB4>&4\fR)
 or if the \fBposix\fR option is set.
+
 .TP
 \(dg \f3return\fP \*(OK \f2n\^\fP \*(CK
 Causes a shell function, dot script (see \f3\|.\fP and \f3source\fP),
@@ -7332,6 +7394,7 @@ If
 is invoked while not in a function, dot script, or profile script,
 then it behaves the same as
 .BR exit .
+
 .TP
 \(dg \f3set\fP \*(OK \f3\(+-BCGHabefhkmnprstuvx\fP \*(CK \*(OK \f3\(+-o\fP \*(OK \f2option\^\fP \*(CK \*(CK .\|.\|. \*(OK \f3\(+-A\fP \f2vname\^\fP \*(CK  \*(OK \f2arg\^\fP .\|.\|. \*(CK
 The options for this command have meaning as follows:
@@ -7622,6 +7685,9 @@ processes to import;
 causes file descriptors > 2 to be left open when invoking another program;
 .IP \[bu]
 disables the \fB&>\fR redirection shorthand;
+.IP \[bu]
+disables fast filescan loops of type
+\f3while\fP \f2inputredirection\^\fP \f3;do\fP \f2list\^\fP \f3;done\fP;
 .IP \[bu]
 makes the \fB<>\fR redirection operator default to redirecting standard input
 if no file descriptor number precedes it;
@@ -9063,6 +9129,10 @@ Traps are not processed while a job is waiting for a foreground process.
 Thus, a trap on
 .B CHLD
 won't be executed until the foreground job terminates.
+.PP
+In locales that use a multibyte character set such as UTF-8, the
+.B KEYBD
+trap is only triggered for ASCII characters (1-127).
 .PP
 It is a good idea to leave a space after the comma operator in
 arithmetic expressions to prevent the comma from being interpreted

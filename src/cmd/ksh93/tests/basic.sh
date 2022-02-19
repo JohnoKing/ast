@@ -678,6 +678,16 @@ got=$(eval 'x=${ for i in test; do case $i in test) true;; esac; done; }' 2>&1) 
 got=$(eval 'x=`for i in test; do case $i in test) true;; esac; done`' 2>&1) \
 || err_exit "case in a for loop inside a \`comsub\` caused syntax error (got $(printf %q "$got"))"
 
+# another obscure thing that got fixed as a side effect: literal here-
+# document terminator '$( a b )' (no, it's not a command substitution)
+exp=$'ok\nend'
+saveLINENO=$LINENO
+got=$(set +x; eval $'cat <<$( a b )\nok\n$( a b )\necho end' 2>&1)
+((LINENO == saveLINENO + 2)) || err_exit "LINENO just got reset (expected $((saveLINENO + 2)), got $LINENO)"
+LINENO=saveLINENO+3
+[[ $got == "$exp" ]] || err_exit 'pathological here-document terminator $( a b ) fails' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
 # ======
 # Various DEBUG trap fixes: https://github.com/ksh93/ksh/issues/155
 #			    https://github.com/ksh93/ksh/issues/187

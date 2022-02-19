@@ -284,7 +284,7 @@ again:
 			for(; ap; ap=apin)
 			{
 				apin = ap->argchn.ap;
-				if(!sh_isoption(SH_NOGLOB))
+				if(!sh_isoption(SH_NOGLOB) || sh_isstate(SH_COMPLETE) || sh_isstate(SH_FCOMPLETE))
 					brace=path_expand(ap->argval,arghead);
 				else
 				{

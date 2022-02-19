@@ -72,7 +72,6 @@ static int _tmprmfile(Sfio_t* f, int type, void* val, Sfdisc_t* disc)
 
 	if(type == SF_CLOSING)
 	{
-		(void)vtmtxlock(_Sfmutex);
 		for(last = NIL(File_t*), ff = File; ff; last = ff, ff = ff->next)
 			if(ff->f == f)
 				break;
@@ -90,7 +89,6 @@ static int _tmprmfile(Sfio_t* f, int type, void* val, Sfdisc_t* disc)
 
 			free((void*)ff);
 		}
-		(void)vtmtxunlock(_Sfmutex);
 	}
 
 	return 0;
@@ -99,12 +97,10 @@ static int _tmprmfile(Sfio_t* f, int type, void* val, Sfdisc_t* disc)
 static void _rmfiles(void)
 {	reg File_t	*ff, *next;
 
-	(void)vtmtxlock(_Sfmutex);
 	for(ff = File; ff; ff = next)
 	{	next = ff->next;
 		_tmprmfile(ff->f, SF_CLOSING, NIL(void*), ff->f->disc);
 	}
-	(void)vtmtxunlock(_Sfmutex);
 }
 
 static Sfdisc_t	Rmdisc =
@@ -122,12 +118,10 @@ static int _rmtmp(Sfio_t* f, char* file)
 
 	if(!(ff = (File_t*)malloc(sizeof(File_t)+strlen(file))) )
 		return -1;
-	(void)vtmtxlock(_Sfmutex);
 	ff->f = f;
 	strcpy(ff->name,file);
 	ff->next = File;
 	File = ff;
-	(void)vtmtxunlock(_Sfmutex);
 
 #else	/* can remove now */
 	while(remove(file) < 0 && errno == EINTR)
@@ -292,7 +286,7 @@ static int _tmpexcept(Sfio_t* f, int type, void* val, Sfdisc_t* disc)
 		return 0;
 
 	/* try to create the temp file */
-	SFCLEAR(&newf,NIL(Vtmutex_t*));
+	SFCLEAR(&newf);
 	newf.flags = SF_STATIC;
 	newf.mode = SF_AVAIL;
 
@@ -307,12 +301,6 @@ static int _tmpexcept(Sfio_t* f, int type, void* val, Sfdisc_t* disc)
 	if(!sf)
 		return -1;
 
-	if(newf.mutex) /* don't need a mutex for this stream */
-	{	(void)vtmtxclrlock(newf.mutex);
-		(void)vtmtxclose(newf.mutex);
-		newf.mutex = NIL(Vtmutex_t*);
-	}
-
 	/* make sure that new stream has the same mode */
 	if((m = f->flags&(SF_READ|SF_WRITE)) != (SF_READ|SF_WRITE))
 		sfset(sf, ((~m)&(SF_READ|SF_WRITE)), 0);
@@ -325,7 +313,6 @@ static int _tmpexcept(Sfio_t* f, int type, void* val, Sfdisc_t* disc)
 	f->pool = savf.pool;
 	f->rsrv = savf.rsrv;
 	f->proc = savf.proc;
-	f->mutex = savf.mutex;
 	f->stdio = savf.stdio;
 
 	/* remove the SF_STATIC bit if it was only set above in making newf */

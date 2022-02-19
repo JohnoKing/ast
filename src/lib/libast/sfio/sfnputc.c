@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -35,13 +35,13 @@ ssize_t sfnputc(Sfio_t*		f,	/* file to write */
 	reg ssize_t	p, w;
 	uchar		buf[128];
 	reg int		local;
-	SFMTXDECL(f); /* declare a local stream variable for multithreading */
 
-	SFMTXENTER(f,-1);
+	if(!f)
+		return -1;
 
 	GETLOCAL(f,local);
 	if(SFMODE(f,local) != SF_WRITE && _sfmode(f,SF_WRITE,local) < 0)
-		SFMTXRETURN(f, -1);
+		return -1;
 
 	SFLOCK(f,local);
 
@@ -73,5 +73,5 @@ ssize_t sfnputc(Sfio_t*		f,	/* file to write */
 	}
 done :
 	SFOPEN(f,local);
-	SFMTXRETURN(f, w);
+	return w;
 }

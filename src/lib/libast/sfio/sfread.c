@@ -34,31 +34,31 @@ ssize_t sfread(Sfio_t*	f,	/* read from this stream. 	*/
 	reg uchar	*s, *begs;
 	reg ssize_t	r;
 	reg int		local, justseek;
-	SFMTXDECL(f);
 
-	SFMTXENTER(f, (ssize_t)(-1));
+	if(!f)
+		return (ssize_t)(-1);
 
 	GETLOCAL(f,local);
 	justseek = f->bits&SF_JUSTSEEK; f->bits &= ~SF_JUSTSEEK;
 
 	if(!buf)
-		SFMTXRETURN(f, (ssize_t)(n == 0 ? 0 : -1) );
+		return (ssize_t)(n == 0 ? 0 : -1) ;
 
 	/* release peek lock */
 	if(f->mode&SF_PEEK)
 	{	if(!(f->mode&SF_READ) )
-			SFMTXRETURN(f, (ssize_t)(-1));
+			return (ssize_t)(-1);
 
 		if(f->mode&SF_GETR)
 		{	if(((uchar*)buf + f->val) != f->next &&
 			   (!f->rsrv || f->rsrv->data != (uchar*)buf) )
-				SFMTXRETURN(f, (ssize_t)(-1));
+				return (ssize_t)(-1);
 			f->mode &= ~SF_PEEK;
-			SFMTXRETURN(f, 0);
+			return 0;
 		}
 		else
 		{	if((uchar*)buf != f->next)
-				SFMTXRETURN(f, (ssize_t)(-1));
+				return (ssize_t)(-1);
 			f->mode &= ~SF_PEEK;
 			if(f->mode&SF_PKRD)
 			{	/* actually read the data now */
@@ -70,7 +70,7 @@ ssize_t sfread(Sfio_t*	f,	/* read from this stream. 	*/
 			}
 			f->next += n;
 			f->endr = f->endb;
-			SFMTXRETURN(f, n);
+			return n;
 		}
 	}
 
@@ -79,7 +79,7 @@ ssize_t sfread(Sfio_t*	f,	/* read from this stream. 	*/
 	{	/* check stream mode */
 		if(SFMODE(f,local) != SF_READ && _sfmode(f,SF_READ,local) < 0)
 		{	n = s > begs ? s-begs : (size_t)(-1);
-			SFMTXRETURN(f, (ssize_t)n);
+			return (ssize_t)n;
 		}
 
 		SFLOCK(f,local);
@@ -132,5 +132,5 @@ ssize_t sfread(Sfio_t*	f,	/* read from this stream. 	*/
 
 	SFOPEN(f,local);
 	r = s-begs;
-	SFMTXRETURN(f, r);
+	return r;
 }

@@ -207,6 +207,7 @@ struct Namval
 #define nv_onattr(n,f)		((n)->nvflag |= (f))
 #define nv_offattr(n,f)		((n)->nvflag &= ~(f))
 #define nv_isarray(np)		(nv_isattr((np),NV_ARRAY))
+#define nv_close(np)		/* no-op */
 
 /* The following are operations for associative arrays */
 #define NV_AINIT	1	/* initialize */
@@ -252,7 +253,6 @@ extern Namval_t	*nv_opensub(Namval_t*);
 /* name-value pair function prototypes */
 extern int		nv_adddisc(Namval_t*, const char**, Namval_t**);
 extern int		nv_clone(Namval_t*, Namval_t*, int);
-extern void 		nv_close(Namval_t*);
 extern void		*nv_context(Namval_t*);
 extern Namval_t		*nv_create(const char*, Dt_t*, int,Namfun_t*);
 extern void		nv_delete(Namval_t*, Dt_t*, int);

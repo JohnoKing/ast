@@ -138,7 +138,7 @@ Sfio_t*	sfpopen(Sfio_t*		f,
 
 	if (!command || !command[0] || !mode)
 		return 0;
-	sflags = _sftype(mode, NIL(int*), NIL(int*), NIL(int*));
+	sflags = _sftype(mode, NIL(int*), NIL(int*));
 
 	if(f == (Sfio_t*)(-1))
 	{	/* stdio compatibility mode */
@@ -186,7 +186,7 @@ Sfio_t*	sfpopen(Sfio_t*		f,
 	/* sanity check */
 	if(!command || !command[0] || !mode)
 		return NIL(Sfio_t*);
-	sflags = _sftype(mode,NIL(int*),NIL(int*),NIL(int*));
+	sflags = _sftype(mode,NIL(int*),NIL(int*));
 
 	/* make pipes */
 	parent[0] = parent[1] = child[0] = child[1] = -1;

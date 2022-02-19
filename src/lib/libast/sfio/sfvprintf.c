@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 1.0                  *
 *                    by AT&T Intellectual Property                     *
@@ -162,18 +162,15 @@ int sfvprintf(Sfio_t*		f,		/* file to print to	*/
 			}
 #endif /* _sffmt_small */
 
-	SFMTXDECL(f);
 
 	SFCVINIT();	/* initialize conversion tables */
 
-	SFMTXENTER(f,-1);
-
-	if(!form)
-		SFMTXRETURN(f, -1);
+	if(!f || !form)
+		return -1;
 
 	/* make sure stream is in write mode and buffer is not NULL */
 	if(f->mode != SF_WRITE && _sfmode(f,SF_WRITE,0) < 0)
-		SFMTXRETURN(f, -1);
+		return -1;
 
 	SFLOCK(f,0);
 
@@ -1436,5 +1433,5 @@ done:
 	else	f->next += n;
 
 	SFOPEN(f,0);
-	SFMTXRETURN(f, n_output);
+	return n_output;
 }
