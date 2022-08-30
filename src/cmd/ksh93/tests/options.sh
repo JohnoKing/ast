@@ -2,20 +2,17 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -572,6 +569,58 @@ let "(e=$?)==3" && [[ -z $got ]] || err_exit 'errexit + pipefail failed' \
 got=$("$SHELL" -o pipefail -c 'trap "print ERR\ trap" ERR; true | exit 3 | false | true | true' 2>&1)
 let "(e=$?)==1" && [[ $got == 'ERR trap' ]] || err_exit 'ERR trap + pipefail failed' \
 	"(expected status 1, 'ERR trap'; got status $e, $(printf %q "$got"))"
+
+# ======
+# Basic test for 'ksh -v' backported from ksh93v- 2013-09-13
+exp=:
+got=$("$SHELL" -vc : 2>&1)
+[[ $exp == $got ]] || err_exit 'incorrect output with ksh -v' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Tests that set -m puts background jobs in a separate process group.
+LINENO=$LINENO "$SHELL" -m <<- \EOF
+	. "${SHTESTS_COMMON:-${0%/*}/_common}"
+	[[ $- == *m* ]] || err_exit '$- does not contain m when monitor mode specified'
+	float t=SECONDS
+	sleep 2 & pid=$!
+	kill -KILL -$pid 2> /dev/null || err_exit 'kill to background group failed'
+	wait 2> /dev/null
+	(( (SECONDS-t) > 1 )) && err_exit 'kill did not kill background sleep'
+	exit $Errors
+EOF
+((Errors+=$?))
+
+# ======
+# Test for 'set -u' from ksh93v- 2013-04-09
+"$SHELL" 2> /dev/null <<- \EOF && err_exit 'unset variable with set -u on does not terminate script'
+	set -e -u -o pipefail
+	ls | while read file
+	do
+		files[${#files[*]}]=$fil
+	done
+	exit
+EOF
+
+# ======
+# https://github.com/ksh93/ksh/issues/449
+set +o monitor +o pipefail
+for opt in monitor pipefail
+do
+	outfile=out$opt
+	exp="ok $opt"
+	(
+		set +x -o "$opt"
+		(
+			sleep .01
+			print "$exp" >&2
+		) 2>$outfile | "${ whence -p true; }"  # the external 'true' should not be exec-optimized
+	) &
+	wait "$!"
+	got=$(<$outfile)
+	[[ $got == "$exp" ]] || err_exit "shell did not wait for entire pipeline with -o $opt" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+done
 
 # ======
 exit $((Errors<125?Errors:125))

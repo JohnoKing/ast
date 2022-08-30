@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -74,24 +71,11 @@ typedef struct Opt_s
 	_OPT_PRIVATE_
 } Opt_t;
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		extern __EXPORT__
-#endif
-#if !_BLD_ast && defined(__IMPORT__)
-#define extern		extern __IMPORT__
-#endif
-
 extern Opt_t*		_opt_infop_;
 
 #define opt_info	(*_opt_infop_)
 
-#undef	extern
-
 #define optinit(d,f)	(memset(d,0,sizeof(*(d))),(d)->version=OPT_VERSION,(d)->infof=(f),opt_info.disc=(d))
-
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
 
 extern int		optget(char**, const char*);
 extern int		optjoin(char**, ...);
@@ -100,7 +84,5 @@ extern char*		optusage(const char*);
 extern int		optstr(const char*, const char*);
 extern int		optesc(Sfio_t*, const char*, int);
 extern Opt_t*		optctx(Opt_t*, Opt_t*);
-
-#undef	extern
 
 #endif

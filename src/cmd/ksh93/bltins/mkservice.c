@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -25,7 +21,12 @@
  * AT&T Labs
  */
 
-#if SHOPT_MKSERVICE
+#include	"shopt.h"
+#include	"defs.h"
+
+#if !SHOPT_MKSERVICE
+NoN(mkservice)
+#else
 
 static const char mkservice_usage[] =
 "[-?\n@(#)$Id: mkservice (AT&T Research) 2001-06-13 $\n]"
@@ -87,8 +88,6 @@ static const char eloop_usage[] =
 "[+SEE ALSO?\bmkservice\b(1)]"
 ;
 
-
-#include	"defs.h"
 
 #include	<cmd.h>
 #include	<error.h>
@@ -352,7 +351,7 @@ static char* setdisc(Namval_t* np, const char* event, Namval_t* action, Namfun_t
 
 	for (i = 0; cp = disctab[i]; i++)
 	{
-		if (memcmp(event, cp, n))
+		if (strncmp(event, cp, n))
 			continue;
 		if (action == np)
 			action = sp->disc[i];
@@ -451,7 +450,7 @@ int	b_mkservice(int argc, char** argv, Shbltin_t *context)
 		close(fd);
 	else
 		sp->fd = fd;
-	np = nv_open(var,sh.var_tree,NV_ARRAY|NV_VARNAME|NV_NOASSIGN);
+	np = nv_open(var,sh.var_tree,NV_ARRAY|NV_VARNAME);
 	sp->node = np;
 	nv_putval(np, path, 0); 
 	nv_stack(np, (Namfun_t*)sp);

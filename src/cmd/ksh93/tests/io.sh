@@ -4,18 +4,14 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
 #                                                                      #
 ########################################################################
 
@@ -954,6 +950,7 @@ got=$(
 [[ $got == 'test' ]] || err_exit "issue 161 hypothetical bug 2" \
 	"(expected 'test', got $(printf %q "$got"))"
 got=$(
+	set +x
 	exec 4>&1
 	foo=${ { redirect 4>&1; } 6<&2 4<&-; }
 	echo "test" >&4 # => 4: cannot open [Bad file descriptor]
@@ -972,6 +969,36 @@ then
 	[[ $got == "$exp" ]] || err_exit '$REPLY or positional parameters incorrect in filescan loop' \
 		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 fi
+
+# ======
+# A process substitution should be valid after a redirection
+# https://github.com/ksh93/ksh/issues/418
+got=$(set +x; eval ': </dev/null <(true)' 2>&1)
+[[ e=$? -eq 0 && -z $got ]] || err_exit "spurious syntax error on process substitution following redirection" \
+	"(expected status 0 and '', got status $e and $(printf %q "$got"))"
+got=$(set +x; eval ': <&1 <(/dev/null' 2>&1)
+exp='*: syntax error at line *: `end of file'\'' unexpected'
+[[ $got == $exp ]] || err_exit "': <&1 <(/dev/null' fails to throw a syntax error" \
+	"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval '{ :; } <(: wrong)' 2>&1)
+exp='*: syntax error at line *: `<('\'' unexpected'
+[[ $got == $exp ]] || err_exit "'{ :; } <(: wrong)' throws incorrect syntax error" \
+	"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval ': >/dev/null >(true)' 2>&1)
+[[ e=$? -eq 0 && -z $got ]] || err_exit "spurious syntax error on process substitution following redirection" \
+	"(expected status 0 and '', got status $e and $(printf %q "$got"))"
+got=$(set +x; eval ': >&1 >(/dev/null' 2>&1)
+exp='*: syntax error at line *: `end of file'\'' unexpected'
+[[ $got == $exp ]] || err_exit "': >&1 >(/dev/null' fails to throw a syntax error" \
+	"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval '{ :; } >(: wrong)' 2>&1)
+exp='*: syntax error at line *: `>('\'' unexpected'
+[[ $got == $exp ]] || err_exit "'{ :; } >(: wrong)' throws incorrect syntax error" \
+	"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval 'cat >out <(echo OK)' 2>&1; echo ===; cat out)
+exp=$'===\nOK'
+[[ $got == "$exp" ]] || err_exit "process substitution nixes output redirection" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

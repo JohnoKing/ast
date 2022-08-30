@@ -28,7 +28,6 @@ libstdio-mt.a -lstdio-mt
 .Ss "DATA TYPES"
 .nf
 .ft 5
-void;
 Sfoff_t;
 Sflong_t;
 Sfulong_t;
@@ -74,7 +73,6 @@ Sfio_t*    sfopen(Sfio_t* f, const char* string, const char* mode);
 Sfio_t*    sfpopen(Sfio_t* f, const char* cmd, const char* mode);
 Sfio_t*    sftmp(size_t size);
 int        sfclose(Sfio_t* f);
-
 .ft 1
 .fi
 .Ss "INPUT/OUTPUT OPERATIONS"
@@ -292,16 +290,11 @@ There are three \fIstandard streams\fP:
 \f3sfstdin\fP for input (file descriptor \f30\fP on UNIX systems),
 \f3sfstdout\fP for normal output (file descriptor \f31\fP), and
 \f3sfstderr\fP for error output (file descriptor \f32\fP).
-
 .PP
 This version of Sfio does not support threads.
-
 .Ss "DATA TYPES"
 .Ss "  void*"
-This defines a type suitable to exchange
-data of unknown types between application and Sfio.
-\f3void\fP is a macro defined as \f3void\fP for ANSI C and C++ and
-\f3char\fP for other compilation environments.
+Used to exchange data of unknown types between applications and Sfio.
 .Ss "  Sfoff_t"
 This defines an integral type suitable to address
 the largest possible file extent.
@@ -334,7 +327,6 @@ This is a macro value of type \f3long int\fP that defines
 the current version number of Sfio. It is composed of a year,
 month and day. For example, \f320220212L\fP indicates the
 version from February 12, 2022.
-
 .Ss "BIT FLAGS"
 A number of bit flags control stream operations.
 They are set either at stream initialization or by calling \f3sfset()\fP.
@@ -419,7 +411,6 @@ aborting I/O operations on such interruptions. Note, however,
 that certain operating systems (e.g., BSD Unix systems) may automatically
 resume interrupted system calls outside the scope of the library. On such systems,
 \f3SF_IOINTR\fP will be ineffective.
-
 .Ss "OPENING/CLOSING STREAMS"
 .Ss "  Sfio_t* sfnew(Sfio_t* f, void* buf, size_t size, int fd, int flags)"
 This function creates or renews a stream.
@@ -448,7 +439,6 @@ opened for both read and write, e.g., sockets.
 \f3flags\fP:
 This is composed from \f3SF_EOF\fP and
 bit values defined in the \fBBIT FLAGS\fP section.
-
 .Ss "  Sfio_t* sfopen(Sfio_t* f, const char* string, const char* mode)"
 
 If \f3string\fP is \f3NULL\fP,
@@ -493,7 +483,6 @@ The \f3+\fP modifier indicates that the stream is opened for both read and write
 
 \f3x\fP specifies exclusive mode, i.e.,
 a file opened for writing should not already exist.
-
 .Ss "  Sfio_t* sfpopen(Sfio_t* f, const char* cmd, const char* mode)"
 This function opens a stream that corresponds to the coprocess \f3cmd\fP.
 The argument \f3mode\fP should be composed from \f3r\fP, \f3w\fP, and \f3+\fP.
@@ -521,7 +510,6 @@ In either case, the interpreter is invoked with 2 arguments, respectively \f3-c\
 and the given command \f3cmd\fP. When the interpreter is \f3/bin/sh\fP or
 \f3/bin/ksh\fP, \f3sfpopen()\fP may execute the command \f3cmd\fP itself
 if there are no shell meta-characters in \f3cmd\fP.
-
 .Ss "  Sfio_t* sftmp(size_t size)"
 This function creates a stream for temporary data.
 It returns the new stream or \f3NULL\fP on error.
@@ -540,7 +528,6 @@ used in a round-robin fashion to create files.
 If \f3TMPPATH\fP is undefined,
 \f3TMPDIR\fP can be used to specify a single directory to create files.
 If neither of \f3TMPPATH\fP and \f3TMPDIR\fP are defined, \f3/tmp\fP is used.
-
 .Ss "  int sfclose(Sfio_t* f)"
 This function closes the stream \f3f\fP and frees its resources.
 \f3SF_STATIC\fP should be used if the stream space is to be preserved.
@@ -566,18 +553,15 @@ In either case, if the exception handler returns a negative value,
 \f3sfclose()\fP will immediately return this value.
 If the exception handler returns a positive value,
 \f3sfclose()\fP will immediately return a zero value.
-
 .Ss "INPUT/OUTPUT OPERATIONS"
 .Ss "  int sfgetc(Sfio_t* f)"
 .Ss "  int sfputc(Sfio_t* f, int c)"
 These functions read/write a byte from/to stream \f3f\fP.
 \f3sfgetc()\fP returns the byte read or \f3-1\fP on error.
 \f3sfputc()\fP returns \f3c\fP on success and \f3-1\fP on error.
-
 .Ss "  ssize_t sfnputc(Sfio_t* f, int c, size_t n)"
 This function attempts to write the byte \f3c\fP to \f3f\fP \f3n\fP times.
 It returns the number of bytes actually written or \f3-1\fP on failure.
-
 .Ss "  int sfungetc(Sfio_t* f, int c)"
 This function pushes the byte \f3c\fP back into \f3f\fP.
 If \f3c\fP matches the byte immediately before the current position in buffered data,
@@ -587,7 +571,6 @@ can be pushed back into a stream. Pushed back bytes not part of
 buffered data will be discarded on any operation that implies
 buffer synchronization.
 \f3sfungetc()\fP returns \f3c\fP on success and \f3-1\fP on failure.
-
 .Ss "  Sfulong_t sfgetm(Sfio_t* f, Sfulong_t max)"
 .Ss "  int sfputm(Sfio_t* f, Sfulong_t v, Sfulong_t max)"
 These functions read and write \f3Sfulong_t\fP values
@@ -597,7 +580,6 @@ requires that the bit order in a byte is the same on both architectures and
 the written value is storable in an \f3Sfulong_t\fP on the read architecture.
 \f3sfgetm()\fP returns the value read or \f3-1\fP on error.
 \f3sfputm()\fP returns the number of bytes written or \f3-1\fP on error.
-
 .Ss "  Sfulong_t sfgetu(Sfio_t* f)"
 .Ss "  int sfputu(Sfio_t* f, Sfulong_t v)"
 These functions read and write \f3Sfulong_t\fP values
@@ -608,13 +590,11 @@ the written value is storable in an \f3Sfulong_t\fP on the read architecture.
 \f3sfgetu()\fP returns the value read or \f3-1\fP on error.
 \f3sfputu()\fP returns the number of bytes written or \f3-1\fP on error.
 See also \f3sfulen()\fP.
-
 .Ss "  Sflong_t sfgetl(Sfio_t* f)"
 .Ss "  int sfputl(Sfio_t* f, Sflong_t v)"
 These functions are similar to \f3sfgetu()\fP and \f3sfputu()\fP
 but for reading and writing (signed) \f3Sflong_t\fP values.
 See also \f3sfllen()\fP.
-
 .Ss "  Sfdouble_t sfgetd(Sfio_t* f)"
 .Ss "  int sfputd(Sfio_t* f, Sfdouble_t v)"
 These functions read and write \f3Sfdouble_t\fP values.
@@ -623,7 +603,6 @@ having the same floating point value representation.
 Values are coded and decoded using \f3ldexp(3)\fP and \f3frexp(3)\fP
 so they are constrained to the sizes supported by these functions.
 See also \f3sfdlen()\fP.
-
 .Ss "  char* sfgetr(Sfio_t* f, int rsc, int type)"
 This function reads a record of data ending in the record separator \f3rsc\fP.
 After \f3sfgetr()\fP returns, the length of the record even if it is incomplete
@@ -645,12 +624,10 @@ a call \f3sfread(f,r,0)\fP.
 \f3SF_LASTR\fP:
 This should be used only after a failed \f3sfgetr()\fP to retrieve
 the last incomplete record. In this case, \f3rsc\fP is ignored.
-
 .Ss "  ssize_t sfputr(Sfio_t* f, const char* s, int rsc)"
 This function writes the null-terminated string \f3s\fP to \f3f\fP.
 If \f3rsc\fP is non-negative, \f3(unsigned char)rsc\fP is output after the string.
 \f3sfputr()\fP returns the number of bytes written or \f3-1\fP on failure.
-
 .Ss "  Sfoff_t sfmove(Sfio_t* fr, Sfio_t* fw, Sfoff_t n, int rsc)"
 This function moves objects
 from input stream \f3fr\fP to output stream \f3fw\fP.
@@ -667,17 +644,14 @@ as if it is a stream corresponding to \f3/dev/null\fP,
 the UNIX device that has no read data and throws away any write data.
 For example, the call \f3sfmove(f,(Sfio_t*)0,(Sfoff_t)(-1),'\en')\fP
 counts the number of complete lines in stream \f3f\fP.
-
 .Ss "  ssize_t sfread(Sfio_t* f, void* buf, size_t n)"
 This function reads up to \f3n\fP bytes from \f3f\fP into buffer \f3buf\fP.
 It returns the number of bytes actually read or \f3-1\fP on error.
-
 .Ss "  ssize_t sfwrite(Sfio_t* f, const void* buf, size_t n)"
 This function writes \f3n\fP bytes from \f3buf\fP to \f3f\fP.
 If \f3f\fP is \f3SF_STRING\fP, and the buffer is not large enough,
 an \f3SF_WRITE\fP exception shall be raised.
 \f3sfwrite()\fP returns the number of bytes written or \f3-1\fP on failure.
-
 .Ss "  Sfoff_t sfseek(Sfio_t* f, Sfoff_t offset, int type)"
 This function sets a new I/O position for \f3f\fP.
 It returns the new position or \f3-1\fP on failure.
@@ -708,7 +682,6 @@ The stream is treated as if it has the control bit \f3SF_PUBLIC\fP on.
 If the physical file position has changed from its last known location,
 the current position is taken as the new physical position.
 Otherwise, the current position is the logical stream position.
-
 .Ss "  void* sfreserve(Sfio_t* f, ssize_t n, int type)"
 This function reserves a data block from the stream \f3f\fP.
 It returns the reserved data block on success and \f3NULL\fP on failure.
@@ -795,7 +768,6 @@ can release the lock with either call (with associated operational semantics!)
 For example, the below code reads 10 bytes of data from a stream
 opened with both \f3SF_READ\fP and \f3SF_WRITE\fP, modifies the data in place,
 then rewrites the new data back to the stream:
-
 .nf
 .ft 5
     rsrv = sfreserve(f, 10, 1);
@@ -804,7 +776,6 @@ then rewrites the new data back to the stream:
     sfwrite(f, rsrv, 10);
 .ft 1
 .fi
-
 .ne 6
 .Ss "DATA FORMATTING"
 .PP
@@ -828,7 +799,6 @@ argument list when there is no extension function or the action to be taken
 by such a function in processing arguments.
 The manipulation of the formatting environment stack is done
 via the pattern \f3!\fP discussed below.
-
 .Ss "%! and Sffmt_t"
 The pattern \f3%!\fP manipulates the formatting environment stack to
 (1) change the top environment to a new environment,
@@ -851,7 +821,6 @@ will prevent the environment from being popped.
 
 A formatting environment is a structure of type \f3Sffmt_t\fP
 which contains the following elements:
-
 .nf
 .ft 5
     Sffmtext_f   extf;   /* extension processor        */
@@ -952,7 +921,6 @@ The bits are:
 \f3SFFMT_VALUE\fP: This is set by \f3fe->extf\fP
 to indicate that it is returning a value to be formatted or
 the address of an object to be assigned.
-
 .Tp
 \f3width\fP:
 This is the field width.
@@ -965,7 +933,6 @@ This is the conversion base.
 .Tp
 \f3t_str\fP and \f3n_str\fP:
 This is the type string and its size.
-
 .Ss "  int (*Sffmtext_f)(Sfio_t* f, void* v, Sffmt_t* fe)"
 This is the type of the extension function \f3fe->extf\fP to process
 patterns and arguments.
@@ -1050,11 +1017,9 @@ to the extent of \f3rv\fP bytes.
 Processing of the current pattern ceases except that,
 for scanning functions, if \f3fe->flags\fP does not contain
 the bit \f3SFFMT_SKIP\fP, the assignment count shall increase by 1.
-
 .Ss "void va_copy(va_list to, va_list fr)"
 This macro function portably copies the argument list \f3fr\fP to
 the argument list \f3to\fP. It should be used to set the field \f3Sffmt_t.args\fP.
-
 .Ss "long sffmtversion(Sffmt_t* fe, int type)"
 This macro function initializes
 the formatting environment \f3fe\fP with a version number if \f3type\fP is
@@ -1063,7 +1028,6 @@ This is useful for applications to find out
 when the format of the structure \f3Sffmt_t\fP changes.
 Note that the version number corresponds to the Sfio version number
 which is defined in the macro value \f3SFIO_VERSION\fP.
-
 .Ss "  int sfprintf(Sfio_t* f, const char* format, ...);"
 .Ss "  char* sfprints(const char* format, ...);"
 .Ss "  char* sfvprints(const char* format, va_list args);"
@@ -1094,13 +1058,11 @@ The standard patterns are:
 Except for \f3!\fP which shall be described below,
 see the ANSI C specification of \f3fprintf(3)\fP for details on the other patterns.
 Let \f3z\fP be some pattern type. A formatting pattern is defined as below:
-
 .nf
 .ft 5
     %[pos$][flag][width][.precision[.base]][(extfdata)]z
 .ft 1
 .fi
-
 .Tp
 \f3pos$\fP:
 A pattern can specify which argument in the argument list to use.
@@ -1132,7 +1094,6 @@ length of the string or strings being formatted (see the discussion of \f3base\f
 For integer and floating point patterns,
 the size is used to select a type from one of the below lists as
 indicated by the conversion specifier:
-
 .nf
 .ft 5
     Sflong_t, long, int, short
@@ -1159,7 +1120,6 @@ This length shall be used regardless of whether or not the given string
 is shorter or longer than 16.
 The last example shows the use of the pattern \f3%n\fP to assign the amount
 of data already output into a \f3short\fP integer \f3n_output\fP.
-
 .nf
 .ft 5
     sfprintf(sfstdout,"%I8d", Sflong_obj);
@@ -1234,7 +1194,6 @@ For \f3%i\fP, \f3%d\fP, and \f3%u\fP,
 and defines a conversion base.
 If \f3base\fP is not in this range, it is defined to be \f310\fP.
 The digits to represent numbers are:
-
 .nf
 .ft 5
     01234567890
@@ -1254,7 +1213,6 @@ the separator \f3base\fP is output if it is a non-zero.
 There are further restrictions on the syntax of \f3%s\fP and \f3%c\fP when
 a separator is defined.
 Below are the legitimate sequences for \f3%s\fP and \f3%c\fP after the second dot:
-
 .nf
 \f3    s            c\fP
 \f3    *s           *c\fP
@@ -1269,21 +1227,18 @@ must be non-alphanumeric and \f3base\fP will be set to this character.
 The below example shows both the call and the result
 of printing a \f3NULL\fP-terminated array
 of three strings \f3apple\fP, \f3orange\fP, and \f3grape\fP:
-
 .nf
 .ft 5
     sfprintf(sfstdout,"|%8..:s|",list);
     |   apple:  orange:   grape|
 .ft 1
 .fi
-
 .Tp
 \f3(extfdata)\fP:
 This defines a string \f3extfdata\fP
 to be passed to the extension function \f3Sffmt_t.extf\fP.
 Parentheses shall be balanced.
 If \f3extfdata\fP is \f3*\fP, the string is obtained from the argument list.
-
 .Ss "  int sfscanf(Sfio_t* f, const char* format, ...)"
 .Ss "  int sfsscanf(const char* s, const char* format, ...)"
 .Ss "  int sfvsscanf(const char* s, const char* format, va_list args)"
@@ -1308,13 +1263,11 @@ The standard scan patterns are:
 Except for \f3!\fP which shall be described below,
 see the ANSI C specification of \f3fscanf(3)\fP for details on other patterns.
 Let \f3z\fP be some pattern type. A formatting pattern is specified as below:
-
 .nf
 .ft 5
     %[*][pos$][width][.width.base][(extfdata)][flag]z
 .ft 1
 .fi
-
 .Tp
 \f3pos$\fP:
 A pattern can specify which argument in the argument list to use.
@@ -1334,13 +1287,11 @@ The `.' (dot) notation also allows specifying a `*' (star) to obtain
 the value from the argument list. The below example specifies scanning
 4 bytes to obtain the value of an integer in base 10. At the end of scanning,
 the variable \f3v\fP should have the value \f31234\fP.
-
 .nf
 .ft 5
     sfsscanf("12345678","%.*.*d", 4, 10, &v);
 .ft 1
 .fi
-
 .Tp
 \f3(extfdata)\fP:
 This defines a string \f3extfdata\fP
@@ -1378,7 +1329,6 @@ Scanned data beyond the buffer limit will be discarded.
 For integer and floating point patterns,
 the size is used to select a type from one of the below lists as
 indicated by the conversion specifier:
-
 .nf
 .ft 5
     Sflong_t, long, int, short
@@ -1403,7 +1353,6 @@ The last example scans a string into a buffer with the given size 128.
 Note that if the scanned string is longer than 127, only the first 127
 bytes shall be copied into the buffer. The rest of the scanned data
 shall be discarded.
-
 .nf
 .ft 5
      sfscanf(sfstdin,"%I64d", &int64_obj);
@@ -1431,7 +1380,6 @@ If \fIbase\fP is \f336\fP or less,
 the digits for \fIvalue\fP can be any combination of \f3[0-9], [a-z], [A-Z]\fP
 where upper and lower case digits are not distinguishable.
 If \fIbase\fP is larger than \f336\fP, the set of digits is:
-
 .nf
 .ft 5
     0123456789
@@ -1439,7 +1387,6 @@ If \fIbase\fP is larger than \f336\fP, the set of digits is:
     ABCDEFGHIJKLMNOPQRSTUVWXYZ @_
 .ft 1
 .fi
-
 .Ss "BUFFERING, SYNCHRONIZATION"
 .Ss "  void* sfsetbuf(Sfio_t* f, void* buf, size_t size)"
 This function changes the buffering scheme for the stream \f3f\fP.
@@ -1478,7 +1425,6 @@ If \f3buf\fP is \f3NULL\fP, the stream will be unbuffered.
 If \f3buf\fP is not \f3NULL\fP,
 \f3sfsetbuf()\fP simply returns the stream buffer.
 In this case, no attempt will be made to synchronize the stream.
-
 .Ss "  int sfsync(Sfio_t* f)"
 This function synchronizes the logical and physical views of stream \f3f\fP.
 It returns a negative value for failure and \f30\fP for success.
@@ -1496,7 +1442,6 @@ the pool head is synchronized.
 
 If \f3f\fP has flag \f3SF_IOCHECK\fP, the \f3SF_SYNC\fP event is raised
 before and after synchronization. See \f3sfdisc()\fP for details.
-
 .Ss "  int sfpoll(Sfio_t** flist, int n, int timeout)"
 This function polls a set of streams to see if I/O operations
 can be performed on them without blocking.
@@ -1526,7 +1471,6 @@ If a stream with discipline is being polled and
 its readiness is as yet undetermined (e.g., empty buffer,)
 the discipline exception function will be called with \f3SF_DPOLL\fP
 before querying the operating system.
-
 .Ss "  Sfio_t* sfpool(Sfio_t* f, Sfio_t* poolf, int mode)"
 This function manipulates pools of streams.
 In a pool, only one stream is at the head and can have buffered data.
@@ -1554,7 +1498,6 @@ A \f3SF_SHARE\fP pool contains streams with \f3SF_WRITE\fP mode.
 In addition, on change to a new head stream,
 buffered write data of the current head
 is transferred to the new head.
-
 .Ss "  int sfpurge(Sfio_t* f)"
 This function discards all buffered data
 unless \f3f\fP is a \f3SF_STRING\fP stream.
@@ -1567,14 +1510,12 @@ if one set of data is to be preserved).
 After purging, if \f3f\fP has flag \f3SF_IOCHECK\fP,
 the event \f3SF_PURGE\fP is raised.
 \f3sfpurge()\fP returns \f3-1\fP for failure and \f30\fP for success.
-
 .Ss "DISCIPLINE, EVENT-HANDLING"
 .PP
 A file stream uses the system calls \f3read(2)\fP, \f3write(2)\fP
 and \f3lseek(2)\fP to read, write and position in the underlying file.
 Disciplines enable application-defined I/O methods including exception handling and
 data pre/post-processing.
-
 .Ss "  Sfdisc_t* sfdisc(Sfio_t* f, Sfdisc_t* disc)"
 Each stream has a discipline stack whose bottom is a virtual discipline
 representing the actual system calls.
@@ -1592,7 +1533,6 @@ stack is returned without any further action.
 An application can then use this feature of \f3sfdisc()\fP
 and the field \f3disc\fP (below) of the discipline structure
 to traverse the entire discipline stack of a stream \f3f\fP as follows:
-
 .nf
 .ft 5
     for(disc = sfdisc(f, (Sfdisc_t*)f); disc; disc = disc->disc)
@@ -1610,7 +1550,6 @@ An application should take care to allocate different discipline
 structures for use with different streams.
 A discipline structure is of the type \f3Sfdisc_t\fP which
 contains the following public fields:
-
 .nf
 .ft 5
     Sfread_f   readf;
@@ -1620,7 +1559,6 @@ contains the following public fields:
     Sfdisc_t*   disc;
 .ft 1
 .fi
-
 .PP
 The first three fields of \f3Sfdisc_t\fP specify alternative I/O functions.
 If any of them is \f3NULL\fP, it is inherited
@@ -1725,11 +1663,9 @@ operation (synchronization or purging) with \f3((int)value)\fP being \f31\fP
 and once after with \f3((int)value)\fP being \f30\fP.
 Note that \f3sfsync()\fP is called for each
 \f3SF_WRITE\fP or \f3SF_SHARE|SF_READ\fP stream on closing.
-
 .Tp
 \f3SF_ATEXIT\fP:
 This event is raised for each open stream before the process exits.
-
 .Ss "  int sfraise(Sfio_t* f, int type, void* data)"
 If \f3f\fP is non-\f3NULL\fP, \f3sfraise()\fP calls all exception handlers
 of \f3f\fP with the event \f3type\fP and associated \f3data\fP.
@@ -1744,7 +1680,6 @@ and raise events as described above. In this case,
 \f3sfraise()\fP returns \f30\fP on success and a negative value
 on failure. The absolute value of the return value tells how many
 streams failed on raising the given event.
-
 .Ss "  ssize_t sfrd(Sfio_t* f, void* buf, size_t n, Sfdisc_t* disc)"
 .Ss "  ssize_t sfwr(Sfio_t* f, const void* buf, size_t n, Sfdisc_t* disc)"
 .Ss "  Sfoff_t sfsk(Sfio_t* f, Sfoff_t offset, int type, Sfdisc_t* disc)"
@@ -1755,7 +1690,6 @@ They should not be used in any other context.
 \f3sfsk()\fP returns the new seek position.
 On error, all three functions return a negative value which should be \f3-1\fP
 or the value returned by the exception handler.
-
 .Ss "STREAM CONTROL"
 .Ss "  int sfresize(Sfio_t* f, Sfoff_t size)"
 This function resizes the stream \f3f\P so that its extent is \f3size\fP.
@@ -1763,7 +1697,6 @@ If the stream corresponds to a file, the file size is set to \f3size\fP
 via the system call \f3ftruncate()\fP.
 When a stream is made larger, the new data space is filled with zero's.
 \f3sfresize()\fP returns \f30\fP on success and a negative value on failure.
-
 .Ss "  int sfset(Sfio_t* f, int flags, int set)"
 This function sets control flags for the stream \f3f\fP.
 It returns the previous set of flags or \f30\fP on error.
@@ -1790,7 +1723,6 @@ If \f3flags\fP is zero, the stream is initialized if not yet done so.
 Then the current set of flags is returned.
 If \f3flags\fP is non-zero, an attempt is made to turn on the
 specified flags.
-
 .Ss "  int sfsetfd(Sfio_t* f, int fd)"
 This function changes the file descriptor of \f3f\fP.
 Before a change is realized,
@@ -1811,7 +1743,6 @@ Then, except for \f3sfclose()\fP, the stream will be inaccessible
 until a future \f3sfsetfd()\fP call resets the file descriptor to a non-negative value.
 Thus, \f3sfsetfd(f,-1)\fP can be used to avoid closing the file descriptor
 of \f3f\fP when \f3f\fP is closed.
-
 .Ss "  Sfio_t* sfstack(Sfio_t* base, Sfio_t* top)"
 This function stacks or unstacks stream.
 Every stream stack is identified by a base stream
@@ -1831,20 +1762,17 @@ If this is \f3SF_POPSTACK\fP or \f3(Sfio_t*)0\fP,
 the stack is popped and \f3sfstack()\fP returns the popped stream.
 Otherwise, \f3top\fP is pushed on top of the stack identified by \f3base\fP
 and \f3sfstack()\fP returns the \f3base\fP stream.
-
 .Ss "  Sfio_t* sfswap(Sfio_t* f1, Sfio_t* f2)"
 This function swaps contents of \f3f1\fP and \f3f2\fP.
 This fails if either stream is in a stream stack but not being a base stream.
 If \f3f2\fP is \f3NULL\fP, a new stream is constructed as a duplicate of \f3f1\fP.
 \f3sfswap()\fP returns \f3f2\fP or \f3f1\fP duplicate on success and
 \f3NULL\fP on failure.
-
 .Ss "STREAM INFORMATION"
 .Ss "  Sfoff_t sfsize(Sfio_t* f)"
 This function returns the size of stream \f3f\fP (see \f3sfnew()\fP).
 If \f3f\fP is not seekable or if its size is not determinable,
 \f3sfsize()\fP returns \f3-1\fP.
-
 .Ss "  Sfoff_t sftell(Sfio_t* f)"
 This function returns the current I/O position in stream \f3f\fP.
 Note that if \f3f\fP is \f3SF_APPEND\fP
@@ -1853,18 +1781,14 @@ the current I/O position is at the physical end of file.
 If \f3f\fP is unseekable, \f3sftell\fP returns the number of bytes
 read from or written to \f3f\fP.
 See also \f3sfungetc()\fP.
-
 .Ss "  ssize_t sfvalue(Sfio_t* f)"
 This function returns the string or buffer length
 for \f3sfreserve()\fP, \f3sfsetbuf()\fP, and \f3sfgetr()\fP.
-
 .Ss "  int sffileno(Sfio_t* f)"
 This function returns the file descriptor of stream \f3f\fP.
-
 .Ss "  int sfstacked(Sfio_t* f)"
 This function returns a non-zero value
 if stream \f3f\fP has been stacked.
-
 .Ss "  int sfeof(Sfio_t* f)"
 .Ss "  int sferror(Sfio_t* f)"
 .Ss "  int sfclrerr(Sfio_t* f)"
@@ -1872,7 +1796,6 @@ if stream \f3f\fP has been stacked.
 \f3sferror()\fP tells whether or not the stream has an error condition.
 \f3sfclrerr()\fP clears both end-of-file and error conditions.
 The end-of-file and error conditions are also cleared on an I/O operation.
-
 .Ss "  int sfclrlock(Sfio_t* f)"
 This function restores the stream back to a normal state.
 This means clearing locks and possibly throwing away unprocessed data.
@@ -1880,7 +1803,6 @@ As such, this operation is unsafe and should be used with care.
 For example, it may be used before a long jump (\f3longjmp(3)\fP)
 out of some discipline I/O function to restore the internal stream states.
 \f3sfclrlock()\fP returns the current set of flags.
-
 .Ss "  int sfnotify((void(*)notify)(Sfio_t*, int, void*) )"
 This sets a function \f3(*notify)()\fP to be called
 as \f3(*notify)(f, type, data)\fP on various stream events.
@@ -1903,7 +1825,6 @@ An attempt to change \f3f\fP to read mode failed.
 \f3SF_WRITE\fP:
 An attempt to change \f3f\fP to write mode failed.
 \f3data\fP is the file descriptor of the stream.
-
 .Ss "  int sfwalk(Sfwalk_f walkf, void* data, int type)"
 This function invokes \f3(*walkf)(f, data)\fP on every open stream \f3f\fP
 whose flags as defined by \f3sfset()\fP contains all bit flags given in \f3type\fP.
@@ -1915,7 +1836,6 @@ As an example, the call \f3sfwalk(walkf, data, SF_READ)\fP will iterate over all
 opened for reading. Similarly, \f3sfwalk(walkf, data, SF_READ|SF_WRITE)\fP
 iterates over all streams opened for both reading and writing.
 Lastly, \f3sfwalk(walkf, data, 0)\fP iterates over all streams.
-
 .Ss "MISCELLANEOUS FUNCTIONS"
 .Ss "  ssize_t sfmaxr(ssize_t maxr, int set)"
 Certain records may require too much memory for storage, thus, causing
@@ -1926,18 +1846,15 @@ to use only about that much memory to construct a record, a non-positive bound
 allows \f3sfgetr()\fP to use as much memory as necessary.
 \f3sfmaxr()\fP sets the value only if \f3set\fP is non-zero.
 It returns the value before setting or the current value if not setting.
-
 .Ss "  ssize_t sfslen()"
 This function returns the length of a string just constructed
 by \f3sfsprintf()\fP or \f3sfprints()\fP.  See also \f3sfvalue()\fP.
-
 .Ss "  int sfulen(Sfulong_t v)"
 .Ss "  int sfllen(Sflong_t v)"
 .Ss "  int sfdlen(Sfdouble_t v)"
 These functions return respectively the number of bytes required to code the
 \f3Sfulong_t\fP, \f3Sflong_t\fP or \f3Sfdouble_t\fP value \f3v\fP by \f3sfputu()\fP,
 \f3sfputl()\fP or \f3sfputd()\fP.
-
 .Ss "  ssize_t sfpkrd(int fd, char* buf, size_t n, int rsc, long tm, int action)"
 This function acts directly on the file descriptor \f3fd\fP.
 It does a combination of peeking on incoming data and a time-out read.
@@ -1965,7 +1882,6 @@ the same data again.
 If \f3action <= 0\fP, \f3sfpkrd()\fP will not peek and there are two cases.
 If \f3rsc < 0\fP, an attempt is made to read \f3n\fP bytes.
 If \f3rsc >= 0\fP, an attempt is made to read one record.
-
 .Ss "FULL STRUCTURE SFIO_T"
 .Ss "  #include <sfio_t.h>"
 Most applications based on Sfio only need to include
@@ -1976,7 +1892,6 @@ when an application may require more details about the full \f3Sfio_t\fP structu
 In such cases, the header file \f3sfio_t.h\fP can be used in place of \f3sfio.h\fP.
 Note that an application doing this will become sensitive to changes
 in the internal architecture of Sfio.
-
 .Ss "  #define SFNEW(buf,size,file,flags,disc)"
 This macro function is defined in \f3sfio_t.h\fP for
 use in static initialization of an \f3Sfio_t\fP structure.
@@ -1993,55 +1908,43 @@ This is composed from bit flags described above.
 .Tp
 \f3disc\fP:
 This defines a discipline if any.
-
 .Ss "EXAMPLE DISCIPLINES"
 .PP
 The below functions create disciplines and insert them into
 the given streams \f3f\fP. These functions return \f30\fP
 on success and \f3-1\fP on failure.
-
 .Ss "int sfdcdio(Sfio_t* f, size_t bufsize)"
 This creates a discipline that uses the direct IO feature
 available on file systems such as SGI's XFS to speed up IO.
 The argument \f3bufsize\fP suggests a buffer size to use for data transfer.
-
 .Ss "int sfdcdos(Sfio_t* f)"
 This creates a discipline to read DOS text files.
 It basically transforms pairs of \er\en to \en.
-
 .Ss "int sfdcfilter(Sfio_t* f, const char* cmd)"
 This creates a discipline that sends data from \f3f\fP
 to the given command \f3cmd\fP to process, then reads back the processed data.
-
 .Ss "int sfdcseekable(Sfio_t* f)"
 This creates a discipline that makes an unseekable reading stream seekable.
-
 .Ss "int sfdcslow(Sfio_t* f)"
 This creates a discipline that makes all Sfio operations return immediately
 on interrupts. This is useful for dealing with slow devices.
-
 .Ss "int sfdcsubstream(Sfio_t* f, Sfio_t* parent, Sfoff_t offset, Sfoff_t extent)"
 This creates a discipline that makes \f3f\fP acts as if it
 corresponds exactly to the subsection of \f3parent\fP
 starting at \f3offset\fP with size \f3extent\fP.
-
 .Ss "int sfdctee(Sfio_t* f, Sfio_t* tee)"
 This creates a discipline that copies to the stream \f3tee\fP
 any data written to \f3f\fP.
-
 .Ss "int sfdcunion(Sfio_t* f, Sfio_t** array, int n)"
 This creates a discipline that makes \f3f\fP act as if it is
 the concatenation of the \f3n\fP streams given in \f3array\fP.
-
 .Ss "int sfdclzw(Sfio_t* f)"
 This creates a discipline that would decompress data in \f3f\fP.
 The stream \f3f\fP should have data from a source compressed by
 the Unix \fBcompress\fP program.
-
 .Ss "int sfdcgzip(Sfio_t* f, int opt)"
 This creates a discipline for reading/writing data compressed by zlib.
 The argument \f3opt\fP defines the optimization level.
-
 .Ss "STDIO COMPATIBILITY"
 .PP
 Sfio provides compatibility functions for all various popular
@@ -2082,10 +1985,6 @@ FILE*  popen(const char* command, const char* mode);
 FILE*  tmpfile();
 int    fclose(FILE* stream);
 int    pclose(FILE* stream);
-
-void   flockfile(FILE* stream)
-int    ftrylockfile(FILE* stream)
-void   funlockfile(FILE* stream)
 
 void   setbuf(FILE* stream, char* buf);
 int    setvbuf(FILE* stream, char* buf, int mode, size_t size);
@@ -2140,7 +2039,6 @@ int    ferror(FILE* stream);
 int    clearerr(FILE* stream);
 .ft 1
 .fi
-
 .SH AUTHORS
 Kiem-Phong Vo, kpv@research.att.com,
 .br

@@ -142,6 +142,11 @@ Many other commands in this repo self-document via the `--help`, `--man` and
 ### Test
 
 After compiling, you can run the regression tests.
+To run the default test sets for ksh and the build system, use:
+```sh
+bin/package test
+```
+For ksh, use the `shtests` command directly to control the regression test runs.
 Start by reading the information printed by:
 ```sh
 bin/shtests --man
@@ -149,13 +154,17 @@ bin/shtests --man
 
 ### Install
 
-Automated installation is not supported yet.
-To install manually:
-```sh
-cp arch/$(bin/package host type)/bin/ksh /usr/local/bin/
-cp src/cmd/ksh93/sh.1 /usr/local/share/man/man1/ksh.1
-```
-(adapting the destination directories as required).
+Usage: `bin/package install` *destination_directory* [ *command* ... ]
+
+Any command from the `arch` directory can be installed. If no *command* is
+specified, `ksh` and `shcomp` are assumed.
+
+The *destination_directory* is created if it does not exist. Commands are
+installed in its `bin` subdirectory and each command's manual page, if
+available, is installed in `share/man`.
+
+Destination directories with whitespace or shell pattern characters in their
+pathnames are not yet supported.
 
 ## What is ksh93?
 

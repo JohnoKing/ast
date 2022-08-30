@@ -4,19 +4,16 @@
 *          Copyright (c) 1992-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -69,14 +66,10 @@ static const char usage[] =
 "	\bsysconf\b(3), \bsysinfo\b(2)]"
 ;
 
-#if defined(__STDPP__directive) && defined(__STDPP__hide)
-__STDPP__directive pragma pp:hide getdomainname gethostid gethostname sethostname
-#else
 #define getdomainname	______getdomainname
 #define gethostid	______gethostid
 #define gethostname	______gethostname
 #define sethostname	______sethostname
-#endif
 
 #include <cmd.h>
 #include <ctype.h>
@@ -91,14 +84,10 @@ __STDPP__directive pragma pp:hide getdomainname gethostid gethostname sethostnam
 # include <sys/utsname.h>
 #endif
 
-#if defined(__STDPP__directive) && defined(__STDPP__hide)
-__STDPP__directive pragma pp:nohide getdomainname gethostid gethostname sethostname
-#else
 #undef	getdomainname
 #undef	gethostid
 #undef	gethostname
 #undef	sethostname
-#endif
 
 #if _lib_getdomainname
 extern int	getdomainname(char*, size_t);
@@ -120,18 +109,6 @@ extern int	sethostname(const char*, size_t);
 static const char	hosttype[] = HOSTTYPE;
 
 #if !_lib_uname || !_sys_utsname
-
-#if defined(__STDPP__)
-#define SYSNAME		#(getprd machine)
-#define RELEASE		#(getprd release)
-#define VERSION		#(getprd version)
-#define MACHINE		#(getprd architecture)
-#else
-#define SYSNAME		""
-#define RELEASE		""
-#define VERSION		""
-#define MACHINE		""
-#endif
 
 struct utsname
 {
@@ -174,14 +151,13 @@ uname(register struct utsname* ut)
 #ifdef HOSTTYPE
 	if (!(ut->sysname = sys))
 #endif
-	if (!*(ut->sysname = SYSNAME))
-		ut->sysname = ut->nodename;
+	ut->sysname = ut->nodename;
 #ifdef HOSTTYPE
 	if (!(ut->machine = arch))
 #endif
-	ut->machine = MACHINE;
-	ut->release = RELEASE;
-	ut->version = VERSION;
+	ut->machine = "";
+	ut->release = "";
+	ut->version = "";
 	return 0;
 }
 
@@ -214,14 +190,6 @@ uname(register struct utsname* ut)
 #define OPT_all			(1L<<29)
 #define OPT_total		(1L<<30)
 #define OPT_standard		((1<<OPT_STANDARD)-1)
-
-#ifndef MACHINE
-#if defined(__STDPP__)
-#define MACHINE			#(getprd architecture)
-#else
-#define MACHINE			""
-#endif
-#endif
 
 #ifndef HOSTTYPE
 #define HOSTTYPE		"unknown"

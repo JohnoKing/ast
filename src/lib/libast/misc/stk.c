@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -56,14 +53,12 @@
 #define STK_FSIZE	(1024*sizeof(char*))
 #define STK_HDRSIZE	(sizeof(Sfio_t)+sizeof(Sfdisc_t))
 
-typedef char* (*_stk_overflow_)(int);
+typedef char* (*_stk_overflow_)(size_t);
 
 static int stkexcept(Sfio_t*,int,void*,Sfdisc_t*);
 static Sfdisc_t stkdisc = { 0, 0, 0, stkexcept };
 
-Sfio_t _Stak_data = SFNEW((char*)0,0,-1,SF_STATIC|SF_WRITE|SF_STRING,&stkdisc);
-
-__EXTERN__(Sfio_t, _Stak_data);
+Sfio_t	_Stak_data = SFNEW((char*)0,0,-1,SF_STATIC|SF_WRITE|SF_STRING,&stkdisc);
 
 struct frame
 {
@@ -120,7 +115,7 @@ static const char Omsg[] = "malloc failed while growing stack\n";
 /*
  * default overflow exception
  */
-static noreturn char *overflow(int n)
+static noreturn char *overflow(size_t n)
 {
 	NoP(n);
 	write(2,Omsg, sizeof(Omsg)-1);

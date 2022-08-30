@@ -2,20 +2,17 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -795,6 +792,7 @@ v=$(printf $'%.28a\n' 64)
 # ======
 # Arbitrary command execution vulnerability in array subscripts in arithmetic expressions
 # https://github.com/ksh93/ksh/issues/152
+unset a
 
 exp='array_test_1: 1$(echo INJECTION >&2): arithmetic syntax error'
 got=$(set +x; var='1$(echo INJECTION >&2)' "$SHELL" -c 'typeset -a a; ((a[$var]++)); typeset -p a' array_test_1 2>&1)
@@ -946,6 +944,47 @@ exp=21
 got=$(typeset -Z x=0x15; set +x; { echo $((x)); } 2>&1)
 [[ $got == "$exp" ]] || err_exit "typeset -Z corrupts hexadecimal number in arithmetic context" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Test for 'set -u' backported from ksh93v- 2013-09-26
+unset IFS i
+set -u
+float -a ar
+function f
+{
+	integer i=0 ar_i=0
+	for	(( i=0 ; i < 3 ; i++ ))
+	do	(( ar[ar_i++]=i))
+	done
+	printf "%q\n" "${ar[*]}"
+}
+[[ $(f) == "'0 1 2'" ]] || err_exit '0 value for variable in arithmetic expression inside function with set -u fails'
+set +u
+
+# Test for unset x.NOT_KNOWN floating point variable (backported
+# from ksh93v- 2013-09-13).
+unset x
+float x
+((x.NOT_KNOWN == 0)) || err_exit 'x.NOT_KNOWN is unknown and should have value 0'
+
+# Test for a bug with short integers that causes core dumps
+# (backported from ksh93v- 2013-08-07).
+"$SHELL" <<- \EOF || err_exit 'detected short integer bug that causes core dumps'
+       typeset -s -i -a t
+       typeset -s -i p
+       (( p=2**17 )) # tape start position
+       (( t[p]+=13))
+       while (( t[p] != 0 ))
+       do      ((t[p]-=1 , p+=1))
+       done
+       exit 0
+EOF
+
+# ======
+got=$(set +x; eval ': $((1 << 2))' 2>&1) \
+|| err_exit "bitwise left shift operator fails to parse (got $(printf %q "$got"))"
+got=$(set +x; eval 'got=$( ((y=1<<4)); echo $y )' 2>&1; echo $got) \
+|| err_exit "bitwise left shift operator fails to parse in comsub (got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

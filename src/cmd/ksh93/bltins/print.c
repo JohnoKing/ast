@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2014 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,6 +24,7 @@
  *   AT&T Labs
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<error.h>
 #include	<stak.h>
@@ -163,7 +161,6 @@ static int infof(Opt_t* op, Sfio_t* sp, const char* s, Optdisc_t* dp)
  * argc==0 when called from echo
  * argc==-1 when called from printf
  */
-
 int    b_print(int argc, char *argv[], Shbltin_t *context)
 {
 	register Sfio_t *outfile;
@@ -397,7 +394,6 @@ printf_v:
  * if <raw> is non-zero then \ is not a special character.
  * returns 0 for \c otherwise 1.
  */
-
 static int echolist(Sfio_t *outfile, int raw, char *argv[])
 {
 	register char	*cp;
@@ -559,7 +555,7 @@ static ssize_t fmtbase64(Sfio_t *iop, char *string, int alt)
 	char			*cp;
 	Sfdouble_t		d;
 	ssize_t			size;
-	Namval_t		*np = nv_open(string, NiL, NV_VARNAME|NV_NOASSIGN|NV_NOADD);
+	Namval_t		*np = nv_open(string, NiL, NV_VARNAME|NV_NOADD);
 	Namarr_t		*ap;
 	static union types_t	number;
 	if(!np || nv_isnull(np))
@@ -693,7 +689,7 @@ static const char *mapformat(Sffmt_t *fe)
 	const struct printmap *pm = Pmap;
 	while(pm->size>0)
 	{
-		if(pm->size==fe->n_str && memcmp(pm->name,fe->t_str,fe->n_str)==0)
+		if(pm->size==fe->n_str && strncmp(pm->name,fe->t_str,fe->n_str)==0)
 			return(pm->map);
 		pm++;
 	}
@@ -796,7 +792,7 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 		case 'n':
 		{
 			Namval_t *np;
-			np = nv_open(argp,sh.var_tree,NV_VARNAME|NV_NOASSIGN|NV_NOARRAY);
+			np = nv_open(argp,sh.var_tree,NV_VARNAME|NV_NOARRAY);
 			_nv_unset(np,0);
 			nv_onattr(np,NV_INTEGER);
 			if (np->nvalue.lp = new_of(int32_t,0))
@@ -1054,7 +1050,6 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
  * Otherwise, puts null-terminated result on stack, but doesn't freeze it
  * returns length of output.
  */
-
 static int fmtvecho(const char *string, struct printf *pp)
 {
 	register const char *cp = string, *cpmax;

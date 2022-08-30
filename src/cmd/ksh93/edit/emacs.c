@@ -4,18 +4,16 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
+*               K. Eugene Carlson <kvngncrlsn@gmail.com>               *
 *                                                                      *
 ***********************************************************************/
 /* Original version by Michael T. Veach 
@@ -61,9 +59,12 @@ One line screen editor for any program
  *  but you can use them to separate features.
  */
 
+#include	"shopt.h"
+
 #if SHOPT_ESH
 
 #include	<ast.h>
+#include	<releaseflags.h>
 #include	"FEATURE/cmds"
 #include	"defs.h"
 #include	"io.h"
@@ -90,8 +91,8 @@ One line screen editor for any program
 #   define digit(c)	((c&~STRIP)==0 && isdigit(c))
 
 #else
-#   define gencpy(a,b)	strcpy((char*)(a),(char*)(b))
-#   define genncpy(a,b,n)	strncpy((char*)(a),(char*)(b),n)
+#   define gencpy(a,b)	strcopy((char*)(a),(char*)(b))
+#   define genncpy(a,b,n)	strncopy((char*)(a),(char*)(b),n)
 #   define genlen(str)	strlen(str)
 #   define print(c)	isprint(c)
 #   define isword(c)	(isalnum(out[c]) || (out[c]=='_'))
@@ -205,7 +206,6 @@ int ed_emacsread(void *context, int fd,char *buff,int scend, int reedit)
 	}
 	raw = 1;
 	/* This mess in case the read system call fails */
-	
 	ed_setup(ep->ed,fd,reedit);
 #if !SHOPT_MULTIBYTE
 	out = (genchar*)buff;
@@ -611,7 +611,7 @@ update:
 			}
 			continue;
 		case cntl('L'):
-			ed_crlf(ep->ed);
+			putchar(ep->ed,'\n');
 			draw(ep,REFRESH);
 			continue;
 		case ESC :
@@ -625,18 +625,6 @@ update:
 			search(ep,out,count);
 			goto drawline;
 		case cntl('P') :
-#if SHOPT_EDPREDICT
-			if(ep->ed->hlist)
-			{
-				if(ep->ed->hoff == 0)
-				{
-					beep();
-					continue;
-				}
-				ep->ed->hoff--;
-				goto hupdate;
-			}
-#endif /* SHOPT_EDPREDICT */
                         if (count <= hloff)
                                 hloff -= count;
                         else
@@ -665,21 +653,6 @@ update:
 			c = '\n';
 			goto process;
 		case cntl('N') :
-#if SHOPT_EDPREDICT
-			if(ep->ed->hlist)
-			{
-				if(ep->ed->hoff >= ep->ed->hmax)
-				{
-					beep();
-					continue;
-				}
-				ep->ed->hoff++;
-			 hupdate:
-				ed_histlist(ep->ed,*ep->ed->hlist!=0);
-				draw(ep,REFRESH);
-				continue;
-			}
-#endif /* SHOPT_EDPREDICT */
 #ifdef ESH_NFIRST
 			hline = location.hist_command;	/* start at saved position */
 			hloff = location.hist_line;
@@ -715,9 +688,7 @@ update:
 			continue;
 		}
 	}
-	
 process:
-
 	if (c == (-1))
 	{
 		lookahead = 0;
@@ -733,7 +704,8 @@ process:
 	{
 		out[eol++] = '\n';
 		out[eol] = '\0';
-		ed_crlf(ep->ed);
+		putchar(ep->ed,'\n');
+		ed_flush(ep->ed);
 	}
 #if SHOPT_MULTIBYTE
 	ed_external(out,buff);
@@ -971,40 +943,25 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 			return(-1);
 		}
 
-#if SHOPT_EDPREDICT
-		case '\n':  case '\t':
-			if(!ep->ed->hlist)
-			{
-				beep();
-				break;
-			}
-			if(ch=='\n')
-				ed_ungetchar(ep->ed,'\n');
-#endif /* SHOPT_EDPREDICT */
-			/* FALLTHROUGH */
 		/* file name expansion */
 		case ESC :
-#if SHOPT_EDPREDICT
-			if(ep->ed->hlist)
-			{
-				value += ep->ed->hoff;
-				if(value > ep->ed->nhlist)
-					beep();
-				else
-				{
-					value = histlines - ep->ed->hlist[value-1]->index;
-					ed_histlist(ep->ed,0);
-					ed_ungetchar(ep->ed,cntl('P'));
-					return(value);
-				}
-			}
-#endif /* SHOPT_EDPREDICT */
 			i = '\\';	/* filename completion */
 			/* FALLTHROUGH */
 		case '*':		/* filename expansion */
 		case '=':	/* escape = - list all matching file names */
+		{
+			char allempty = 1;
+			int x;
 			ep->mark = cur;
-			if(cur<1)
+			for(x=0; x < cur; x++)
+			{
+				if(!isspace(out[x]))
+				{
+					allempty = 0;
+					break;
+				}
+			}
+			if(cur<1 || allempty)
 			{
 				beep();
 				return(-1);
@@ -1042,6 +999,7 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 				draw(ep,UPDATE);
 			}
 			return(-1);
+		}
 
 		/* search back for character */
 		case cntl(']'):	/* feature not in book */
@@ -1086,11 +1044,7 @@ static int escape(register Emacs_t* ep,register genchar *out,int count)
 			{
 			    case 'A':
 				/* VT220 up arrow */
-#if SHOPT_EDPREDICT
-				if(!ep->ed->hlist && cur>0 && eol==cur && (cur<(SEARCHSIZE-2) || ep->prevdirection == -2))
-#else
 				if(cur>0 && eol==cur && (cur<(SEARCHSIZE-2) || ep->prevdirection == -2))
-#endif /* SHOPT_EDPREDICT */
 				{
 					/* perform a reverse search based on the current command line */
 					if(ep->lastdraw==APPEND)
@@ -1287,7 +1241,7 @@ static void xcommands(register Emacs_t *ep,int count)
 			}
 			return;
 
-#	define itos(i)	fmtbase((long)(i),0,0)/* want signed conversion */
+#	define itos(i)	fmtbase((intmax_t)(i),0,0)	/* want signed conversion */
 
 		case cntl('H'):		/* ^X^H show history info */
 			{
@@ -1316,7 +1270,7 @@ static void xcommands(register Emacs_t *ep,int count)
 				show_info(ep,hbuf);
 				return;
 			}
-#	if !_AST_ksh_release		/* debugging, modify as required */
+#	if !_AST_release		/* debugging, modify as required */
 		case cntl('D'):		/* ^X^D show debugging info */
 			{
 				char debugbuf[MAXLINE];
@@ -1414,7 +1368,6 @@ static void search(Emacs_t* ep,genchar *out,int direction)
 	}
 	skip:
 	i = genlen(string);
-	
 	if(ep->prevdirection == -2 && i!=2 || direction!=1)
 		ep->prevdirection = -1;
 	if (direction < 1)
@@ -1429,7 +1382,7 @@ static void search(Emacs_t* ep,genchar *out,int direction)
 #if SHOPT_MULTIBYTE
 		ed_external(string,(char*)string);
 #endif /* SHOPT_MULTIBYTE */
-		strncpy(lstring,((char*)string)+2,SEARCHSIZE-1);
+		strncopy(lstring,((char*)string)+2,SEARCHSIZE-1);
 		lstring[SEARCHSIZE-1] = 0;
 		ep->prevdirection = direction;
 	}
@@ -1531,34 +1484,6 @@ static void draw(register Emacs_t *ep,Draw_t option)
 		i = *(logcursor-1);	/* last character inserted */
 	else
 		i = 0;
-#if SHOPT_EDPREDICT
-	if(option==FINAL)
-	{
-		if(ep->ed->hlist)
-			ed_histlist(ep->ed,0);
-	}
-	else if((option==UPDATE||option==APPEND) && drawbuff[0]=='#' && cur>1 && cur==eol && drawbuff[cur-1]!='*')
-	{
-		int		n;
-		drawbuff[cur+1]=0;
-#   if SHOPT_MULTIBYTE
-		ed_external(drawbuff,(char*)drawbuff);
-#   endif /* SHOPT_MULTIBYTE */
-		n = ed_histgen(ep->ed,(char*)drawbuff);
-#   if SHOPT_MULTIBYTE
-		ed_internal((char*)drawbuff,drawbuff);
-#   endif /* SHOPT_MULTIBYTE */
-		if(ep->ed->hlist)
-		{
-			ed_histlist(ep->ed,n);
-			putstring(ep,Prompt);
-			ed_setcursor(ep->ed,ep->screen,0,ep->cursor-ep->screen, 0);
-		}
-		else
-			ed_ringbell();
-
-		}
-#endif /* SHOPT_EDPREDICT */
 	
 	if ((option == APPEND)&&(ep->scvalid)&&(*logcursor == '\0')&&
 	    print(i)&&((ep->cursor-ep->screen)<(w_size-1)))
@@ -1583,7 +1508,6 @@ static void draw(register Emacs_t *ep,Draw_t option)
 	**********************/
 	
 	i = ncursor - nscreen;
-	
 	if ((ep->offset && i<=ep->offset)||(i >= (ep->offset+w_size)))
 	{
 		/* Center the cursor on the screen */
@@ -1600,12 +1524,9 @@ static void draw(register Emacs_t *ep,Draw_t option)
 	
 	nptr = &nscreen[ep->offset];
 	sptr = ep->screen;
-	
 	i = w_size;
-	
 	while (i-- > 0)
 	{
-		
 		if (*nptr == '\0')
 		{
 			*(nptr + 1) = '\0';
@@ -1638,7 +1559,6 @@ static void draw(register Emacs_t *ep,Draw_t option)
 	if(ep->ed->e_multiline && option == REFRESH)
 		ed_setcursor(ep->ed, ep->screen, ep->ed->e_peol, ep->ed->e_peol, -1);
 
-	
 	/******************
 	
 	Screen overflow checks 

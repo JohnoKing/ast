@@ -1,21 +1,18 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2014 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,6 +24,7 @@
  *   Coded April 1983.
  */
 
+#include	"shopt.h"
 #include	<ast.h>
 #include	<errno.h>
 #include	<ccode.h>
@@ -47,10 +45,17 @@
 #include	"edit.h"
 #include	"shlex.h"
 
-static char CURSOR_UP[20] = { ESC, '[', 'A', 0 };
-static char KILL_LINE[20] = { ESC, '[', 'J', 0 };
-static Lex_t *savelex;
-
+static char *CURSOR_UP = Empty;  /* move cursor up one line */
+static char *ERASE_EOS = Empty;  /* erase to end of screen */
+#if _tput_terminfo
+#define TPUT_CURSOR_UP	"cuu1"
+#define TPUT_ERASE_EOS	"ed"
+#elif _tput_termcap
+#define TPUT_CURSOR_UP	"up"
+#define TPUT_ERASE_EOS	"cd"
+#else
+#undef _pth_tput
+#endif /* _tput_terminfo */
 
 #if SHOPT_MULTIBYTE
 #   define is_cntrl(c)	((c<=STRIP) && iscntrl(c))
@@ -69,7 +74,6 @@ static Lex_t *savelex;
     {
 	switch(c)
 	{
-	    
 	    case cntl('A'): return('A');
 	    case cntl('B'): return('B');
 	    case cntl('C'): return('C');
@@ -212,15 +216,13 @@ int tty_set(int fd, int action, struct termios *tty)
 /*{	TTY_COOKED( fd )
  *
  *	This routine will set the tty in cooked mode.
- *	It is also called by error.done().
+ *	It is also called by sh_done().
  *
 }*/
 
 void tty_cooked(register int fd)
 {
 	register Edit_t *ep = (Edit_t*)(sh.ed_context);
-	if(sh.st.trap[SH_KEYTRAP] && savelex)
-		memcpy(sh.lex_context,savelex,sizeof(Lex_t));
 	ep->e_keytrap = 0;
 	if(ep->e_raw==0)
 		return;
@@ -502,17 +504,11 @@ int tty_alt(register int fd)
  */
 int ed_window(void)
 {
-	int	rows,cols;
-	register char *cp = nv_getval(COLUMNS);
-	if(cp)
-		cols = (int)strtol(cp, (char**)0, 10)-1;
-	else
-	{
-		astwinsize(2,&rows,&cols);
-		if(--cols <0)
-			cols = DFLTWINDOW-1;
-	}
-	if(cols < MINWINDOW)
+	int	cols;
+	sh_winsize(NIL(int*),&cols);
+	if(--cols < 0)
+		cols = DFLTWINDOW - 1;
+	else if(cols < MINWINDOW)
 		cols = MINWINDOW;
 	else if(cols > MAXWINDOW)
 		cols = MAXWINDOW;
@@ -549,23 +545,32 @@ void ed_ringbell(void)
  * send a carriage return line feed to the terminal
  */
 
-void ed_crlf(register Edit_t *ep)
+#ifdef _pth_tput
+/*
+ * Get or update a tput (terminfo or termcap) capability string.
+ */
+static void get_tput(char *tp, char **cpp)
 {
-#ifdef cray
-	ed_putchar(ep,'\r');
-#endif /* cray */
-#ifdef u370
-	ed_putchar(ep,'\r');
-#endif	/* u370 */
-#ifdef VENIX
-	ed_putchar(ep,'\r');
-#endif /* VENIX */
-	ed_putchar(ep,'\n');
-	ed_flush(ep);
+	Shopt_t	o = sh.options;
+	char	*cp;
+	sigblock(SIGINT);
+	sh_offoption(SH_RESTRICTED);
+	sh_offoption(SH_VERBOSE);
+	sh_offoption(SH_XTRACE);
+	sfprintf(sh.strbuf,".sh.value=$(" _pth_tput " %s 2>/dev/null)",tp);
+	sh_trap(sfstruse(sh.strbuf),0);
+	if((cp = nv_getval(SH_VALNOD)) && (!*cpp || strcmp(cp,*cpp)!=0))
+	{
+		if(*cpp && *cpp!=Empty)
+			free(*cpp);
+		*cpp = *cp ? sh_strdup(cp) : Empty;
+	}
+	nv_unset(SH_VALNOD);
+	sh.options = o;
+	sigrelease(SIGINT);
 }
-#endif /* SHOPT_ESH || SHOPT_VSH */
+#endif /* _pth_tput */
 
-#if SHOPT_ESH || SHOPT_VSH
 /*	ED_SETUP( max_prompt_size )
  *
  *	This routine sets up the prompt string
@@ -587,30 +592,8 @@ void	ed_setup(register Edit_t *ep, int fd, int reedit)
 	register int qlen = 1, qwid;
 	char inquote = 0;
 	ep->e_fd = fd;
-#if SHOPT_ESH && SHOPT_VSH
-	ep->e_multiline = sh_isoption(SH_MULTILINE) && (sh_isoption(SH_EMACS) || sh_isoption(SH_GMACS) || sh_isoption(SH_VI));
-#elif SHOPT_ESH
-	ep->e_multiline = sh_isoption(SH_MULTILINE) && (sh_isoption(SH_EMACS) || sh_isoption(SH_GMACS));
-#else
-	ep->e_multiline = sh_isoption(SH_MULTILINE) && sh_isoption(SH_VI);
-#endif
-#ifdef SIGWINCH
-	if(!(sh.sigflag[SIGWINCH]&SH_SIGFAULT))
-	{
-		signal(SIGWINCH,sh_fault);
-		sh.sigflag[SIGWINCH] |= SH_SIGFAULT;
-	}
-	pp = sh.st.trapcom[SIGWINCH];
-	sh.st.trapcom[SIGWINCH] = 0;
-	sh_fault(SIGWINCH);
-	sh.st.trapcom[SIGWINCH] = pp;
+	ep->e_multiline = sh_editor_active() && sh_isoption(SH_MULTILINE);
 	sh.winch = 0;
-#endif
-#if SHOPT_EDPREDICT
-	ep->hlist = 0;
-	ep->nhlist = 0;
-	ep->hoff = 0;
-#endif /* SHOPT_EDPREDICT */
 	ep->e_stkoff = staktell();
 	ep->e_stkptr = stakfreeze(0);
 	if(!(last = sh.prompt))
@@ -627,18 +610,7 @@ void	ed_setup(register Edit_t *ep, int fd, int reedit)
 		ep->e_hismax = ep->e_hismin = ep->e_hloff = 0;
 	}
 	ep->e_hline = ep->e_hismax;
-#if SHOPT_ESH && SHOPT_VSH
-	if(!sh_isoption(SH_VI) && !sh_isoption(SH_EMACS) && !sh_isoption(SH_GMACS))
-#elif SHOPT_ESH
-	if(!sh_isoption(SH_EMACS) && !sh_isoption(SH_GMACS))
-#elif SHOPT_VSH
-	if(!sh_isoption(SH_VI))
-#else
-	if(1)
-#endif /* SHOPT_ESH && SHOPT_VSH */
-		ep->e_wsize = MAXLINE;
-	else
-		ep->e_wsize = ed_window()-2;
+	ep->e_wsize = sh_editor_active() ? ed_window()-2 : MAXLINE;
 	ep->e_winsz = ep->e_wsize+2;
 	ep->e_crlf = 1;
 	ep->e_plen = 0;
@@ -773,7 +745,7 @@ void	ed_setup(register Edit_t *ep, int fd, int reedit)
 		register int shift = 7-ep->e_wsize;
 		ep->e_wsize = 7;
 		pp = ep->e_prompt+1;
-		strcpy(pp,pp+shift);
+		strcopy(pp,pp+shift);
 		ep->e_plen -= shift;
 		last[-ep->e_plen-2] = '\r';
 	}
@@ -800,35 +772,17 @@ void	ed_setup(register Edit_t *ep, int fd, int reedit)
 #if SHOPT_ESH || SHOPT_VSH
 	if(ep->e_multiline)
 	{
-#if defined(_pth_tput) && (_tput_terminfo || _tput_termcap)
+#ifdef _pth_tput
 		char *term;
 		if(!ep->e_term)
 			ep->e_term = nv_search("TERM",sh.var_tree,0);
 		if(ep->e_term && (term=nv_getval(ep->e_term)) && strlen(term)<sizeof(ep->e_termname) && strcmp(term,ep->e_termname))
 		{
-			Shopt_t o = sh.options;
-			sigblock(SIGINT);
-			sh_offoption(SH_RESTRICTED);
-			sh_offoption(SH_VERBOSE);
-			sh_offoption(SH_XTRACE);
-			/* get the cursor up sequence from tput */
-#if _tput_terminfo
-			sh_trap(".sh.subscript=$(" _pth_tput " cuu1 2>/dev/null)",0);
-#elif _tput_termcap
-			sh_trap(".sh.subscript=$(" _pth_tput " up 2>/dev/null)",0);
-#else
-#error no tput method
-#endif
-			if((pp = nv_getval(SH_SUBSCRNOD)) && strlen(pp) < sizeof(CURSOR_UP))
-				strcpy(CURSOR_UP,pp);
-			else
-				CURSOR_UP[0] = '\0';  /* no escape sequence is better than a faulty one */
-			nv_unset(SH_SUBSCRNOD);
-			strcpy(ep->e_termname,term);
-			sh.options = o;
-			sigrelease(SIGINT);
+			get_tput(TPUT_CURSOR_UP,&CURSOR_UP);
+			get_tput(TPUT_ERASE_EOS,&ERASE_EOS);
+			strcopy(ep->e_termname,term);
 		}
-#endif
+#endif /* _pth_tput */
 		ep->e_wsize = MAXLINE - (ep->e_plen+1);
 	}
 #endif /* SHOPT_ESH || SHOPT_VSH */
@@ -841,12 +795,6 @@ void	ed_setup(register Edit_t *ep, int fd, int reedit)
 		while(n-- > 0)
 			ep->e_lbuf[n] = *pp++;
 		ep->e_default = 0;
-	}
-	if(sh.st.trap[SH_KEYTRAP])
-	{
-		if(!savelex)
-			savelex = (Lex_t*)sh_malloc(sizeof(Lex_t));
-		memcpy(savelex, sh.lex_context, sizeof(Lex_t));
 	}
 }
 #endif /* SHOPT_ESH || SHOPT_VSH */
@@ -898,45 +846,40 @@ int ed_read(void *context, int fd, char *buff, int size, int reedit)
 		if(sh.trapnote&(SH_SIGSET|SH_SIGTRAP))
 			goto done;
 #if SHOPT_ESH || SHOPT_VSH
-#if SHOPT_ESH && SHOPT_VSH
-		if(sh.winch && sh_isstate(SH_INTERACTIVE) && (sh_isoption(SH_VI) || sh_isoption(SH_EMACS) || sh_isoption(SH_GMACS)))
-#elif SHOPT_ESH
-		if(sh.winch && sh_isstate(SH_INTERACTIVE) && (sh_isoption(SH_EMACS) || sh_isoption(SH_GMACS)))
-#else
-		if(sh.winch && sh_isstate(SH_INTERACTIVE) && sh_isoption(SH_VI))
-#endif
+		/*
+		 * If sh.winch is set, the number of window columns changed and/or there is a buffered
+		 * job notification. When using a line editor, erase and redraw the command line.
+		 */
+		if(sh.winch && sh_editor_active() && sh_isstate(SH_INTERACTIVE))
 		{
-			/* redraw the prompt after receiving SIGWINCH */
-			Edpos_t	lastpos;
-			int	n, rows, newsize;
-			/* move cursor to start of first line */
-			ed_putchar(ep,'\r');
-			ed_flush(ep);
-			astwinsize(2,&rows,&newsize);
-			n = (ep->e_plen+ep->e_cur)/++ep->e_winsz;
-			while(n--)
-				ed_putstring(ep,CURSOR_UP);
-			if(ep->e_multiline && newsize>ep->e_winsz && (lastpos.line=(ep->e_plen+ep->e_peol)/ep->e_winsz))
+			int	n, newsize;
+			char	*cp;
+			sh_winsize(NIL(int*),&newsize);
+			/*
+			 * Try to move cursor to start of first line and pray it works... it's very
+			 * failure-prone if the window size changed, especially on modern terminals
+			 * that break the whole terminal abstraction by rewrapping lines themselves :(
+			 */
+			if(ep->e_multiline)
 			{
-				/* clear the current command line */
-				n = lastpos.line;
-				while(lastpos.line--)
-				{
-					ed_nputchar(ep,ep->e_winsz,' ');
-					ed_putchar(ep,'\n');
-				}
-				ed_nputchar(ep,ep->e_winsz,' ');
+				n = (ep->e_plen + ep->e_cur) / newsize;
 				while(n--)
 					ed_putstring(ep,CURSOR_UP);
 			}
+			ed_putchar(ep,'\r');
+			/* clear the current command line */
+			ed_putstring(ep,ERASE_EOS);
 			ed_flush(ep);
-			sh_delay(.05,0);
-			astwinsize(2,&rows,&newsize);
+			/* show any buffered 'set -b' job notification(s) */
+			if(sh.notifybuf && (cp = sfstruse(sh.notifybuf)) && *cp)
+				sfputr(sfstderr, cp, -1);
+			/* update window size */
 			ep->e_winsz = newsize-1;
 			if(ep->e_winsz < MINWINDOW)
 				ep->e_winsz = MINWINDOW;
 			if(!ep->e_multiline && ep->e_wsize < MAXLINE)
 				ep->e_wsize = ep->e_winsz-2;
+			/* redraw command line */
 #if SHOPT_ESH && SHOPT_VSH
 			if(sh_isoption(SH_VI))
 				vi_redraw(ep->e_vi);
@@ -946,7 +889,7 @@ int ed_read(void *context, int fd, char *buff, int size, int reedit)
 			vi_redraw(ep->e_vi);
 #elif SHOPT_ESH
 			emacs_redraw(ep->e_emacs);
-#endif
+#endif /* SHOPT_ESH && SHOPT_VSH */
 		}
 #endif /* SHOPT_ESH || SHOPT_VSH */
 		sh.winch = 0;
@@ -1025,7 +968,7 @@ static int putstack(Edit_t *ep,char string[], register int nbyte, int type)
 			{
 				/*** user break key ***/
 				ep->e_lookahead = 0;
-				sh_fault(SIGINT);
+				kill(sh.current_pid,SIGINT);
 				siglongjmp(ep->e_env, UINTR);
 			}
 #   endif /* CBREAK */
@@ -1081,7 +1024,7 @@ static int putstack(Edit_t *ep,char string[], register int nbyte, int type)
 		{
 			/*** user break key ***/
 			ep->e_lookahead = 0;
-			sh_fault(SIGINT);
+			kill(sh.current_pid,SIGINT);
 			siglongjmp(ep->e_env, UINTR);
 		}
 #   endif /* CBREAK */
@@ -1494,7 +1437,7 @@ int	ed_external(const genchar *src, char *dest)
 #ifdef _lib_wcscpy
 		wcscpy((wchar_t *)dest,(const wchar_t *)buffer);
 #else
-		strcpy(dest,buffer);
+		strcopy(dest,buffer);
 #endif
 		return(c);
 	}
@@ -1637,6 +1580,7 @@ static int keytrap(Edit_t *ep,char *inbuff,register int insize, int bufsize, int
 {
 	register char *cp;
 	int savexit;
+	Lex_t *lexp = (Lex_t*)sh.lex_context, savelex;
 #if SHOPT_MULTIBYTE
 	char buff[MAXLINE];
 	ed_external(ep->e_inbuf,cp=buff);
@@ -1657,13 +1601,15 @@ static int keytrap(Edit_t *ep,char *inbuff,register int insize, int bufsize, int
 	nv_putval(ED_TXTNOD,(char*)cp,NV_NOFREE);
 	nv_putval(ED_MODENOD,ep->e_vi_insert,NV_NOFREE);
 	savexit = sh.savexit;
+	savelex = *lexp;
 	sh_trap(sh.st.trap[SH_KEYTRAP],0);
+	*lexp = savelex;
 	sh.savexit = savexit;
 	if((cp = nv_getval(ED_CHRNOD)) == inbuff)
 		nv_unset(ED_CHRNOD);
 	else if(bufsize>0)
 	{
-		strncpy(inbuff,cp,bufsize);
+		strncopy(inbuff,cp,bufsize);
 		inbuff[bufsize-1]='\0';
 		insize = strlen(inbuff);
 	}
@@ -1672,223 +1618,6 @@ static int keytrap(Edit_t *ep,char *inbuff,register int insize, int bufsize, int
 	nv_unset(ED_TXTNOD);
 	return(insize);
 }
-
-#if SHOPT_EDPREDICT
-static int ed_sortdata(const char *s1, const char *s2)
-{
-	Histmatch_t *m1 = (Histmatch_t*)s1;
-	Histmatch_t *m2 = (Histmatch_t*)s2;
-	return(strcmp(m1->data,m2->data));
-}
-
-static int ed_sortindex(const char *s1, const char *s2)
-{
-	Histmatch_t *m1 = (Histmatch_t*)s1;
-	Histmatch_t *m2 = (Histmatch_t*)s2;
-	return(m2->index-m1->index);
-}
-
-static int ed_histlencopy(const char *cp, char *dp)
-{
-	int c,n=1,col=1;
-	const char *oldcp=cp;
-	for(n=0;c = mbchar(cp);oldcp=cp,col++)
-	{
-		if(c=='\n' && *cp)
-		{
-			n += 2;
-			if(dp)
-			{
-				*dp++ = '^';
-				*dp++ = 'J';
-				col +=2;
-			}
-		}
-		else if(c=='\t')
-		{
-			n++;
-			if(dp)
-				*dp++ = ' ';
-		}
-		else
-		{
-			n  += cp-oldcp;
-			if(dp)
-			{
-				while(oldcp < cp)
-					*dp++ = *oldcp++;
-			}
-		}
-	}
-	return(n);
-}
-
-int ed_histgen(Edit_t *ep,const char *pattern)
-{
-	Histmatch_t	*mp,*mplast=0;
-	History_t	*hp;
-	off_t		offset;
-	int 		ac=0,l,n,index1,index2;
-	size_t		m;
-	char		*cp, **argv=0, **av, **ar;
-	static		int maxmatch;
-	if(!(hp=sh.hist_ptr) && (!nv_getval(HISTFILE) || !sh_histinit()))
-		return(0);
-	if(ep->e_cur <=2)
-		maxmatch = 0;
-	else if(maxmatch && ep->e_cur > maxmatch)
-	{
-		ep->hlist = 0;
-		ep->hfirst = 0;
-		return(0);
-	}
-	hp = sh.hist_ptr;
-	if(*pattern=='#' && *++pattern=='#')
-		return(0);
-	cp = stakalloc(m=strlen(pattern)+6);
-	sfsprintf(cp,m,"@(%s)*%c",pattern,0);
-	if(ep->hlist)
-	{
-		m = strlen(ep->hpat)-4;
-		if(memcmp(pattern,ep->hpat+2,m)==0)
-		{
-			n = strcmp(cp,ep->hpat)==0;
-			for(argv=av=(char**)ep->hlist,mp=ep->hfirst; mp;mp= mp->next)
-			{
-				if(n || strmatch(mp->data,cp))
-					*av++ = (char*)mp;
-			}
-			*av = 0;
-			ep->hmax = av-argv;
-			if(ep->hmax==0)
-				maxmatch = ep->e_cur;
-			return(ep->hmax=av-argv);
-		}
-		stakset(ep->e_stkptr,ep->e_stkoff);
-	}
-	if((m=strlen(cp)) >= sizeof(ep->hpat))
-		m = sizeof(ep->hpat)-1;
-	memcpy(ep->hpat,cp,m);
-	ep->hpat[m] = 0;
-	pattern = cp;
-	index1 = (int)hp->histind;
-	for(index2=index1-hp->histsize; index1>index2; index1--)
-	{
-		offset = hist_tell(hp,index1);
-		sfseek(hp->histfp,offset,SEEK_SET);
-		if(!(cp = sfgetr(hp->histfp,0,0)))
-			continue;
-		if(*cp=='#')
-			continue;
-		if(strmatch(cp,pattern))
-		{
-			l = ed_histlencopy(cp,(char*)0);
-			mp = (Histmatch_t*)stakalloc(sizeof(Histmatch_t)+l);
-			mp->next = mplast;
-			mplast = mp;
-			mp->len = l;
-			ed_histlencopy(cp,mp->data);
-			mp->count = 1;
-			mp->data[l] = 0;
-			mp->index = index1;
-			ac++;
-		}
-	}
-	if(ac>0)
-	{
-		l = ac;
-		argv = av  = (char**)stakalloc((ac+1)*sizeof(char*));
-		for(; l>=0 && (*av= (char*)mp); mp=mp->next,av++)
-			l--;
-		*av = 0;
-		strsort(argv,ac,ed_sortdata);
-		mplast = (Histmatch_t*)argv[0];
-		for(ar= av= &argv[1]; mp=(Histmatch_t*)*av; av++)
-		{
-			if(strcmp(mp->data,mplast->data)==0)
-			{
-				mplast->count++;
-				if(mp->index> mplast->index)
-					mplast->index = mp->index;
-				continue;
-			}
-			*ar++ = (char*)(mplast=mp);
-		}
-		*ar = 0;
-		mplast->next = 0;
-		ac = ar-argv;
-		strsort(argv,ac,ed_sortindex);
-		mplast = (Histmatch_t*)argv[0];
-		for(av= &argv[1]; mp=(Histmatch_t*)*av; av++, mplast=mp)
-			mplast->next = mp;
-		mplast->next = 0;
-	}
-	if (argv)
-	{
-		ep->hlist = (Histmatch_t**)argv;
-		ep->hfirst = ep->hlist?ep->hlist[0]:0;
-	}
-	else
-		ep->hfirst = 0;
-	return(ep->hmax=ac);
-}
-
-#if SHOPT_ESH || SHOPT_VSH
-void	ed_histlist(Edit_t *ep,int n)
-{
-	Histmatch_t	*mp,**mpp = ep->hlist+ep->hoff;
-	int		i,last=0,save[2];
-	if(n)
-	{
-		/* don't bother updating the screen if there is typeahead */
-		if(!ep->e_lookahead && sfpkrd(ep->e_fd,save,1,'\r',200L,-1)>0)
-			ed_ungetchar(ep,save[0]);
-		if(ep->e_lookahead)
-			return;
-		ed_putchar(ep,'\n');
-		ed_putchar(ep,'\r');
-	}
-	else
-	{
-		stakset(ep->e_stkptr,ep->e_stkoff);
-		ep->hlist = 0;
-		ep->nhlist = 0;
-	}
-	ed_putstring(ep,KILL_LINE);
-	if(n)
-	{
-		for(i=1; (mp= *mpp) && i <= 16 ; i++,mpp++)
-		{
-			last = 0;
-			if(mp->len >= ep->e_winsz-4)
-			{
-				last = ep->e_winsz-4;
-				save[0] = mp->data[last-1];
-				save[1] = mp->data[last];
-				mp->data[last-1] = '\n';
-				mp->data[last] = 0;
-			}
-			ed_putchar(ep,i<10?' ':'1');
-			ed_putchar(ep,i<10?'0'+i:'0'+i-10);
-			ed_putchar(ep,')');
-			ed_putchar(ep,' ');
-			ed_putstring(ep,mp->data);
-			if(last)
-			{
-				mp->data[last-1] = save[0];
-				mp->data[last] = save[1];
-			}
-			ep->nhlist = i;
-		}
-		last = i-1;
-		while(i-->0)
-			ed_putstring(ep,CURSOR_UP);
-	}
-	ed_flush(ep);
-}
-#endif /* SHOPT_ESH || SHOPT_VSH */
-
-#endif /* SHOPT_EDPREDICT */
 
 void	*ed_open(void)
 {

@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -821,16 +818,18 @@ r \thist -lnN 1\r\n$
 ((SHOPT_VSH || SHOPT_ESH)) && tst $LINENO <<"!"
 L tab completion while expanding ${.sh.*} variables
 # https://github.com/att/ast/issues/1461
+# also tests $'...' string: https://github.com/ksh93/ksh/issues/462
 
 d 15
 p :test-1:
-w test \$\{.sh.level\t
-r ^:test-1: test \$\{.sh.level\}\r\n$
+w test \$'foo\\'bar' \$\{.sh.level\t
+r ^:test-1: test \$'foo\\'bar' \$\{.sh.level\}\r\n$
 !
 
 ((SHOPT_VSH || SHOPT_ESH)) && tst $LINENO <<"!"
 L tab completion executes command substitutions
 # https://github.com/ksh93/ksh/issues/268
+# https://github.com/ksh93/ksh/issues/462#issuecomment-1038482307
 
 d 15
 p :test-1:
@@ -839,6 +838,20 @@ r ^:test-1: \$\(echo true\)\r\n$
 p :test-2:
 w `echo true`\t
 r ^:test-2: `echo true`\r\n$
+p :test-3:
+w '`/dev\t
+r ^:test-3: '`/dev[[:blank:]]*\r\n$
+# escape from PS2 prompt with Ctrl+C
+r ^> $
+c \cC
+p :test-4:
+w '$(/dev\t
+r ^:test-4: '\$\(/dev[[:blank:]]*\r\n$
+r ^> $
+c \cC
+p :test-5:
+w $'`/dev\t
+r ^:test-5: \$'`/dev[[:blank:]]*\r\n$
 !
 
 ((SHOPT_ESH)) && VISUAL=emacs tst $LINENO <<"!"
@@ -996,6 +1009,40 @@ p :test-2:
 w echo ok
 r echo
 r ^ok\r\n$
+!
+
+# TODO: fails too often on github runners; 'set -b' must still
+# have a race condition when several jobs terminate all at once
+: <<\DISABLED
+tst $LINENO <<"!"
+L --notify does not report all simultaneously terminated jobs
+
+d 15
+p :test-1:
+w set -b; sleep .1 & sleep .1 & sleep .1 &
+u Done
+u Done
+u Done
+!
+DISABLED
+
+((SHOPT_HISTEXPAND)) && HISTFILE=$tmp/tmp_histfile tst $LINENO <<"!"
+L history expansion: history comment character stops line from being processed
+# https://github.com/ksh93/ksh/issues/513
+
+d 15
+p :test-1:
+w set -H
+p :test-2:
+w true ${#v} !non_existent
+u : !non_existent: event not found
+w histchars='!^@'
+p :test-3:
+w true \\@ !non_existent
+u : !non_existent: event not found
+p :test-4:
+w echo @ !non_existent
+u @ !non_existent\r\n$
 !
 
 # ======

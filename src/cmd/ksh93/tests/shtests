@@ -13,8 +13,8 @@ USAGE=$'
 [-author?David Korn <dgk@research.att.com>]
 [-author?Glenn Fowler <gsf@research.att.com>]
 [-copyright?(c) 2000-2012 AT&T Intellectual Property]
-[-copyright?(c) 2020-2021 Contributors to https://github.com/ksh93/ksh]
-[-license?http://www.eclipse.org/org/documents/epl-v10.html]
+[-copyright?(c) 2020-2022 Contributors to https://github.com/ksh93/ksh]
+[-license?https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html]
 [+NAME?shtests - ksh regression test harness]
 [+DESCRIPTION?\bshtests\b is the \bksh\b(1) regression test harness for
     \b$SHELL\b or \bksh\b if \bSHELL\b is not defined and exported. If
@@ -312,8 +312,9 @@ SHOPT()
 }
 . "${SHOPTFILE:-../SHOPT.sh}"
 unset -f SHOPT
+[[ -n $SHOPT_MULTIBYTE ]] || SHOPT_MULTIBYTE=$( LC_ALL=C.UTF-8; x=$'\xc3\xa9'; print $(( ${#x}==1 )) )
 if	(( !SHOPT_MULTIBYTE && utf8 && !posix && !compile ))
-then	echo "The -u/--utf8 option is unavailable as SHOPT_MULTIBYTE is turned off in ${SHOPTFILE:-SHOPT.sh}." >&2
+then	echo "-u/--utf8 is unavailable because multibyte support was not compiled in." >&2
 	exit 1
 fi
 

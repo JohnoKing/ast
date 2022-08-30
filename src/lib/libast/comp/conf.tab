@@ -65,18 +65,11 @@ CHAR_MAX			C	XX 1 L
 CHAR_MIN			C	XX 1 L
 CHAR_TERM			POSIX	SC 2 FUW
 CHILD_MAX			POSIX	SC 1 CDLMUX	6	cc{
-	#if _lib_fork
-	#define child()		fork()
-	#else
-	extern int		spawnve(const char*, char* const[], char* const[]);
-	static char*		cmd[] = { "/bin/echo", 0 };
-	#define child()		spawnve(cmd[0],cmd,(char**)0)
-	#endif
 	int main()
 	{
 		int	i;
 		int	n;
-		for (i = 3; i < 512 && (n = child()) >= 0; i++)
+		for (i = 3; i < 512 && (n = fork()) >= 0; i++)
 			if (!n) _exit(0);
 		while (wait((int*)0) > 0);
 		for (n = 8; n < i; n <<= 1);

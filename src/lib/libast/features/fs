@@ -41,9 +41,6 @@ macro{
 	#ifndef major
 	#include <sys/sysmacros.h>
 	#endif
-	<<"#if defined(__STDPP__directive) && defined(__STDPP__initial)">>
-	<<"__STDPP__directive pragma pp:initial">>
-	<<"#endif">>
 	<<"#ifndef major">>
 	#ifdef major
 	<<"#define major(x)">> major((x))
@@ -78,9 +75,6 @@ macro{
 	#endif
 	<<"#endif">>
 	#endif
-	<<"#if defined(__STDPP__directive) && defined(__STDPP__initial)">>
-	<<"__STDPP__directive pragma pp:noinitial">>
-	<<"#endif">>
 }end fail{
 	cat <<!
 	#ifndef major

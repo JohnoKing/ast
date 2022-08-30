@@ -4,20 +4,16 @@
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -31,12 +27,8 @@
  * NOTE: two's complement binary integral representation assumed
  */
 
-#if defined(__STDPP__directive) && defined(__STDPP__hide)
-__STDPP__directive pragma pp:hide getpagesize getdtablesize
-#else
 #define getpagesize	______getpagesize
 #define getdtablesize	______getdtablesize
-#endif
 
 /*
  * we'd like as many symbols as possible defined
@@ -74,12 +66,8 @@ __STDPP__directive pragma pp:hide getpagesize getdtablesize
 
 #include "FEATURE/param"
 
-#if defined(__STDPP__directive) && defined(__STDPP__hide)
-__STDPP__directive pragma pp:nohide getpagesize getdtablesize
-#else
 #undef	getpagesize
 #undef	getdtablesize   
-#endif
 
 int main()
 {
@@ -295,23 +283,6 @@ int main()
 #endif
 
 	printf("\n");
-#ifdef _UWIN
-	printf("#ifdef _UWIN\n");
-	printf("#ifndef DBL_DIG\n");
-	printf("#define DBL_DIG		15\n");
-	printf("#endif\n");
-	printf("#ifndef DBL_MAX\n");
-	printf("#define DBL_MAX		1.7976931348623158e+308\n");
-	printf("#endif\n");
-	printf("#ifndef FLT_DIG\n");
-	printf("#define FLT_DIG		6\n");
-	printf("#endif\n");
-	printf("#ifndef FLT_MAX\n");
-	printf("#define FLT_MAX		3.402823466e+38F\n");
-	printf("#endif\n");
-	printf("#endif\n");
-	printf("\n");
-#endif
 
 #include "conflim.h"
 

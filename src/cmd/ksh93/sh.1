@@ -179,19 +179,34 @@ built-in utility).
 A
 .I pipeline\^
 is a sequence of one or more
-.I commands\^
+.IR command\^ s
 separated by
 .BR | .
 The standard output of each command but the last
 is connected by a
+.IR socketpair (2)
+or
+(if the
+.B posix
+shell option is on)
+by a
 .IR pipe (2)
 to the standard input of the next command.
-Each command,
-except possibly the last,
-is run as a separate process;
-the shell waits for the last command to terminate.
+Each command except the last is run asynchronously in a subshell (see
+.I Subshells\^
+below).
+If the
+.B monitor
+or
+.B pipefail
+option is on,
+or the pipeline is preceded by the
+.I "reserved word"
+.BR time ,
+then the shell waits for all component commands in the pipeline to terminate;
+otherwise, the shell only waits for the last component command.
 The exit status of a pipeline is the exit
-status of the last command unless the
+status of its last component command, unless the
 .B pipefail
 option is enabled.
 Each pipeline can be preceded by the
@@ -547,7 +562,9 @@ status is 0, otherwise the exit status is 1.
 .br
 Execute
 .I list\^
-in a separate environment.
+in a subshell (see
+.I Subshells\^
+below).
 Note, that if two adjacent open parentheses are
 needed for nesting, a space must be inserted to avoid
 evaluation as an arithmetic command as described above.
@@ -805,11 +822,7 @@ definition command has to be executed before
 the command which references the alias is read.
 .PP
 The following aliases are automatically preset
-when the shell is invoked as an interactive shell,
-unless invoked in POSIX compliance mode
-(see
-.I Invocation\^
-below).
+when the shell is invoked as an interactive shell.
 Preset aliases can be unset or redefined.
 .RS 20
 .PD 0
@@ -916,6 +929,55 @@ If this value is non-empty and does not start with a
 .BR \(ap ,
 it replaces the default tilde expansion when the function terminates.
 Otherwise, the tilde expansion is left unchanged.
+.SS Subshells.
+A
+.I subshell\^
+is a separate execution environment that is a complete duplicate of the
+current shell environment, except for two things: all traps are reset to
+default except those for signals that are being ignored, and subshells
+cannot be interactive (i.e., they have no command prompt).
+Changes made within a subshell do not affect the parent environment and are
+lost when the subshell exits.
+.PP
+Particular care should be taken not to confuse a subshell with a newly
+invoked shell that is merely a child process of the current shell,
+and which (unlike a subshell) starts from scratch in terms of
+variables and functions and may be interactive.
+Beware of shell tutorials on the Internet that confuse these.
+.PP
+Subshells are not themselves invoked as commands.
+Instead, the following are automatically run in or from a subshell:
+.RS 8
+.IP \[bu] 3
+any command or group of commands enclosed in parentheses;
+.IP \[bu]
+command substitutions of the first and third form (see
+.I "Command Substitution"
+below);
+.IP \[bu]
+process substitutions (see
+.I "Process Substitution"
+below);
+.IP \[bu]
+all elements of a pipeline except the last;
+.IP \[bu]
+any command executed asynchronously (i.e., in a background process).
+.RE
+.PP
+Creating processes is expensive, so as a performance optimization, a
+subshell of a non-interactive shell may share the process of its parent
+environment. Such a subshell is known as a virtual subshell.
+Subshells are virtual unless or until something (such as asynchronous
+execution, or an attempt to set a process limit using the
+.B ulimit
+built-in command, or other implementation- or system-defined requirements)
+makes it necessary to fork it into a separate process.
+Barring any bugs in the shell, virtual subshells should be indistinguishable
+from real subshells except by their execution speed and their process ID.
+See the description of the
+.B .sh.pid
+variable below for more information.
+.RE
 .SS Command Substitution.
 The standard output from a command list enclosed in
 parentheses preceded by a dollar sign (
@@ -963,7 +1025,7 @@ will run process
 .I list
 asynchronously connected to some file in
 .B /dev/fd
-if this directory exists, or else a fifo a temporary directory.
+if this directory exists, or else a fifo in a temporary directory.
 The name of this file will become the argument to the command.
 If the form with
 .B >
@@ -1117,7 +1179,6 @@ may be assigned by writing:
 \*(CK .\|.\|.
 .RE
 .PP
-.PD 0
 or
 .PP
 .RS
@@ -1125,13 +1186,11 @@ or
 \*(OK
 .IB vname [ subscript ]= value\^
 \*(CK .\|.\|.
-.sp .5
 .RE
+.PP
 Note that no space is allowed before or after the
 .BR = .
-.sp .5
 .PP
-.PD 0
 Attributes assigned by the
 .I typeset\^
 special built-in command apply to all elements of the array.
@@ -1147,7 +1206,6 @@ third element of the indexed array, use
 .BI ${ vname [ 3 ][ foobar ]}
 .sp .5
 .PP
-.PD 0
 A
 .I nameref\^
 is a variable that is a reference to another variable.
@@ -1292,7 +1350,6 @@ The number of elements in the array
 .I vname\^
 is substituted.
 .TP
-.PD 0
 \f3${@\fP\f2vname\^\fP\f3}\fP
 Expands to the type name (See
 .I "Type Variables"\^
@@ -1355,6 +1412,7 @@ inclusive using the same quoting rules as
 .PD 0
 \f3${!\fP\f2prefix\^\fP\f3@}\fP
 .TP
+.PD
 \f3${!\fP\f2prefix\^\fP\f3*}\fP
 These both expand to the names of the variables whose names begin with
 .IR prefix .
@@ -1419,6 +1477,7 @@ is set or not.
 .PD 0
 \f3${\fP\f2parameter\^\fP\f3:\fP\f2offset\^\fP\f3:\fP\f2length\^\fP\f3}\fP
 .TP
+.PD
 \f3${\fP\f2parameter\^\fP\f3:\fP\f2offset\^\fP\f3}\fP
 Expands to the portion of the value of
 .I parameter\^
@@ -1586,6 +1645,7 @@ are automatically set by the shell:
 .TP
 .B #
 The number of positional parameters in decimal.
+.PD
 .TP
 .B \-
 Options supplied to the shell on invocation or by
@@ -1608,7 +1668,8 @@ that run in the current environment may return status values in this range.
 .B $
 The process ID of the main shell process. Note that this value will not
 change in a subshell, even if the subshell runs in a different process.
-See also \f3.sh.pid\fP.
+See also
+.BR .sh.pid .
 .TP
 .B _
 Initially, the value of
@@ -1715,13 +1776,20 @@ The pathname of the file that contains the current command.
 The name of the current function that is being executed.
 .TP
 .B .sh.level
-Set to the current function depth.  This can be changed
-inside a DEBUG trap and will set the context to the specified
-level.
+Set to the current call depth of functions and dot scripts.
+Normally, this variable is read-only, but while executing a
+.B DEBUG
+trap, its value may be changed to switch the current function scope
+to that of the specified level for the duration of the trap run,
+making it possible to access a parent scope for debugging purposes.
+When trap execution ends, the variable and the scope are restored.
+It is an error to assign a value lower than 0 (the global scope)
+or higher than the current call depth.
 .TP
 .B .sh.lineno
-Set during a DEBUG trap to the line number for the caller of
-each function.
+Set during a
+.B DEBUG
+trap to the line number for the caller of each function.
 .TP
 .B .sh.match
 An indexed array which stores the most recent match and subpattern
@@ -1739,7 +1807,7 @@ element stores the
 .IR i\^ -th
 submatch.
 For
-.B //
+.BR // ,
 the array is two-dimensional, with the first subscript indicating the
 most recent match and subpattern match, and the second subscript indicating
 which match with
@@ -1770,14 +1838,30 @@ discipline function is invoked.
 The current depth for subshells and command substitution.
 .TP
 .B .sh.pid
-Set to the process ID of the current shell.
-This is distinct from
-.B $$
-as in forked subshells this is set to the process ID of the
-subshell instead of the parent shell's process ID.
-In virtual subshells
+Set to the process ID of the current shell process.
+Unlike
+.BR $$ ,
+this is updated in a subshell when it forks into a new process.
+Note that a virtual subshell may have to fork mid-execution
+due to various system- and implementation-dependent requirements,
+so the value should not be counted on to remain the same
+from one command to the next.
+If a persistent process ID is required for a subshell,
+it must be ensured it is running in its own process first.
+Any attempt to set a process limit using the
+.B ulimit
+built-in command, such as
+.BR "ulimit -t unlimited 2>/dev/null" ,
+is a reliable way to make a subshell fork if it hasn't already.
+.TP
+.B .sh.ppid
+Set to the process ID of the parent of the current shell process.
+Unlike
+.BR $PPID ,
+this is updated in a subshell when it forks into a new process.
+The same note as for
 .B .sh.pid
-retains its previous value.
+applies.
 .TP
 .B .sh.value
 Set to the value of the variable at the time that the
@@ -1798,6 +1882,17 @@ is restored when the function returns.
 Set to a value that identifies the version of this shell.
 .TP
 .B
+.SM COLUMNS
+Width of the terminal window in character positions.
+Updated automatically at initialization and on receiving a
+.B SIGWINCH
+signal.
+The shell uses the value to define the width of the edit window
+for the shell edit modes and for printing
+.B select
+lists.
+.TP
+.B
 .SM KSH_VERSION
 A name reference to
 .BR .sh.version .
@@ -1806,6 +1901,19 @@ A name reference to
 .SM LINENO
 The current line number within the script or
 function being executed.
+.TP
+.B
+.SM LINES
+Height of the terminal window in lines.
+Updated automatically at initialization and on receiving a
+.B SIGWINCH
+signal.
+The shell uses the value to determine the column length for printing
+.B select
+lists: they are printed vertically until about two thirds of
+.B
+.SM LINES
+lines are filled.
 .TP
 .B
 .SM OLDPWD
@@ -1827,7 +1935,11 @@ built-in command.
 .TP
 .B
 .SM PPID
-The process ID of the parent of the shell.
+The process ID of the parent of the main shell process.
+Note that this value will not change in a subshell,
+even if the subshell runs in a different process.
+See also
+.BR .sh.ppid .
 .TP
 .B
 .SM PWD
@@ -1883,14 +1995,7 @@ are used by the shell:
 The search path for the
 .B cd
 command.
-.TP
-.B
-.SM COLUMNS
-If this variable is set,
-the value is used to define the width of the edit window
-for the shell edit modes and for printing
-.B select
-lists.
+.PD
 .TP
 .B
 .SM EDITOR
@@ -2038,7 +2143,7 @@ Each single occurrence of
 an
 .SM
 .B IFS
-character in the string to be split,
+character in the string to be split
 that is not in the \f2isspace\^\fP character class, and any
 adjacent characters in
 .SM
@@ -2048,13 +2153,16 @@ One or more
 characters in
 .SM
 .B IFS
-that belong to the \f2isspace\^\fP character class,
+that belong to the \f2isspace\^\fP character class
 delimit a field.
 In addition, if the same \f2isspace\^\fP character appears
 consecutively inside
-.BR IFS ,
+.B IFS
+and the
+.B posix
+shell option is not on,
 this character is treated as if it were not in the \f2isspace\^\fP
-class, so that if
+class - for example, if
 .BR IFS
 consists of two
 .B tab
@@ -2106,17 +2214,6 @@ below).
 .SM LC_NUMERIC
 This variable determines the locale category for the
 decimal point character.
-.TP
-.B
-.SM LINES
-If this variable is set,
-the value is used to determine the column length for printing
-.B select
-lists.
-Select lists will print vertically until about two-thirds of
-.B
-.SM LINES
-lines are filled.
 .TP
 .B
 .SM MAIL
@@ -2279,10 +2376,10 @@ The number of CPU seconds spent in user mode.
 The number of CPU seconds spent in system mode.
 .TP
 .B %[\fIp\fP][l]C
-The total number of CPU seconds; i.e., the sum of the time spent in user plus system mode.
+The total number of CPU seconds, i.e. the sum of the time spent in user and system mode.
 .TP
 .B %P
-The CPU percentage (i.e., CPU utilization), computed as C / R.
+The CPU percentage, computed as C / R.
 .PD
 .RE
 .IP
@@ -2292,17 +2389,20 @@ the number of fractional digits after a decimal point.
 A value of 0 causes no decimal point or fraction to be output.
 At most six places after the decimal point can be displayed;
 values of \fIp\fP greater than 6 are treated as 6.
-If \fIp\fP is not specified, the value 6 is used.
+If \fIp\fP is not specified, the value 3 is used.
 .IP
 The optional \fBl\fP specifies a longer format, including
 hours if greater than zero,
 minutes, and seconds of the form \fIHH\fPh\fIMM\fPm\fISS\fP.\fIFF\fPs.
 The value of \fIp\fP determines whether or not the fraction is
 included.
+Seconds are zero-padded unless the
+.B posix
+shell option is on.
 .IP
 All other characters are output without change and a trailing
 newline is added.
-If unset, the default value, \fB$'\enreal\et%6lR\enuser\et%6lU\ensys\et%6lS'\fP,
+If unset, the default value, \fB$'\enreal\et%3lR\enuser\et%3lU\ensys\et%3lS'\fP,
 is used.  If the value is null, no timing information is displayed.
 .TP
 .B
@@ -2684,8 +2784,9 @@ Matches exactly one of the given patterns.
 .TP
 \f3!(\fP\f2pattern-list\^\fP\f3)\fP
 Matches anything except one of the given patterns.
-.PD
 .RE
+.PD
+.PP
 By default, each pattern or subpattern will match the
 longest string possible consistent with generating
 the longest overall match.  If more than one match is
@@ -2763,6 +2864,7 @@ Causes the ending character to be interpreted as a quote character,
 causing all characters other than any escape character to be ignored
 when looking for a match.
 .PD
+.PP
 .RE
 Thus,
 \f3%(\^{\^}Q"E\e\^)\fP,
@@ -2878,6 +2980,7 @@ Right-anchor the pattern.  This is the default for
 .B K
 style patterns.
 .PD
+.PP
 .RE
 If both \f2options\^\fP and \f3:\fP\f2pattern-list\^\fP
 are specified, then the options apply only to  \f2pattern-list\^\fP.
@@ -2911,6 +3014,7 @@ A single quoted string preceded by an unquoted
 .B $
 is processed as an ANSI C string
 except for the following:
+.RS
 .PD 0
 .TP
 .B \e0
@@ -2931,6 +3035,7 @@ Expands to the character control-\f2x\fP.
 .TP
 .BI \eC[. name .]
 Expands to the collating element \f2name\fP.
+.RE
 .PD
 .PP
 Inside double quote marks
@@ -3172,6 +3277,7 @@ and
 .BR ]] .
 Each expression can be constructed from one or more
 of the following unary or binary expressions:
+.RS
 .PD 0
 .TP
 \f2string\fP
@@ -3394,8 +3500,11 @@ True, if
 comes after
 .I string2\^
 based on ASCII value of their characters.
+.RE
+.PD
 .PP
 The following obsolete arithmetic comparisons are also permitted:
+.RS
 .PD 0
 .TP
 \f2exp1\fP \f3\-eq\fP \f2exp2\fP
@@ -3433,6 +3542,7 @@ True, if
 .I exp1\^
 is greater than or equal to
 .IR exp2 .
+.RE
 .PD
 .PP
 In each of the above expressions, if
@@ -3447,7 +3557,8 @@ descriptor number is
 .IR n .
 .PP
 A compound expression can be constructed from these primitives by
-using any of the following, listed in decreasing order of precedence.
+using any of the following, listed in decreasing order of precedence:
+.RS
 .PD 0
 .TP
 \f3(\fP\f2expression\fP\f3)\fP
@@ -3475,6 +3586,7 @@ or
 .I expression2\^
 is true.
 .PD
+.RE
 .SS Input/Output.
 Before a command is executed, its input and output
 may be redirected using a special notation interpreted by the shell.
@@ -3858,6 +3970,7 @@ echo \|a=b \|c
 .ft R
 .fi
 .RE
+.PP
 This feature is intended for use with scripts written
 for early versions of the shell and its use in new scripts
 is strongly discouraged.
@@ -3992,8 +4105,6 @@ If \f3.sh.value\fP is unset inside the discipline, then
 that value is unchanged.
 If the \f3unset\fP discipline is defined for a variable, it is invoked
 whenever the given variable is unset.
-The variable will not be unset unless it is unset explicitly
-from within this discipline function.
 .PP
 The variable
 .B .sh.name
@@ -4212,6 +4323,7 @@ There are several ways to refer to jobs in the shell.
 A job can be referred to by the process ID of any process of the job
 or by one of the following:
 .PD 0
+.RS
 .TP
 .BI % number
 The job with the given number.
@@ -4243,7 +4355,9 @@ Equivalent to
 .TP
 .BI %\-
 Previous job.
+.RE
 .PD
+.PP
 In addition, unless noted otherwise, wherever a job can be specified,
 the name of a background job pool can be used to represent all the
 jobs in that pool.
@@ -4701,7 +4815,9 @@ Remove all but the extension.
 \f3s/\fP\f2l\fP\f3/\fP\f2r\fP\f3/\fP
 Substitute \f2l\fP for \f2r\fP.
 \f2l\fP is simply a string like \f2r\fP,
-not a regular expression as in the eponymous \f2ed\fP(1) command.
+not a regular expression as in the eponymous
+.IR ed (1)
+command.
 Any character may be used as the delimiter in place of \f3/\fP;
 a \f3\\\fP can be used to quote the delimiter inside \f2l\fP and \f2r\fP.
 The character \f3&\fP in the \f2r\fP is replaced by \f2l\fP;
@@ -4879,6 +4995,8 @@ will provide a numbered list of matching alternatives.
 A specific selection can be made by entering the
 selection number followed by a
 .IR tab .
+Neither completion nor listing operations are attempted before
+the first character in a line.
 .SS Key Bindings.
 The
 .B
@@ -5429,6 +5547,7 @@ same time, such as when pressing one of those keys.
 .SS "\ \ \ \ \ Input Edit Commands"
 .RS
 By default the editor is in input mode.
+.PP
 .PD 0
 .TP 10
 .I erase
@@ -5472,10 +5591,9 @@ or
 character.
 .TP 10
 .BI ^I  " tab"
-Attempts command or file name completion as described above
-and returns to input mode.
-If a partial completion occurs, repeating this will
-behave as if
+Attempts command or file name completion as described
+above and returns to input mode. If a partial completion
+occurs, repeating this will behave as if
 .B =
 were entered from control mode.
 If no match is found or entered after
@@ -5484,9 +5602,13 @@ a
 .I tab\^
 is inserted.
 .RE
+.PD
+.PP
 .SS "\ \ \ \ \ Motion Edit Commands"
 .RS
 These commands will move the cursor.
+.PP
+.PD 0
 .TP 10
 [\f2count\fP]\f3l\fP
 Cursor forward (right) one character.
@@ -5644,9 +5766,13 @@ If cursor is not on one of the above characters,
 the remainder of the line is searched for the first
 occurrence of one of the above characters first.
 .RE
+.PD
+.PP
 .SS "\ \ \ \ \ Search Edit Commands"
 .RS
 These commands access your command history.
+.PP
+.PD 0
 .TP 10
 [\f2count\fP]\f3k\fP
 Fetch previous command.
@@ -5721,9 +5847,13 @@ or
 .BR ? ,
 but in reverse direction.
 .RE
+.PD
+.PP
 .SS "\ \ \ \ \ Text Modification Edit Commands"
 .RS
 These commands will modify the line.
+.PP
+.PD 0
 .TP 10
 .B a
 Enter input mode and enter text after the current character.
@@ -5835,9 +5965,13 @@ by the matching pattern and input mode is entered.
 .B \e
 Command or file name completion as described above.
 .RE
+.PD
+.PP
 .SS "\ \ \ \ \ Other Edit Commands"
 .RS
 Miscellaneous commands.
+.PP
+.PD 0
 .TP 10
 [\f2count\fP]\f3y\fP\f2motion\fP
 .TP 10
@@ -5943,7 +6077,8 @@ section from their manual page, and
 .B \-?
 as a request to print a brief usage message.
 All these are processed as error messages, so they are written on standard
-error (file descriptor 2) and to pipe them into a pager such as \fBmore\fR(1)
+error (file descriptor 2) and to pipe them into a pager such as
+.IR more (1)
 you need to add a \fB2>&1\fR redirection before the \fB|\fR. The display of
 boldface text depends on whether standard error is on a terminal, so is
 disabled when using a pager. Exporting the \fBERROR_OPTIONS\fR environment
@@ -5962,6 +6097,7 @@ Commands that are preceded by a \(dg symbol below are
 .I special\ built-in\ commands
 and are treated specially in the following ways:
 .PD 0
+.RS
 .TP
 1.
 Variable assignment lists preceding the command
@@ -5977,6 +6113,8 @@ that contains them to abort.
 .TP
 4.
 They are not valid function names.
+.RE
+.PD
 .PP
 Commands that are preceded by a \(dd symbol below are
 .IR declaration\ commands .
@@ -6400,10 +6538,13 @@ See
 .IR echo (1)
 for usage and description.
 .TP
-\(dd \f3enum\fP \*(OK \f3\-i\fP  \*(CK \f2type\^\fP\*(OK=(\f2value\^\fP .\|.\|.) \*(CK
-Creates a declaration command named \f2type\^\fP that
-allows one of the specified \f2value\fPs as
-enumeration names.  If \f3=(\fP\f2value\^\ .\|.\|.\|\fP\f3)\fP is
+\(dd \f3enum\fP \*(OK \f3\-i\fP \*(CK \f2type\^\fP\*(OK=(\f2value\^\fP .\|.\|.) \*(CK .\|.\|.
+Creates, for each \f2type\^\fP specified,
+an enumeration type declaration command named \f2type\^\fP.
+Variables of the created type can only store any one of the \f2value\fPs given.
+For example, \f3enum bool=(false true)\fP creates a Boolean variable
+type of which variables may be declared like \f3bool x=true y=false\fP.
+If \f3=(\fP\f2value\^\ .\|.\|.\|\fP\f3)\fP is
 omitted, then \f2type\^\fP must be an indexed array variable with at
 least two elements and the values are taken from this array variable.
 If
@@ -6420,6 +6561,14 @@ Within arithmetic expressions (see
 above), enumeration type values translate to index numbers between 0 and the
 number of defined values minus 1. It is an error for an arithmetic expression
 to assign a value outside of that range. Decimal fractions are ignored.
+Taking the \f3bool\fP type from the example above,
+if a variable of this type is used in an arithmetic expression,
+\f3false\fP translates to 0 and \f3true\fP to 1.
+Enumeration values may also be used directly in an arithmetic expression
+that refers to a variable of an enumeration type.
+To continue our example, for a \f3bool\fP variable \f3v\fP,
+\f3((v==true))\fP is the same as \f3((v==1))\fP
+and if a variable named \f3true\fP exists, it is ignored.
 .RE
 .TP
 \(dg \f3eval\fP \*(OK \f2arg\^\fP .\|.\|. \*(CK
@@ -6818,7 +6967,7 @@ See
 for a description of the format of
 .IR job .
 In the third form,
-.BR "kill \-l" ,
+.B "kill \-l"
 or
 .BR "kill \-L" ,
 if
@@ -6827,9 +6976,10 @@ is not specified,
 the signal names are listed.
 The
 .B \-l
-option list only the signal names.
+option lists only the signal names.
+The
 .B \-L
-options lists each signal name and corresponding number.
+option lists each signal name and corresponding number.
 Otherwise, for each
 .I sig\^
 that is a name, the corresponding signal number is listed.
@@ -7160,6 +7310,7 @@ or
 formats, separates groups of digits with the grouping delimiter
 .RB  ( ,
 on groups of 3 in the C locale).
+.PD
 .PP
 The \f3\-v\fP option assigns the output directly to a variable instead of
 writing it to standard output. This is faster than capturing the output using a
@@ -7478,6 +7629,10 @@ above) are only exported while their name space is active.
 .B \-b
 Prints job completion messages as soon as a background job changes
 state rather than waiting for the next prompt.
+If one of the shell line editors is in use (see
+.I In-line Editing Options
+above), the completion message is inserted directly above the
+command line being typed.
 .TP 8
 .B \-e
 Unless contained in a
@@ -7513,6 +7668,8 @@ not just those that precede the command name.
 Background jobs will run in a separate process group
 and a line will print upon completion.
 The exit status of background jobs is reported in a completion message.
+A pipeline will not terminate until all component commands of the pipeline
+have terminated.
 On systems with job control,
 this option is turned on automatically for
 interactive shells.
@@ -7559,6 +7716,22 @@ style in-line editor for command entry.
 .B errexit
 Same as
 .BR \-e .
+.TP 8
+.B functrace
+Causes the
+.B \-x
+option's state and the
+.B DEBUG
+trap action to be inherited by functions defined using the
+.B function
+keyword (see
+.I "Functions\^"
+above) instead of being reset to default.
+Changes made to them within the function
+do not propagate back to the parent scope.
+Similarly, this option also causes the
+.B DEBUG
+trap action to be inherited by subshells.
 .TP 8
 .B globcasedetect
 When this option is turned on, globbing (see
@@ -7657,10 +7830,11 @@ Same as
 .BR \-u .
 .TP 8
 .B pipefail
-A pipeline will not complete until all components
-of the pipeline have completed, and the return value
-will be the value of the last non-zero command
-to fail or zero if no command has failed.
+The exit status of the entire pipeline will be that of the last component
+command that exited with a non-zero exit status, or zero if no command
+exited with a non-zero exit status.
+The shell will wait for all component commands of the pipeline to terminate,
+instead of only waiting for the last component command.
 .TP 8
 .B posix
 Enables the POSIX standard mode for maximum compatibility with other compliant
@@ -7672,15 +7846,23 @@ is automatically turned on upon invocation if the shell is invoked as \fBsh\fR
 or \fBrsh\fR, or if \fB\-o posix\fR or \fB\-\-posix\fR is specified on the
 shell invocation command line, or when executing scripts without a \fB#!\fR path
 with this option active in the invoking shell. In that case, the invoked shell
-will not set the preset aliases even if interactive, and will not import type
-attributes for variables (such as integer or left/right justify)
-from the environment.
+will not import type attributes for variables (such as integer or left/right
+justify) from the environment.
 .RS 8
 .PP
 In addition, while on, the \fBposix\fR option
 .IP \[bu] 3
 disables exporting variable type attributes to the environment for other ksh
 processes to import;
+.IP \[bu]
+if the \fB\-B\fR/\fBbraceexpand\fR option is turned back on,
+disallows brace expansion on the results of unquoted expansions;
+.IP \[bu]
+disables the special handling of repeated
+.I isspace
+class characters in the
+.B IFS
+variable;
 .IP \[bu]
 causes file descriptors > 2 to be left open when invoking another program;
 .IP \[bu]
@@ -7692,6 +7874,21 @@ disables fast filescan loops of type
 makes the \fB<>\fR redirection operator default to redirecting standard input
 if no file descriptor number precedes it;
 .IP \[bu]
+causes the shell to use a standard UNIX
+.IR pipe (2)
+instead of a
+.IR socketpair (2)
+to connect commands in a pipeline
+(when reading directly from a pipeline, the
+.BI <# pattern
+and
+.BI <## pattern
+redirection operators will not work and the
+.B -n
+option to the
+.B read
+built-in will not return early when reading from a slow device);
+.IP \[bu]
 disables the special floating point constants \fBInf\fR and \fBNaN\fR in
 arithmetic evaluation so that, e.g., \fB$((inf))\fR and \fB$((nan))\fR refer
 to the variables by those names;
@@ -7700,8 +7897,26 @@ enables the recognition of a leading zero as introducing an octal number in
 all arithmetic evaluation contexts, except in the \fBlet\fR built-in while
 \fBletoctal\fR is off;
 .IP \[bu]
+disables zero-padding of seconds in the output of the
+.B time
+and
+.B times
+built-ins;
+.IP \[bu]
 stops the \fB.\fR command (but not \fBsource\fR) from looking up functions
 defined with the \fBfunction\fR syntax;
+.IP \[bu]
+disables the recognition of unexpanded shell arithmetic expressions in the
+numerical comparison operators
+.BR \-eq ,
+.BR \-ne ,
+.BR \-gt ,
+.BR \-ge ,
+.B \-lt
+and
+.B \-le
+of the \fBtest\fR/\fB[\fR built-in command, causing them to accept only
+decimal numbers as operands;
 .IP \[bu]
 changes the \fBtest\fR/\fB[\fR built-in command to make its deprecated
 \fIexpr1\fR \fB-a\fR \fIexpr2\fR and \fIexpr1\fR \fB-o\fR \fIexpr2\fR operators
@@ -7766,6 +7981,7 @@ line delimiters, and may be helpful for certain terminals.
 .B xtrace
 Same as
 .BR \-x .
+.PD
 .PP
 If no option name is supplied, then the current option settings are printed.
 .RE
@@ -7783,6 +7999,7 @@ This mode is on whenever the effective UID (GID)
 is not equal to the real UID (GID).
 Turning this off causes the effective UID and GID to be
 set to the real UID and GID.
+.PD 0
 .TP 8
 .B \-r
 Enables the restricted shell.  This option cannot be unset
@@ -7914,7 +8131,7 @@ to those specified for the \f3[[\fP compound command under
 .I Conditional Expressions
 above, but with several important differences. The \f3=\fP, \f3==\fP and
 \f3!=\fP operators test for string (in)equality without pattern matching;
-\f3==\fP is nonstandard and unportable. The f3&&\fP and \f3||\fP operators are
+\f3==\fP is nonstandard and unportable. The \f3&&\fP and \f3||\fP operators are
 not available. Instead, the \f3-a\fP and \f3-o\fP binary operators can be
 used, but they are fraught with pitfalls due to grammatical ambiguities and
 therefore deprecated in favor of invoking separate \f3test\fP commands. Most
@@ -7940,6 +8157,9 @@ or
 Displays the accumulated user and system CPU times, one line with the times
 used by the shell and another with those used by all of the shell's child
 processes. No options are supported.
+Seconds are zero-padded unless the
+.B posix
+shell option is on.
 .TP
 \(dg \f3trap\fP \*(OK \f3\-p\fP \*(CK \*(OK \f2action\^\fP \*(CK \*(OK \f2sig\^\fP \*(CK .\|.\|.
 The
@@ -8311,6 +8531,19 @@ format
 can be used to output the actual data in this buffer instead
 of the base64 encoding of the data.
 .TP
+.B \-g
+Forces variables to be created or modified at the global scope,
+even when
+.B typeset
+is executed in a function defined by the
+.B function
+.I name
+syntax (see
+.I Functions\^
+above) or in a name space (see
+.I Name Spaces\^
+above).
+.TP
 .B \-h
 Used within type definitions to add information when generating
 information about the subvariable on the man page.
@@ -8347,7 +8580,7 @@ Equivalent to
 .B "\-M tolower" .
 .TP
 .B \-m
-moves or renames the variable.
+Moves or renames the variable.
 The value is the name of a variable whose value will be moved to
 .IR vname\^ .
 The original variable will be unset.
@@ -8361,7 +8594,8 @@ defined by the value of variable
 .IR vname .
 This is usually used to reference a variable inside
 a function whose name has been passed as an argument.
-Cannot be used with any other options.
+Cannot be used with other options except
+.BR \-g .
 .TP
 .B \-p
 The name, attributes and values for the given
@@ -8931,36 +9165,35 @@ are identical to those of
 .if \nZ=2 .BR ksh93\^ ,
 except that the following are disallowed:
 .RS
-.PD 0
-.PP
-unsetting the restricted option,
-.br
+.IP \[bu]
+unsetting the restricted option
+.IP \[bu]
 changing directory (see
-.IR cd (1)),
-.br
+.IR cd (1))
+.IP \[bu]
 setting or unsetting the value or attributes of
 .BR SHELL ,
 .BR ENV ,
 .BR FPATH ,
 or
-.BR PATH\*S,
-.br
+.BR PATH\*S
+.IP \[bu]
 specifying path or
 command names containing
-.BR / ,
-.br
+.BR / 
+.IP \[bu]
 redirecting output
 .RB ( > ,
 .BR >| ,
 .BR <> ,
 and
-.BR >> ) ,
-.br
-adding or deleting built-in commands,
-.br
+.BR >> ) 
+.IP \[bu]
+adding or deleting built-in commands
+.IP \[bu]
 using
 .B "command -p"
-to invoke a command.
+to invoke a command
 .PD
 .RE
 .PP
@@ -9049,41 +9282,41 @@ file when the real and effective user or group ID do not match.
 .B /dev/null
 NULL device
 .SH SEE ALSO
-cat(1),
-cd(1),
-chmod(1),
-cut(1),
-date(1),
-egrep(1),
-echo(1),
-emacs(1),
-env(1),
-fgrep(1),
-gmacs(1),
-grep(1),
-stty(1),
-test(1),
-umask(1),
-vi(1),
-dup(2),
-exec(2),
-fork(2),
-getpwnam(3),
-ioctl(2),
-lseek(2),
-paste(1),
-pathconf(2),
-pipe(2),
-sysconf(3),
-umask(2),
-ulimit(2),
-wait(2),
-strftime(3),
-wctrans(3),
-rand(3),
-a.out(5),
-profile(5),
-environ(7).
+.IR cat (1),
+.IR cd (1),
+.IR chmod (1),
+.IR cut (1),
+.IR date (1),
+.IR egrep (1),
+.IR echo (1),
+.IR emacs (1),
+.IR env (1),
+.IR fgrep (1),
+.IR gmacs (1),
+.IR grep (1),
+.IR stty (1),
+.IR test (1),
+.IR umask (1),
+.IR vi (1),
+.IR dup (2),
+.IR exec (2),
+.IR fork (2),
+.IR getpwnam (3),
+.IR ioctl (2),
+.IR lseek (2),
+.IR paste (1),
+.IR pathconf (2),
+.IR pipe (2),
+.IR sysconf (3),
+.IR umask (2),
+.IR ulimit (2),
+.IR wait (2),
+.IR strftime (3),
+.IR wctrans (3),
+.IR rand (3),
+.IR a.out (5),
+.IR profile (5),
+.IR environ (7).
 .PP
 Morris I. Bolsky and David G. Korn,
 .IR "The New KornShell Command and Programming Language" ,
@@ -9105,11 +9338,6 @@ command or the
 option of the
 .B alias\^
 command to correct this situation.
-.PP
-Some very old shell scripts contain a
-.B ^
-as a synonym for the pipe character
-.BR | .
 .PP
 Using the
 .B hist\^

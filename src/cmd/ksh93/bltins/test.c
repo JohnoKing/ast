@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,7 +24,7 @@
  *
  */
 
-
+#include	"shopt.h"
 #include	"defs.h"
 #include	<error.h>
 #include	<ls.h>
@@ -335,14 +332,8 @@ static int e3(struct test *tp)
 	if(*arg=='-' && arg[2]==0)
 	{
 		op = arg[1];
-		if(!cp)
-		{
-			/* for backward compatibility with new flags */
-			if(op==0 || !strchr(test_opchars+10,op))
-				return(1);
-			errormsg(SH_DICT,ERROR_exit(2),e_argument);
-			UNREACHABLE();
-		}
+		if(!cp)					/* no further argument: */
+			return(1);			/* treat as nonempty string instead of unary op, so return true */
 		if(strchr(test_opchars,op))
 			return(test_unop(op,cp));
 	}
@@ -451,7 +442,7 @@ int test_unop(register int op,register const char *arg)
 		return(statb.st_gid==sh.groupid);
 	    case 'a':
 	    case 'e':
-		if(memcmp(arg,"/dev/",5)==0 && sh_open(arg,O_NONBLOCK))
+		if(strncmp(arg,"/dev/",5)==0 && sh_open(arg,O_NONBLOCK))
 			return(1);
 		return(permission(arg, F_OK));
 	    case 'o':
@@ -459,7 +450,7 @@ int test_unop(register int op,register const char *arg)
 		if(*arg=='?')
 			return(sh_lookopt(arg+1,&f)>0);
 		op = sh_lookopt(arg,&f);
-		return(op && (f==(sh_isoption(op)!=0)));
+		return(op>0 && (f==(sh_isoption(op)!=0)));
 	    case 't':
 	    {
 		char *last;
@@ -483,7 +474,6 @@ int test_unop(register int op,register const char *arg)
 				np = nv_refnode(np);
 			else
 				return(0);
-			
 		}
 		if(ap = nv_arrayptr(np))
 			return(nv_arrayisset(np,ap));
@@ -505,15 +495,48 @@ int test_unop(register int op,register const char *arg)
  */
 int test_binop(register int op,const char *left,const char *right)
 {
-	register double lnum = 0, rnum = 0;
 	if(op&TEST_ARITH)
 	{
-		while(*left=='0')
-			left++;
-		while(*right=='0')
-			right++;
-		lnum = sh_arith(left);
-		rnum = sh_arith(right);
+		Sfdouble_t lnum, rnum;
+		if(sh.bltinfun==b_test && sh_isoption(SH_POSIX))
+		{
+			/* for test/[ in POSIX, only accept simple decimal numbers */
+			char *l = (char*)left, *r = (char*)right;
+			while(*l=='0')
+				l++;
+			while(*r=='0')
+				r++;
+			lnum = strtold(l,&l);
+			rnum = strtold(r,&r);
+			if(*l || *r)
+			{
+				errormsg(SH_DICT, ERROR_exit(2), e_number, *l ? left : right);
+				UNREACHABLE();
+			}
+		}
+		else
+		{
+			/* numeric operands are arithmetic expressions */
+			lnum = sh_arith(left);
+			rnum = sh_arith(right);
+		}
+		switch(op)
+		{
+			case TEST_EQ:
+				return(lnum==rnum);
+			case TEST_NE:
+				return(lnum!=rnum);
+			case TEST_GT:
+				return(lnum>rnum);
+			case TEST_LT:
+				return(lnum<rnum);
+			case TEST_GE:
+				return(lnum>=rnum);
+			case TEST_LE:
+				return(lnum<=rnum);
+		}
+		/* all arithmetic binary operators should be covered above */
+		UNREACHABLE();
 	}
 	switch(op)
 	{
@@ -541,27 +564,14 @@ int test_binop(register int op,const char *left,const char *right)
 			return(test_time(left,right)>0);
 		case TEST_OT:
 			return(test_time(left,right)<0);
-		case TEST_EQ:
-			return(lnum==rnum);
-		case TEST_NE:
-			return(lnum!=rnum);
-		case TEST_GT:
-			return(lnum>rnum);
-		case TEST_LT:
-			return(lnum<rnum);
-		case TEST_GE:
-			return(lnum>=rnum);
-		case TEST_LE:
-			return(lnum<=rnum);
 	}
-	/* all possible binary operators should be covered above */
+	/* all non-arithmetic binary operators should be covered above */
 	UNREACHABLE();
 }
 
 /*
  * returns the modification time of f1 - modification time of f2
  */
-
 static time_t test_time(const char *file1,const char *file2)
 {
 	Time_t t1, t2;
@@ -583,7 +593,6 @@ static time_t test_time(const char *file1,const char *file2)
 /*
  * return true if inode of two files are the same
  */
-
 int test_inode(const char *file1,const char *file2)
 {
 	struct stat stat1,stat2;
@@ -598,7 +607,6 @@ int test_inode(const char *file1,const char *file2)
  * This version of access checks against the effective UID/GID
  * The static buffer statb is shared with test_mode.
  */
-
 int sh_access(register const char *name, register int mode)
 {
 	struct stat statb;
@@ -686,7 +694,6 @@ skip:
  * If <file> is null, then the previous stat buffer is used.
  * The mode bits are zero if the file doesn't exist.
  */
-
 static int test_mode(register const char *file)
 {
 	struct stat statb;

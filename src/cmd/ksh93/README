@@ -27,6 +27,10 @@ The options have the following defaults and meanings:
     ACCTFILE     off Enable per user accounting info.
                      See README-AUDIT.md.
 
+    ALL_LIBCMD   off Enables all of the available /opt/ast/bin builtin commands
+                     in src/lib/libcmd (excludes vmstate if vmalloc is not
+                     enabled).
+
     AUDIT        on  For auditing specific users.
                      Noted by "A" in the version string when enabled.
                      See README-AUDIT.md.
@@ -59,17 +63,10 @@ The options have the following defaults and meanings:
     DEVFD            Use the more secure /dev/fd mechanism instead of FIFOs for
                      process substitutions. On by default on OSs with /dev/fd.
 
-    DYNAMIC      on  Dynamic loading of builtins. (Requires dlopen() interface.)
+    DYNAMIC      off Dynamic loading of builtins. Requires dlopen() interface
+                     and dynamic libshell, libdll and libast libraries.
 
     ECHOPRINT    off Make echo equivalent to print.
-
-    EDPREDICT    off Enables history pattern search menu. As you begin a line
-                     with a #, the following characters are treated as a shell
-                     pattern and cause matching lines from the history file to
-                     be displayed as a numbered list as you type. You can
-                     scroll up and down this list or you can use <ESC>nTAB to
-                     make this the current line (n defaults to 1 if omitted).
-                     Experimental. Bugs: https://github.com/ksh93/ksh/issues/233
 
     ESH          on  Compile with emacs command line editing.  The original
                      emacs line editor code was provided by Mike Veach at IH.
@@ -100,8 +97,9 @@ The options have the following defaults and meanings:
                      As of 2021-05-10, no tool that can parse this database is
                      known. If you know of any, please contact us.
 
-    MULTIBYTE    on  Multibyte character handling.  Requires mblen() and
-                     mbctowc().
+    MULTIBYTE        Multibyte character handling. This is on by default unless
+                     the flag -DAST_NOMULTIBYTE is passed to the compiler via
+                     CCFLAGS. The UTF-8 character set is fully supported.
 
     NAMESPACE    on  Adds a 'namespace' reserved word that allows defining name
                      spaces. Variables and functions defined within a block like
@@ -125,8 +123,8 @@ The options have the following defaults and meanings:
 
     OPTIMIZE     on  Optimize loop invariants for with for and while loops.
 
-    P_SUID       off If set, all real UIDs, greater than or equal to this
-                     value will require the -p flag to run SUID/SGID scripts.
+    P_SUID       0   If set, all real UIDs greater than or equal to this value
+                     will require the -p option to run the shell setuid/setgid.
 
     RAWONLY      on  Turn on if the vi line mode doesn't work right unless
                      you do a set -o viraw.
@@ -191,19 +189,29 @@ Note: Do not add compiler flags that cause the compiler to emit terminal
 escape codes, such as -fdiagnostics-color=always; this will cause the build
 to fail as the probing code greps compiler diagnostics.
 
+If you are certain that you don't need support for UTF-8 and other multibyte
+character locales and really want to save some memory and CPU cycles, add
+'-DAST_NOMULTIBYTE' to CCFLAGS to compile out all multibyte character
+handling in ksh and supporting libraries. Not recommended for most users.
+
+To install, use: bin/package install DESTINATION_DIRECTORY [ COMMAND ... ]
+
+Any command from the arch directory can be installed. If no COMMAND is
+specified, ksh and shcomp are assumed.
+
+The DESTINATION_DIRECTORY is created if it does not exist. Commands are
+installed in its bin subdirectory and each command's manual page, if
+available, is installed in share/man.
+
+Destination directories with whitespace or shell pattern characters in their
+pathnames are not yet supported.
+
 For more information, run:
 
 	bin/package help
 
 Many other commands in this repo self-document via the --help, --man and
 --html options; those that do have no separate manual page.
-
-Automated installation is not supported yet. To install manually:
-
-	cp arch/$(bin/package host type)/bin/ksh /usr/local/bin/
-	cp src/cmd/ksh93/sh.1 /usr/local/share/man/man1/ksh.1
-
-(adapting the destination directories as required).
 
 The build should also generate shcomp, a program that will precompile
 a script.  ksh93 is able to recognize files in this format and process
@@ -270,8 +278,10 @@ failures (crashes, and/or important functionality does not work).
 	GNU/Linux: Ubuntu 18.04 on armv7l (32-bit)
 	GNU/Linux: Ubuntu 20.04 on arm64
 	GNU/Linux: Void Linux (musl C library) on x86_64
+***	Haiku R1/beta3 on x86_64
 ***	HP-UX B.11.11 on pa-risc
 *	illumos: OmniOS 2020-08-19 (gcc) on x86_64
+	illumos: OmniOS r151040 (gcc) on x86_64
 	macOS 10.13.6 (High Sierra) on x86_64
 	macOS 10.14.6 (Mojave) on x86_64
 *	macOS 12.0.1 (Monterey) on arm64
@@ -279,15 +289,14 @@ failures (crashes, and/or important functionality does not work).
 *	NetBSD 9.2 on x86_64
 *	OpenBSD 6.8 on x86_64
 	OpenBSD 7.0 on x86_64
-**	QNX 6.5.0 on i386
+*	QNX Neutrino 6.5.0 on i386
 *	Solaris 11.4 (gcc) on x86_64
 	Solaris 11.4 (Solaris Studio 12.5 cc) on x86_64
 *	UnixWare 7.1.4 on x86
 ***	Windows 7 using Cygwin on x86
 ***	Windows 10 using Cygwin on x86_64
 ***	Windows 11 using Cygwin on x86_64
-*	Windows 11 using WSL 2 with Ubuntu 20.04 on x86_64
-***	Haiku R1/beta3 on x86_64
+	Windows 11 using WSL 2 with Ubuntu 20.04 on x86_64
 
 #### REPORTING BUGS ####
 

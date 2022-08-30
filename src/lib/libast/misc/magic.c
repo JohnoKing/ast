@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -839,82 +835,9 @@ ckmagic(register Magic_t* mp, const char* file, char* buf, char* end, struct sta
 			break;
 
 		case 'r':
-#if _UWIN
-		{
-			char*			e;
-			Sfio_t*			rp;
-			Sfio_t*			gp;
-
-			if (!(t = strrchr(file, '.')))
-				goto next;
-			sfprintf(mp->tmp, "/reg/classes_root/%s", t);
-			if (!(t = sfstruse(mp->tmp)) || !(rp = sfopen(NiL, t, "r")))
-				goto next;
-			*ep->desc = 0;
-			*ep->mime = 0;
-			gp = 0;
-			while (t = sfgetr(rp, '\n', 1))
-			{
-				if (strneq(t, "Content Type=", 13))
-				{
-					ep->mime = vmnewof(mp->vm, ep->mime, char, sfvalue(rp), 0);
-					strcpy(ep->mime, t + 13);
-					if (gp)
-						break;
-				}
-				else
-				{
-					sfprintf(mp->tmp, "/reg/classes_root/%s", t);
-					if ((e = sfstruse(mp->tmp)) && (gp = sfopen(NiL, e, "r")))
-					{
-						ep->desc = vmnewof(mp->vm, ep->desc, char, strlen(t), 1);
-						strcpy(ep->desc, t);
-						if (*ep->mime)
-							break;
-					}
-				}
-			}
-			sfclose(rp);
-			if (!gp)
-				goto next;
-			if (!*ep->mime)
-			{
-				t = T(ep->desc);
-				if (!strncasecmp(t, "microsoft", 9))
-					t += 9;
-				while (isspace(*t))
-					t++;
-				e = "application/x-ms-";
-				ep->mime = vmnewof(mp->vm, ep->mime, char, strlen(t), strlen(e));
-				e = strcopy(ep->mime, e);
-				while ((c = *t++) && c != '.' && c != ' ')
-					*e++ = isupper(c) ? tolower(c) : c;
-				*e = 0;
-			}
-			while (t = sfgetr(gp, '\n', 1))
-				if (*t && !streq(t, "\"\""))
-				{
-					ep->desc = vmnewof(mp->vm, ep->desc, char, sfvalue(gp), 0);
-					strcpy(ep->desc, t);
-					break;
-				}
-			sfclose(gp);
-			if (!*ep->desc)
-				goto next;
-			if (!t)
-				for (t = T(ep->desc); *t; t++)
-					if (*t == '.')
-						*t = ' ';
-			if (!mp->keep[level])
-				mp->keep[level] = 2;
-			mp->mime = ep->mime;
-			break;
-		}
-#else
 			if (ep->cont == '#' && !mp->keep[level])
 				mp->keep[level] = 1;
 			goto next;
-#endif
 
 		case 'v':
 			if (!(p = getdata(mp, num, 4)))

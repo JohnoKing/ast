@@ -4,37 +4,46 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
+#include	"shopt.h"
 #include	"defs.h"
 
-#define ENUM_ID "enum (ksh 93u+m) 2021-12-17"
+#define ENUM_ID "enum (ksh 93u+m) 2022-03-05"
 
 const char sh_optenum[] =
 "[-?@(#)$Id: " ENUM_ID " $\n]"
 "[--catalog?" ERROR_CATALOG "]"
 "[+NAME?enum - create an enumeration type]"
-"[+DESCRIPTION?\benum\b is a declaration command that creates an enumeration "
-    "type \atypename\a that can only store any one of the values in the indexed "
-    "array variable \atypename\a.]"
+"[+DESCRIPTION?\benum\b is a declaration command that creates one or more "
+	"enumeration type declaration commands named \atypename\a. Variables "
+	"of the created type can only store any one of the \avalue\as given. "
+	"For example, \benum bool=(false true)\b creates a Boolean variable "
+	"type of which variables may be declared like \bbool x=true y=false\b.]"
 "[+?If the list of \avalue\as is omitted, then \atypename\a must name an "
     "indexed array variable with at least two elements.]" 
-"[+?For more information, see \atypename\a \b--man\b.]"
+"[+?For more information, create a type, then use \atypename\a \b--man\b.]"
+"[+USE IN ARITHMETIC EXPRESSIONS?When an enumeration variable is used in an "
+	"arithmetic expression, its value is the index into the array that "
+	"defined it, starting from 0. Taking the \bbool\b type from the "
+	"example above, if a variable of this type is used in an arithmetic "
+	"expression, \bfalse\b translates to 0 and \btrue\b to 1.]"
+"[+?Enumeration values may also be used directly in an arithmetic expression "
+	"that refers to a variable of an enumeration type. "
+	"To continue our example, for a \bbool\b variable \bv\b, "
+	"\b((v==true))\b is the same as \b((v==1))\b and "
+	"if a variable named \btrue\b exists, it is ignored.]"
 "[i:ignorecase?The values are case insensitive.]"
 "\n"
-"\n\atypename\a[\b=(\b \avalue\a ... \b)\b]\n"
+"\n\atypename\a[\b=(\b \avalue\a ... \b)\b] ...\n"
 "\n"
 "[+EXIT STATUS]"
     "{"
@@ -118,7 +127,7 @@ static int enuminfo(Opt_t* op, Sfio_t *out, const char *str, Optdisc_t *fp)
 		return(0);
 	if(strcmp(str,"default")==0)
 		sfprintf(out,"\b%s\b",ep->values[0]);
-	else if(memcmp(str,"last",4)==0)
+	else if(strncmp(str,"last",4)==0)
 	{
 		while(ep->values[++n])
 			;
@@ -234,7 +243,7 @@ int b_enum(int argc, char** argv, Shbltin_t *context)
 		break;
 	}
 	argv += opt_info.index;
-	if (error_info.errors || !*argv || *(argv + 1))
+	if (error_info.errors || !*argv)
 	{
 		error(ERROR_USAGE|2, "%s", optusage(NiL));
 		return 1;

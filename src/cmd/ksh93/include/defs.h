@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -28,22 +25,18 @@
 #ifndef defs_h_defined
 #define defs_h_defined
 
+/* In case multibyte support was disabled for ksh only (SHOPT_MULTIBYTE==0) and not for libast */
+#if !SHOPT_MULTIBYTE && !AST_NOMULTIBYTE
+#    undef AST_NOMULTIBYTE
+#    define AST_NOMULTIBYTE	1
+#endif
+
 #include	<ast.h>
-#if !defined(AST_VERSION) || AST_VERSION < 20220208
-#error libast version 20220208 or later is required
+#if !defined(AST_VERSION) || AST_VERSION < 20220801
+#error libast version 20220801 or later is required
 #endif
 #if !_lib_fork
 #error In 2021, ksh joined the 21st century and started requiring fork(2).
-#endif
-#if !SHOPT_MULTIBYTE
-    /*
-     * Disable multibyte without need for excessive '#if SHOPT_MULTIBYTE' preprocessor conditionals.
-     * If we redefine the maximum character size mbmax() as 1 byte, the mbwide() macro will always
-     * evaluate to 0. All the other multibyte macros have multibtye code conditional upon mbwide(),
-     * so the compiler should optimize all of that code away. See src/lib/libast/include/ast.h
-     */
-#   undef mbmax
-#   define mbmax()	1
 #endif
 
 #include	<sfio.h>
@@ -60,6 +53,7 @@
 #endif
 
 #define Empty			((char*)(e_sptbnl+3))
+#define AltEmpty		((char*)(e_dot+1))	/* alternative pointer to empty string */
 
 #define	env_change()		(++ast.env_serial)
 
@@ -98,7 +92,6 @@ extern char*	sh_setenviron(const char*);
 #define SH_TYPE_KSH		002
 #define SH_TYPE_POSIX		004
 #define SH_TYPE_LOGIN		010
-#define SH_TYPE_PROFILE		020
 #define SH_TYPE_RESTRICTED	040
 
 #ifndef PIPE_BUF
@@ -116,7 +109,7 @@ extern struct dolnod	*sh_argnew(char*[],struct dolnod**);
 extern void 		*sh_argopen(void);
 extern struct argnod	*sh_argprocsub(struct argnod*);
 extern void 		sh_argreset(struct dolnod*,struct dolnod*);
-extern Namval_t		*sh_assignok(Namval_t*,int);
+extern void		sh_assignok(Namval_t*,int);
 extern struct dolnod	*sh_arguse(void);
 extern char		*sh_checkid(char*,char*);
 extern void		sh_chktrap(void);
@@ -128,6 +121,7 @@ extern Sfdouble_t	sh_arith(const char*);
 extern void		*sh_arithcomp(char*);
 extern pid_t 		sh_fork(int,int*);
 extern pid_t		_sh_fork(pid_t, int ,int*);
+extern void		sh_invalidate_ifs(void);
 extern char 		*sh_mactrim(char*,int);
 extern int 		sh_macexpand(struct argnod*,struct argnod**,int);
 extern int		sh_macfun(const char*,int);
@@ -156,8 +150,6 @@ extern int		sh_trace(char*[],int);
 extern void		sh_trim(char*);
 extern int		sh_type(const char*);
 extern void             sh_unscope(void);
-extern void		sh_utol(const char*, char*);
-extern int 		sh_whence(char**,int);
 #if SHOPT_NAMESPACE
     extern Namval_t	*sh_fsearch(const char *,int);
 #endif /* SHOPT_NAMESPACE */
@@ -200,7 +192,9 @@ extern char		*sh_getcwd(void);
 #define sh_sigcheck()	do { if(sh.trapnote & SH_SIGSET) sh_exit(SH_EXITSIG); } while(0)
 
 extern int32_t		sh_mailchk;
-extern const char	e_dict[];
+extern const char	e_dict[];	/* error message catalog */
+extern const char	e_sptbnl[];	/* default IFS: " \t\n" */
+extern const char	e_dot[];	/* default path & name of dot command: "." */
 
 /* sh_printopts() mode flags -- set --[no]option by default */
 

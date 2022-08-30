@@ -51,15 +51,9 @@ tst	output{
 		printf("\n");
 		printf("typedef void* nl_catd;\n");
 		printf("\n");
-		printf("#if _BLD_ast && defined(__EXPORT__)\n");
-		printf("#define extern		__EXPORT__\n");
-		printf("#endif\n");
-		printf("\n");
 		printf("extern nl_catd		catopen(const char*, int);\n");
 		printf("extern char*		catgets(nl_catd, int, int, const char*);\n");
 		printf("extern int		catclose(nl_catd);\n");
-		printf("\n");
-		printf("#undef	extern\n");
 		printf("\n");
 		return 0;
 	}

@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -31,6 +28,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<fcin.h>
 #include	<pwd.h>
@@ -63,7 +61,7 @@ typedef struct  _mac_
 	char		quote;		/* set within double quoted contexts */
 	char		lit;		/* set within single quotes */
 	char		split;		/* set when word splitting is possible */
-	char		pattern;	/* set when file expansion follows */
+	char		pattern;	/* set when glob pattern expansion or matching follows */
 	char		patfound;	/* set if pattern character found */
 	char		assign;		/* set for assignments */
 	char		arith;		/* set for ((...)) */
@@ -79,7 +77,7 @@ typedef struct  _mac_
 #define isescchar(s)	((s)>S_QUOTE)
 #define isqescchar(s)	((s)>=S_QUOTE)
 #define isbracechar(c)	((c)==RBRACE || (_c_=sh_lexstates[ST_BRACE][c])==S_MOD1 ||_c_==S_MOD2)
-#define ltos(x)		fmtbase((long)(x),0,0)
+#define ltos(x)		fmtbase((intmax_t)(x),0,0)
 
 /* type of macro expansions */
 #define M_BRACE		1	/* ${var}	*/
@@ -105,7 +103,8 @@ static void	endfield(Mac_t*,int);
 static char	*mac_getstring(char*);
 static int	charlen(const char*,int);
 #if SHOPT_MULTIBYTE
-    static char	*lastchar(const char*,const char*);
+#   define lastchar(string,endstring)  (mbwide() ? _lastchar(string,endstring) : (endstring))
+    static char	*_lastchar(const char*,const char*);
 #else
 #   define lastchar(string,endstring)  (endstring)
 #endif /* SHOPT_MULTIBYTE */
@@ -1229,6 +1228,8 @@ retry1:
 		}
 		break;
 	    case S_ALP:
+	    {
+		Namval_t *np_orig;
 		if(c=='.' && type==0)
 			goto nosub;
 		offset = stktell(stkp);
@@ -1320,7 +1321,7 @@ retry1:
 			}
 			goto nosub;
 		}
-		flag |= NV_NOASSIGN|NV_VARNAME|NV_NOADD;
+		flag |= NV_VARNAME|NV_NOADD;
 		if(c=='=' || c=='?' || (c==':' && ((d=fcpeek(0))=='=' || d=='?')))
 		{
 			if(c=='=' || (c==':' && d=='='))
@@ -1396,23 +1397,28 @@ retry1:
 #endif  /* SHOPT_FILESCAN */
 				np = 0;
 		}
+		np_orig = np;
 		ap = np?nv_arrayptr(np):0;
 		if(type)
 		{
 			if(mp->dotdot)
 			{
-				Namval_t *nq;
 #if SHOPT_FIXEDARRAY
-				if(ap && !ap->fixed && (nq=nv_opensub(np)))
+				if(ap && !ap->fixed)
 #else
-				if(ap && (nq=nv_opensub(np)))
+				if(ap)
 #endif /* SHOPT_FIXEDARRAY */
-					ap = nv_arrayptr(np=nq);
+				{
+					Namval_t *nq;
+					if(nq = nv_opensub(np))
+						np = nq;
+				}
 				if(ap)
 				{
 					np = nv_putsub(np,v,ARRAY_SCAN);
 					v = stkptr(stkp,mp->dotdot);
 					dolmax =1;
+					ap = nv_arrayptr(np_orig); /* update */
 					if(array_assoc(ap))
 						arrmax = sh_strdup(v);
 					else if((dolmax = (int)sh_arith(v))<0)
@@ -1462,7 +1468,7 @@ retry1:
 		if(np && type==M_BRACE && sh.argaddr)
 			nv_optimize(np);  /* needed before calling nv_isnull() */
 #endif /* SHOPT_OPTIMIZE */
-		if(np && (type==M_BRACE ? (!nv_isnull(np) || np==SH_LEVELNOD) : (type==M_TREE || !c || !ap)))
+		if(np && (type==M_BRACE ? !nv_isnull(np) : (type==M_TREE || !c || !ap)))
 		{
 			/* Either the parameter is set, or it's a special type of expansion where 'unset' doesn't apply. */
 			char *savptr;
@@ -1472,8 +1478,12 @@ retry1:
 			{
 				type = M_BRACE;
 				v = nv_name(np);
-				if(ap && !mp->dotdot && !(ap->nelem&ARRAY_UNDEF))
-					addsub = 1;
+				if(ap && !mp->dotdot)
+				{
+					ap = nv_arrayptr(np_orig); /* update */
+					if(!(ap->nelem&ARRAY_UNDEF))
+						addsub = 1;
+				}
 			}
 			else if(type==M_TYPE)
 			{
@@ -1496,7 +1506,10 @@ retry1:
 				if(type && fcpeek(0)=='+')
 				{
 					if(ap)
+					{
+						ap = nv_arrayptr(np_orig); /* update */
 						v = nv_arrayisset(np,ap)?(char*)"x":0;
+					}
 					else
 						v = nv_isnull(np)?0:(char*)"x";
 				}
@@ -1529,6 +1542,7 @@ retry1:
 		stkseek(stkp,offset);
 		if(ap)
 		{
+			ap = nv_arrayptr(np_orig); /* update */
 #if SHOPT_OPTIMIZE
 			if(sh.argaddr)
 				nv_optimize(np);
@@ -1539,10 +1553,10 @@ retry1:
 			{
 				ap->nelem &= ~ARRAY_SCAN;
 				dolg = 0;
-		
 			}
 		}
 		break;
+	    }
 	    case S_EOF:
 		fcseek(-1);
 	    default:
@@ -1616,7 +1630,10 @@ retry1:
 				c = sh.st.dolc;
 			}
 			else if(dolg<0)
+			{
+				ap = nv_arrayptr(np); /* update */
 				c = array_elem(ap);
+			}
 			else
 				c = (v!=0);
 			dolg = dolmax = 0;
@@ -1740,6 +1757,7 @@ skip:
 			}
 			else if(ap)
 			{
+				ap = nv_arrayptr(np); /* update */
 				if(type<0)
 				{
 					if(array_assoc(ap))
@@ -1940,6 +1958,7 @@ retry2:
 					v = nv_getsub(np);
 				else
 					v = nv_getval(np);
+				ap = nv_arrayptr(np); /* update */
 				if(array_assoc(ap))
 				{
 					if(strcmp(bysub?v:nv_getsub(np),arrmax)>0)
@@ -1981,7 +2000,10 @@ retry2:
 					break;
 				}
 				if(ap)
+				{
+					ap = nv_arrayptr(np); /* update */
 					ap->nelem |= ARRAY_SCAN;
+				}
 				if(nv_nextsub(np) == 0)
 					break;
 				if(bysub)
@@ -2004,6 +2026,8 @@ retry2:
 				 * We're joining fields into one; write the output field separator, which may be multi-byte.
 				 * For "$@" it's a space, for "$*" it's the 1st char of IFS (space if unset, none if empty).
 				 */
+				if(mp->pattern)				/* avoid BUG_IFSGLOBS */
+					sfputc(sfio_ptr, '\\');
 				if(mode == '@' || !mp->ifsp)		/* if expanding $@ or if IFS is unset... */
 					sfputc(sfio_ptr, ' ');
 				else if(mp->ifs)			/* else if IFS is non-empty... */
@@ -2052,7 +2076,7 @@ retry2:
 			if(np)
 			{
 				if(sh.subshell)
-					np = sh_assignok(np,1);
+					sh_assignok(np,1);
 				nv_putval(np,argp,0);
 				v = nv_getval(np);
 				nulflg = 0;
@@ -2534,7 +2558,8 @@ static void endfield(register Mac_t *mp,int split)
 		{
 			sh.argaddr = 0;
 #if SHOPT_BRACEPAT
-			if(sh_isoption(SH_BRACEEXPAND))
+			/* in POSIX mode, disallow brace expansion for unquoted expansions */
+			if(sh_isoption(SH_BRACEEXPAND) && !(sh_isoption(SH_POSIX) && mp->pattern==1))
 				count = path_generate(argp,mp->arghead);
 			else
 #endif /* SHOPT_BRACEPAT */
@@ -2608,7 +2633,7 @@ static int substring(register const char *string,size_t len,const char *pat,int 
 }
 
 #if SHOPT_MULTIBYTE
-	static char	*lastchar(const char *string, const char *endstring)
+	static char	*_lastchar(const char *string, const char *endstring)
 	{
 		register char *str = (char*)string;
 		register int c;
@@ -2698,7 +2723,6 @@ static void tilde_expand2(register int offset)
  * If ~name  is replaced with login directory of name.
  * If string doesn't start with ~ or ~... not found then 0 returned.
  */
-                                                            
 static char *sh_tilde(register const char *string)
 {
 	register char		*cp;
@@ -2799,9 +2823,7 @@ static char *special(register int c)
 			return(ltos(sh.bckpid));
 		break;
 	    case '$':
-		if(nv_isnull(SH_DOLLARNOD))
-			return(ltos(sh.pid));
-		return(nv_getval(SH_DOLLARNOD));
+		return(ltos(sh.pid));
 	    case '-':
 		return(sh_argdolminus(sh.arg_context));
 	    case '?':

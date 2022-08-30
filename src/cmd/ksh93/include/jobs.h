@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 #ifndef JOB_NFLAG
@@ -33,6 +30,7 @@
 #   include	<signal.h>
 #endif /* !SIGINT */
 #include	"FEATURE/options"
+#include	<aso.h>
 
 #undef JOBS
 #if defined(SIGCLD) && !defined(SIGCHLD)
@@ -123,16 +121,13 @@ extern struct jobs job;
 #define vmbusy()	0
 #endif
 
-#define job_lock()	(job.in_critical++)
+#define job_lock()	asoincint(&job.in_critical)
 #define job_unlock()	\
 	do { \
-		int	sig; \
-		if (!--job.in_critical && (sig = job.savesig)) \
-		{ \
-			if (!job.in_critical++ && !vmbusy()) \
-				job_reap(sig); \
-			job.in_critical--; \
-		} \
+		int	_sig; \
+		if (asogetint(&job.in_critical) == 1 && (_sig = job.savesig) && !vmbusy()) \
+		    job_reap(_sig); \
+		asodecint(&job.in_critical); \
 	} while(0)
 
 extern const char	e_jobusage[];

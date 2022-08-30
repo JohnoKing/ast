@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -23,6 +20,7 @@
  *
  */
 
+#include	"shopt.h"
 #include        "defs.h"
 #include        "variables.h"
 #include        "builtins.h"
@@ -158,7 +156,6 @@ void nv_putv(Namval_t *np, const char *value, int flags, register Namfun_t *nfp)
 #define	APPEND		2
 #define	UNASSIGN	3
 #define	LOOKUPN		4
-#define BLOCKED		((Namval_t*)&nv_local)
 
 struct	vardisc
 {
@@ -367,7 +364,7 @@ static void	assign(Namval_t *np,const char* val,int flags,Namfun_t *handle)
 done:
 	if(bp== &block)
 		block_done(bp);
-	if(nq && nq->nvalue.rp->running==1)
+	if(nq && nq->nvalue.rp && nq->nvalue.rp->running==1)
 	{
 		nq->nvalue.rp->running=0;
 		_nv_unset(nq,0);
@@ -536,6 +533,8 @@ char *nv_setdisc(register Namval_t* np,register const char *event,Namval_t *acti
 	if (type < 0)
 		return(NIL(char*));
 	/* Handle GET/SET/APPEND/UNSET disc */
+	if(np==SH_VALNOD || np==SH_LEVELNOD)
+		return(0);
 	if(vp && vp->fun.disc->putval!=assign)
 		vp = 0;
 	if(!vp)
@@ -659,7 +658,6 @@ static void putdisc(Namval_t* np, const char* val, int flag, Namfun_t* fp)
 		nv_disc(np,fp,NV_POP);
 		if(!(fp->nofree&1))
 			free((void*)fp);
-			
 	}
 }
 
@@ -810,51 +808,6 @@ Namfun_t *nv_hasdisc(Namval_t *np, const Namdisc_t *dp)
 	return(0);
 }
 
-struct notify
-{
-	Namfun_t	hdr;
-	char		**ptr;
-};
-
-static void put_notify(Namval_t* np,const char *val,int flags,Namfun_t *fp)
-{
-	struct notify *pp = (struct notify*)fp;
-	nv_putv(np,val,flags,fp);
-	nv_stack(np,fp);
-	nv_stack(np,(Namfun_t*)0);
-	*pp->ptr = 0;
-	if(!(fp->nofree&1))
-		free((void*)fp);
-}
-
-static const Namdisc_t notify_disc  = {  0, put_notify };
-
-int nv_unsetnotify(Namval_t *np, char **addr)
-{
-	register Namfun_t *fp;
-	for(fp=np->nvfun;fp;fp=fp->next)
-	{
-		if(fp->disc->putval==put_notify && ((struct notify*)fp)->ptr==addr)
-		{
-			nv_stack(np,fp);
-			nv_stack(np,(Namfun_t*)0);
-			if(!(fp->nofree&1))
-				free((void*)fp);
-			return(1);
-		}
-	}
-	return(0);
-}
-
-int nv_setnotify(Namval_t *np, char **addr)
-{
-	struct notify *pp = sh_newof(0,struct notify, 1,0);
-	pp->ptr = addr;
-	pp->hdr.disc = &notify_disc;
-	nv_stack(np,&pp->hdr);
-	return(1);
-}
-
 static void *newnode(const char *name)
 {
 	register int s;
@@ -972,7 +925,7 @@ int nv_clone(Namval_t *np, Namval_t *mp, int flags)
 		mp->nvflag |= (np->nvflag&NV_MINIMAL);
 	if(mp->nvalue.cp==val && !nv_isattr(np,NV_INTEGER))
 	{
-		if(np->nvalue.cp && np->nvalue.cp!=Empty && (flags&NV_COMVAR) && !(flags&NV_MOVE))
+		if(np->nvalue.cp && np->nvalue.cp!=Empty && (!flags || ((flags&NV_COMVAR) && !(flags&NV_MOVE))))
 		{
 			if(size)
 				mp->nvalue.cp = (char*)sh_memdup(np->nvalue.cp,size);
@@ -1007,7 +960,7 @@ int nv_clone(Namval_t *np, Namval_t *mp, int flags)
 	}
 	else if((flags&NV_ARRAY) && !nv_isattr(np,NV_MINIMAL))
 		mp->nvenv = np->nvenv;
-	if(nv_isattr(np,NV_INTEGER) && mp->nvalue.ip!=np->nvalue.ip && np->nvalue.cp!=Empty)
+	if(nv_isattr(np,NV_INTEGER) && !nv_isarray(np) && mp->nvalue.ip!=np->nvalue.ip && np->nvalue.cp!=Empty)
 	{
 		mp->nvalue.ip = (int*)num_clone(np,(void*)np->nvalue.ip);
 		nv_offattr(mp,NV_NOFREE);
@@ -1018,62 +971,23 @@ int nv_clone(Namval_t *np, Namval_t *mp, int flags)
 }
 
 /*
- *  The following discipline is for copy-on-write semantics
+ * Low-level function to look up <name> in <root>. Returns a pointer to the
+ * name-value node found, or NULL if not found. <mode> is an options bitmask:
+ * - If NV_NOSCOPE is set, the search is only done in <root> itself and
+ *   not in any trees it has a view to (i.e. is connected to through scoping).
+ * - If NV_ADD is set and <name> is not fond, a node by that name is created
+ *   in <root> and a pointer to the newly created node is returned.
+ * - If NV_REF is set, <name> is a pointer to a name-value node, and that
+ *   node's name is used.
+ * Note: The mode bitmask is NOT compatible with nv_open's flags bitmask.
  */
-static char* clone_getv(Namval_t *np, Namfun_t *handle)
-{
-	return(np->nvalue.np?nv_getval(np->nvalue.np):0);
-}
-
-static Sfdouble_t clone_getn(Namval_t *np, Namfun_t *handle)
-{
-	return(np->nvalue.np?nv_getnum(np->nvalue.np):0);
-}
-
-static void clone_putv(Namval_t *np,const char* val,int flags,Namfun_t *handle)
-{
-	Namfun_t *dp = nv_stack(np,(Namfun_t*)0);
-	Namval_t *mp = np->nvalue.np;
-	if(!sh.subshell)
-		free((void*)dp);
-	if(val)
-		nv_clone(mp,np,NV_NOFREE);
-	np->nvalue.cp = 0;
-	nv_putval(np,val,flags);
-}
-
-static const Namdisc_t clone_disc =
-{
-	0,
-	clone_putv,
-	clone_getv,
-	clone_getn
-};
-
-Namval_t *nv_mkclone(Namval_t *mp)
-{
-	Namval_t *np;
-	Namfun_t *dp;
-	np = sh_newof(0,Namval_t,1,0);
-	np->nvflag = mp->nvflag;
-	np->nvsize = mp->nvsize;
-	np->nvname = mp->nvname;
-	np->nvalue.np = mp;
-	np->nvflag = mp->nvflag;
-	dp = sh_newof(0,Namfun_t,1,0);
-	dp->disc = &clone_disc;
-	nv_stack(np,dp);
-	dtinsert(nv_dict(sh.namespace),np);
-	return(np);
-}
-
 Namval_t *nv_search(const char *name, Dt_t *root, int mode)
 {
 	register Namval_t *np;
 	register Dt_t *dp = 0;
-	if(mode&HASH_NOSCOPE)
+	if(mode&NV_NOSCOPE)
 		dp = dtview(root,0);
-	if(mode&HASH_BUCKET)
+	if(mode&NV_REF)
 	{
 		Namval_t *mp = (void*)name;
 		if(!(np = dtsearch(root,mp)) && (mode&NV_ADD))
@@ -1087,9 +1001,9 @@ Namval_t *nv_search(const char *name, Dt_t *root, int mode)
 	}
 	if(!np && (mode&NV_ADD))
 	{
-		if(sh.namespace && !(mode&HASH_NOSCOPE) && root==sh.var_tree)
+		if(sh.namespace && !(mode&NV_NOSCOPE) && root==sh.var_tree)
 			root = nv_dict(sh.namespace);
-		else if(!dp && !(mode&HASH_NOSCOPE))
+		else if(!dp && !(mode&NV_NOSCOPE))
 		{
 			register Dt_t *next;
 			while(next=dtvnext(root))
@@ -1151,7 +1065,7 @@ Namval_t *nv_bfsearch(const char *name, Dt_t *root, Namval_t **var, char **last)
 		*last = cp;
 	c = *cp;
 	*cp = 0;
-	nq=nv_open(stakptr(offset),0,NV_VARNAME|NV_NOASSIGN|NV_NOADD|NV_NOFAIL);
+	nq=nv_open(stakptr(offset),0,NV_VARNAME|NV_NOADD|NV_NOFAIL);
 	*cp = c;
 	if(!nq)
 	{
@@ -1208,7 +1122,7 @@ Namval_t *sh_addbuiltin(const char *path, Shbltin_f bltin, void *extra)
 	int			offset=staktell();
 	if(extra==(void*)1)
 		name = path;
-	else if((name = path_basename(path))==path && bltin!=(Shbltin_f)SYSTYPESET->nvalue.bfp && (nq=nv_bfsearch(name,sh.bltin_tree,(Namval_t**)0,&cp)))
+	else if((name = path_basename(path))==path && bltin!=b_typeset && (nq=nv_bfsearch(name,sh.bltin_tree,(Namval_t**)0,&cp)))
 		path = name = stakptr(offset);
 	else if(sh.bltin_dir && extra!=(void*)1)
 	{
@@ -1247,7 +1161,7 @@ Namval_t *sh_addbuiltin(const char *path, Shbltin_f bltin, void *extra)
 			if(nv_isattr(np,BLT_SPC))
 				return(np);
 			if(!bltin)
-				bltin = (Shbltin_f)np->nvalue.bfp;
+				bltin = funptr(np);
 			if(np->nvenv)
 				dtdelete(sh.bltin_tree,np);
 			if(extra == (void*)1)
@@ -1269,7 +1183,7 @@ Namval_t *sh_addbuiltin(const char *path, Shbltin_f bltin, void *extra)
 	np->nvfun = 0;
 	if(bltin)
 	{
-		np->nvalue.bfp = (Nambfp_f)bltin;
+		np->nvalue.bfp = (void*)bltin;
 		nv_onattr(np,NV_BLTIN|NV_NOFREE);
 		np->nvfun = (Namfun_t*)extra;
 	}

@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
@@ -174,7 +171,6 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 pid_t
 spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, int tcfd)
 {
-#if _lib_fork || _lib_vfork
 	int			n;
 	int			m;
 	pid_t			pid;
@@ -184,19 +180,15 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 	volatile int* volatile	exec_errno_ptr;
 #else
 	int			err[2];
-#endif
-#endif
+#endif /* _real_vfork */
 
 	NOT_USED(tcfd);
 	if (!envv)
 		envv = environ;
 #if _lib_spawnve
-#if _lib_fork || _lib_vfork
 	if (!pgid)
-#endif
 		return spawnve(path, argv, envv);
-#endif
-#if _lib_fork || _lib_vfork
+#endif /* _lib_spawnve */
 	n = errno;
 #if _real_vfork
 	exec_errno = 0;
@@ -209,13 +201,13 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 		fcntl(err[0], F_SETFD, FD_CLOEXEC);
 		fcntl(err[1], F_SETFD, FD_CLOEXEC);
 	}
-#endif
+#endif /* _real_vfork */
 	sigcritical(SIG_REG_EXEC|SIG_REG_PROC);
 #if _lib_vfork
 	pid = vfork();
 #else
 	pid = fork();
-#endif
+#endif /* _lib_vfork */
 	if (pid == -1)
 		n = errno;
 	else if (!pid)
@@ -236,7 +228,7 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 #elif defined(TIOCSPGRP)
 			if (m)
 				ioctl(2, TIOCSPGRP, &pgid);
-#endif
+#endif /* _lib_tcgetpgrp */
 		}
 		execve(path, argv, envv);
 #if _real_vfork
@@ -247,7 +239,7 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 			m = errno;
 			write(err[1], &m, sizeof(m));
 		}
-#endif
+#endif /* _real_vfork */
 		_exit(errno == ENOENT ? EXIT_NOTFOUND : EXIT_NOEXEC);
 	}
 	rid = pid;
@@ -280,7 +272,7 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 		}
 		close(err[0]);
 	}
-#endif
+#endif /* _real_vfork */
 	sigcritical(0);
 	if (pid != -1 && pgid > 0)
 	{
@@ -295,10 +287,6 @@ spawnveg(const char* path, char* const argv[], char* const envv[], pid_t pgid, i
 	}
 	errno = n;
 	return rid;
-#else
-	errno = ENOSYS;
-	return -1;
-#endif
 }
 
 #endif

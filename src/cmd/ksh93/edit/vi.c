@@ -4,18 +4,16 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
+*               K. Eugene Carlson <kvngncrlsn@gmail.com>               *
 *                                                                      *
 ***********************************************************************/
 /* Adapted for ksh by David Korn */
@@ -27,6 +25,8 @@
  *		P.D. Sullivan
  *		cbosgd!pds
 -*/
+
+#include	"shopt.h"
 
 #if SHOPT_VSH
 
@@ -67,8 +67,8 @@
 #   define isalph(v)	_isalph(virtual[v])
 #else
     static genchar	_c;
-#   define gencpy(a,b)	strcpy((char*)(a),(char*)(b))
-#   define genncpy(a,b,n) strncpy((char*)(a),(char*)(b),n)
+#   define gencpy(a,b)	strcopy((char*)(a),(char*)(b))
+#   define genncpy(a,b,n) strncopy((char*)(a),(char*)(b),n)
 #   define genlen(str)	strlen(str)
 #   define isalph(v)	((_c=virtual[v])=='_'||isalnum(_c))
 #   undef  isblank
@@ -191,10 +191,10 @@ static int	search(Vi_t*,int);
 static void	sync_cursor(Vi_t*);
 static int	textmod(Vi_t*,int,int);
 
-/*+	VI_READ( fd, shbuf, nchar )
+/*+	ED_VIREAD( context, fd, shbuf, nchar, reedit )
  *
  *	This routine implements a one line version of vi and is
- * called by _filbuf.c
+ * called by slowread() in io.c
  *
 -*/
 
@@ -472,7 +472,10 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 				pr_string(vp,Prompt);
 				putstring(vp,0, last_phys+1);
 				if(echoctl)
-					ed_crlf(vp->ed);
+				{
+					putchar('\n');
+					ed_flush(vp->ed);
+				}
 				else
 					while(kill_erase-- > 0)
 						putchar(' ');
@@ -481,7 +484,10 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 			if( term_char=='\n' )
 			{
 				if(!echoctl)
-					ed_crlf(vp->ed);
+				{
+					putchar('\n');
+					ed_flush(vp->ed);
+				}
 				virtual[++last_virt] = '\n';
 			}
 			vp->last_cmd = 'i';
@@ -594,7 +600,8 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 	if( vp->addnl )
 	{
 		virtual[++last_virt] = '\n';
-		ed_crlf(vp->ed);
+		putchar('\n');
+		ed_flush(vp->ed);
 	}
 	if( ++last_virt >= 0 )
 	{
@@ -610,10 +617,6 @@ int ed_viread(void *context, int fd, register char *shbuf, int nchar, int reedit
 			last_virt = ed_external(virtual,shbuf);
 		}
 #endif /* SHOPT_MULTIBYTE */
-#if SHOPT_EDPREDICT
-		if(vp->ed->nhlist)
-			ed_histlist(vp->ed,0);
-#endif /* SHOPT_EDPREDICT */
 		return(last_virt);
 	}
 	else
@@ -734,13 +737,8 @@ static int cntlmode(Vi_t *vp)
 	{
 		vp->repeat_set = 0;
 		was_inmacro = inmacro;
-		if( c == '0' )
-		{
-			/*** move to leftmost column ***/
-			cur_virt = 0;
-			sync_cursor(vp);
-			continue;
-		}
+
+		/*** see if it's a repeat count parameter ***/
 
 		if( digit(c) )
 		{
@@ -844,15 +842,6 @@ static int cntlmode(Vi_t *vp)
 
 		case 'j':		/** get next command **/
 		case '+':		/** get next command **/
-#if SHOPT_EDPREDICT
-			if(vp->ed->hlist)
-			{
-				if(vp->ed->hoff >= vp->ed->hmax)
-					goto ringbell;
-				vp->ed->hoff++;
-				goto hupdate;
-			}
-#endif /* SHOPT_EDPREDICT */
 			curhline += vp->repeat;
 			if( curhline > histmax )
 			{
@@ -873,18 +862,6 @@ static int cntlmode(Vi_t *vp)
 
 		case 'k':		/** get previous command **/
 		case '-':		/** get previous command **/
-#if SHOPT_EDPREDICT
-			if(vp->ed->hlist)
-			{
-				if(vp->ed->hoff == 0)
-					goto ringbell;
-				vp->ed->hoff--;
-			 hupdate:
-				ed_histlist(vp->ed,*vp->ed->hlist!=0);
-				vi_redraw((void*)vp);
-				continue;
-			}
-#endif /* SHOPT_EDPREDICT */
 			if( curhline == histmax )
 			{
 				vp->u_space = tmp_u_space;
@@ -908,7 +885,7 @@ static int cntlmode(Vi_t *vp)
 				hist_copy((char*)virtual, MAXLINE, curhline,-1);
 			else
 			{
-				strcpy((char*)virtual,(char*)vp->u_space);
+				strcopy((char*)virtual,(char*)vp->u_space);
 #if SHOPT_MULTIBYTE
 				ed_internal((char*)vp->u_space,vp->u_space);
 #endif /* SHOPT_MULTIBYTE */
@@ -918,16 +895,6 @@ static int cntlmode(Vi_t *vp)
 #endif /* SHOPT_MULTIBYTE */
 			if((last_virt=genlen(virtual)-1) >= 0  && cur_virt == INVALID)
 				cur_virt = 0;
-#if SHOPT_EDPREDICT
-			if(vp->ed->hlist)
-			{
-				ed_histlist(vp->ed,0);
-				if(c=='\n')
-					ed_ungetchar(vp->ed,c);
-				cur_virt = 0;
-				vi_redraw((void*)vp);
-			}
-#endif /* SHOPT_EDPREDICT */
 			break;
 
 
@@ -1010,22 +977,8 @@ static int cntlmode(Vi_t *vp)
 			/* FALLTHROUGH */
 
 		case '\n':		/** send to shell **/
-#if SHOPT_EDPREDICT
-			if(!vp->ed->hlist)
-				return(ENTER);
-			/* FALLTHROUGH */
-		case '\t':		/** bring choice to edit **/
-			if(vp->ed->hlist)
-			{
-				if(vp->repeat > vp->ed->nhlist-vp->ed->hoff)
-					goto ringbell;
-				curhline = vp->ed->hlist[vp->repeat+vp->ed->hoff-1]->index;
-				goto newhist;
-			}
-			goto ringbell;
-#else
 			return(ENTER);
-#endif /* SHOPT_EDPREDICT */
+
 	        case ESC:
 			/* don't ring bell if next char is '[' */
 			if(!lookahead)
@@ -1530,6 +1483,22 @@ static void getline(register Vi_t* vp,register int mode)
 			return;
 
 		case '\t':		/** command completion **/
+		{
+			char allempty = 1;
+			int x;
+			for(x=0; x <= cur_virt; x++)
+			{
+				if(!isspace(virtual[x]))
+				{
+					allempty = 0;
+					break;
+				}
+			}
+			if(allempty)
+			{
+				ed_ringbell();
+				break;
+			}
 			if(sh_isoption(SH_VI) &&
 				mode != SEARCH &&
 				last_virt >= 0 &&
@@ -1553,7 +1522,13 @@ static void getline(register Vi_t* vp,register int mode)
 				}
 				vp->ed->e_tabcount = 0;
 			}
+			if(cur_virt <= 0)
+			{
+				ed_ringbell();
+				break;
+			}
 			/* FALLTHROUGH */
+		}
 		default:
 		fallback:
 			if( mode == REPLACE )
@@ -1574,7 +1549,6 @@ static void getline(register Vi_t* vp,register int mode)
 			break;
 		}
 		refresh(vp,INPUT);
-
 	}
 }
 
@@ -1599,10 +1573,14 @@ static int mvcursor(register Vi_t* vp,register int motion)
 		/***** Cursor move commands *****/
 
 	case '0':		/** First column **/
+		if(cur_virt <= 0)
+			return(ABORT);
 		tcur_virt = 0;
 		break;
 
 	case '^':		/** First nonblank character **/
+		if(cur_virt <= 0)
+			return(ABORT);
 		tcur_virt = first_virt;
 		while( tcur_virt < last_virt && isblank(tcur_virt) )
 			++tcur_virt;
@@ -1624,17 +1602,13 @@ static int mvcursor(register Vi_t* vp,register int motion)
 		{
 		    case 'A':
 			/* VT220 up arrow */
-#if SHOPT_EDPREDICT
-			if(!vp->ed->hlist && cur_virt>=0  && cur_virt<(SEARCHSIZE-2) && cur_virt == last_virt)
-#else
 			if(cur_virt>=0  && cur_virt<(SEARCHSIZE-2) && cur_virt == last_virt)
-#endif /* SHOPT_EDPREDICT */
 			{
 				virtual[last_virt + 1] = '\0';
 #if SHOPT_MULTIBYTE
 				ed_external(virtual,lsearch+1);
 #else
-				strcpy(lsearch+1,virtual);
+				strcopy(lsearch+1,virtual);
 #endif /* SHOPT_MULTIBYTE */
 				*lsearch = '^';
 				vp->direction = -2;
@@ -2004,31 +1978,6 @@ static void refresh(register Vi_t* vp, int mode)
 			mode = TRANSLATE;
 	}
 	v = cur_virt;
-#if SHOPT_EDPREDICT
-	if(mode==INPUT && v>0 && virtual[0]=='#' && v==last_virt && virtual[v]!='*' && sh_isoption(SH_VI))
-	{
-		int		n;
-		virtual[last_virt+1] = 0;
-#   if SHOPT_MULTIBYTE
-		ed_external(virtual,(char*)virtual);
-#   endif /* SHOPT_MULTIBYTE */
-		n = ed_histgen(vp->ed,(char*)virtual);
-#   if SHOPT_MULTIBYTE
-		ed_internal((char*)virtual,virtual);
-#   endif /* SHOPT_MULTIBYTE */
-		if(vp->ed->hlist)
-		{
-			ed_histlist(vp->ed,n);
-			pr_string(vp,Prompt);
-			vp->ocur_virt = INVALID;
-			ed_setcursor(vp->ed,physical,0,cur_phys,0);
-		}
-		else
-			ed_ringbell();
-	}
-	else if(mode==INPUT && v<=1 && vp->ed->hlist)
-		ed_histlist(vp->ed,0);
-#endif /* SHOPT_EDPREDICT */
 	if( v<vp->ocur_virt || vp->ocur_virt==INVALID
 		|| ( v==vp->ocur_virt
 			&& (!is_print(virtual[v]) || !is_print(vp->o_v_char))) )
@@ -2321,7 +2270,7 @@ static int curline_search(Vi_t *vp, const char *string)
 #endif /* SHOPT_MULTIBYTE */
 	for(dp=(char*)vp->u_space,dpmax=dp+strlen(dp)-len; dp<=dpmax; dp++)
 	{
-		if(*dp==*cp && memcmp(cp,dp,len)==0)
+		if(strncmp(cp,dp,len)==0)
 			return(dp-(char*)vp->u_space);
 	}
 #if SHOPT_MULTIBYTE
@@ -2362,7 +2311,7 @@ static int search(register Vi_t* vp,register int mode)
 	{
 		/*** user wants repeat of last search ***/
 		del_line(vp,BAD);
-		strcpy( ((char*)virtual)+1, lsearch);
+		strcopy( ((char*)virtual)+1, lsearch);
 #if SHOPT_MULTIBYTE
 		*((char*)virtual) = '/';
 		ed_internal((char*)virtual,virtual);
@@ -2394,7 +2343,7 @@ static int search(register Vi_t* vp,register int mode)
 		location = hist_find(sh.hist_ptr,((char*)virtual)+1, curhline, 1, new_direction);
 	}
 	cur_virt = i;
-	strncpy(lsearch, ((char*)virtual)+1, SEARCHSIZE-1);
+	strncopy(lsearch, ((char*)virtual)+1, SEARCHSIZE-1);
 	lsearch[SEARCHSIZE-1] = 0;
 	if( (curhline=location.hist_command) >=0 )
 	{
@@ -2533,10 +2482,21 @@ addin:
 		/* FALLTHROUGH */
 	case '*':		/** do file name expansion in place **/
 	case '\\':		/** do file name completion in place **/
-		if( cur_virt == INVALID )
+	case '=':		/** list file name expansions **/
+	{
+		char allempty = 1;
+		int x;
+		for(x=0; x <= cur_virt; x++)
+		{
+			if(!isspace(virtual[x]))
+			{
+				allempty = 0;
+				break;
+			}
+		}
+		if(cur_virt == INVALID || allempty)
 			return(BAD);
 		/* FALLTHROUGH */
-	case '=':		/** list file name expansions **/
 		save_v(vp);
 		i = last_virt;
 		++last_virt;
@@ -2557,7 +2517,7 @@ addin:
 			last_virt = i;
 			ed_ringbell();
 		}
-		else if((c=='=' || (c=='\\'&&virtual[last_virt]=='/')) && !vp->repeat_set)
+		else if(vp->ed->e_nlist!=0 && !vp->repeat_set)
 		{
 			last_virt = i;
 			vi_redraw((void*)vp);
@@ -2573,6 +2533,7 @@ addin:
 			return(APPEND);
 		}
 		break;
+	}
 
 	case '@':		/** macro expansion **/
 		if( mode )

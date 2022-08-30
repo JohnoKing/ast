@@ -4,20 +4,16 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -40,9 +36,7 @@
 #define _BLD_aso	1
 #define _BLD_cdt	1
 #define _BLD_sfio	1
-#if !_UWIN
 #define _BLD_vmalloc	1
-#endif
 #endif
 
 #ifdef	_SFSTDIO_H
@@ -64,6 +58,9 @@ struct _sfio_s;
 #endif
 
 #include <ast_lib.h>
+#if !_lib_fork
+#error In 2022, libast joined the 21st century and started requiring fork(2).
+#endif
 #include <ast_sys.h>
 #include <ast_getopt.h>	/* <stdlib.h> does this */
 #include <ast_fcntl.h>
@@ -127,12 +124,6 @@ struct lconv
 
 #endif
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
-
-#if !_UWIN /* for AST54 compatibility */
-
 #undef	getenv
 #define getenv		_ast_getenv
 
@@ -140,8 +131,6 @@ struct lconv
 #define setenviron	_ast_setenviron
 
 extern char*		getenv(const char*);
-
-#endif
 
 #undef	localeconv
 #define localeconv	_ast_localeconv
@@ -234,8 +223,6 @@ extern char*		strerror(int);
 #define LC_LANG			(-AST_LC_LANG)
 #endif
 
-#undef	extern
-
 #undef	strcoll
 #if _std_strcoll
 #define strcoll		_ast_info.collate
@@ -282,16 +269,7 @@ typedef struct
 
 } _Ast_info_t;
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		extern __EXPORT__
-#endif
-#if !_BLD_ast && defined(__IMPORT__)
-#define extern		extern __IMPORT__
-#endif
-
 extern _Ast_info_t	_ast_info;
-
-#undef	extern
 
 /* direct macro access for bsd crossover */
 
@@ -325,15 +303,9 @@ extern int		rename(const char*, const char*);
 
 /* and now introducing prototypes botched by the standard(s) */
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
-
 #undef	getpgrp
 #define	getpgrp()	_ast_getpgrp()
 extern int		_ast_getpgrp(void);
-
-#undef	extern
 
 /*
  * and finally, standard interfaces hijacked by AST

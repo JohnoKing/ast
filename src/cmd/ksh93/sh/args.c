@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,6 +23,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	"path.h"
 #include	"jobs.h"
@@ -140,7 +137,7 @@ int sh_argopts(int argc,register char *argv[])
 		switch(n)
 		{
 	 	    case 'A':
-			np = nv_open(opt_info.arg,sh.var_tree,NV_NOASSIGN|NV_ARRAY|NV_VARNAME);
+			np = nv_open(opt_info.arg,sh.var_tree,NV_ARRAY|NV_VARNAME);
 			if(f)
 				nv_unset(np);
 			continue;
@@ -156,7 +153,7 @@ int sh_argopts(int argc,register char *argv[])
 			o = sh_lookopt(opt_info.arg,&f);
 			if(o<=0 || (setflag && (o&SH_COMMANDLINE)))
 			{
-				errormsg(SH_DICT,2, e_option, opt_info.arg);
+				errormsg(SH_DICT,2, "%s: %s option", opt_info.arg, o<0 ? "ambiguous" : "unknown");
 				error_info.errors++;
 			}
 			o &= 0xff;
@@ -170,8 +167,14 @@ int sh_argopts(int argc,register char *argv[])
 			{
 				register const Shtable_t *tp;
 				for(tp=shtab_options; o = tp->sh_number; tp++)
+				{
 					if(!(o&SH_COMMANDLINE) && (o&=0xff)!=SH_RESTRICTED && is_option(&newflags,o))
+					{
 						off_option(&newflags,o);
+						if(o==SH_POSIX)
+							sh_invalidate_ifs();
+					}
+				}
 			}
 			defaultflag++;
 		    	continue;
@@ -245,6 +248,7 @@ int sh_argopts(int argc,register char *argv[])
 				off_option(&newflags,SH_BRACEEXPAND);
 #endif
 				on_option(&newflags,SH_LETOCTAL);
+				sh_invalidate_ifs();
 			}
 			on_option(&newflags,o);
 			off_option(&sh.offoptions,o);
@@ -262,6 +266,7 @@ int sh_argopts(int argc,register char *argv[])
 				on_option(&newflags,SH_BRACEEXPAND);
 #endif
 				off_option(&newflags,SH_LETOCTAL);
+				sh_invalidate_ifs();
 			}
 			if(o==SH_XTRACE)
 				trace = 0;
@@ -641,7 +646,6 @@ char **sh_argbuild(int *nargs, const struct comnod *comptr,int flag)
 			*nargs = ap->dolnum;
 			return(ap->dolval+ap->dolbot);
 		}
-		sh.lastpath = 0;
 		*nargs = 0;
 		if(ac)
 		{
@@ -736,7 +740,7 @@ struct argnod *sh_argprocsub(struct argnod *argp)
 	chmod(sh.fifo,S_IRUSR|S_IWUSR);	/* mkfifo + chmod works regardless of umask */
 	sfputr(sh.stk,sh.fifo,0);
 #endif /* SHOPT_DEVFD */
-	sfputr(sh.stk,fmtbase((long)pv[fd],10,0),0);
+	sfputr(sh.stk,fmtbase((intmax_t)pv[fd],10,0),0);
 	ap = (struct argnod*)stkfreeze(sh.stk,0);
 	sh.inpipe = sh.outpipe = 0;
 	/* turn off job control */

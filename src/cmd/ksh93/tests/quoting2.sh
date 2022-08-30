@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#          atheik <14833674+atheik@users.noreply.github.com>           #
 #                                                                      #
 ########################################################################
 
@@ -289,6 +286,73 @@ exp=\''text between expansions'\'
 got="${var:+'}text between expansions${var:+'}"
 [[ $got == "$exp" ]] || err_exit "Single quotes misparsed in expansion operator string (8)" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# https://github.com/ksh93/ksh/issues/352
+got=$(eval 'foo="`: "^Exec(\[[^]=]*])?="`"' 2>&1) || err_exit "Backtick command substitutions can't nest double quotes" \
+	"(got $(printf %q "$got"))"
+
+# ======
+# https://github.com/ksh93/ksh/issues/367
+exp='one twothree'
+got=$(
+echo one two\
+three
+)
+[[ $got == "$exp" ]] || err_exit "Line continuation broken within standard command substitution" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=${
+echo one two\
+three
+}
+[[ $got == "$exp" ]] || err_exit "Line continuation broken within shared-state command substitution" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+# backticks did not have this bug but let's test them anyway
+got=`
+echo one two\
+three
+`
+[[ $got == "$exp" ]] || err_exit "Line continuation broken within backtick command substitution" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# BUG_IFSGLOBS: https://github.com/ksh93/ksh/issues/489
+# "$*" does pattern matching if the first char of $IFS is a wildcard
+
+IFS=*			# output field separator for "$*"
+set -- F ''		# "$*" is now "F*"
+exp=BUGFREE
+got=${exp%"$*"}		# the quoted "*" in "F*" should not act as a wildcard
+[[ $got == "$exp" ]] || err_exit 'BUG_IGSGLOBS reproducer 1' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+case BUGFREE in
+BUG"$*")	err_exit 'BUG_IFSGLOBS reproducer 2' ;;
+BUGFREE)	;;
+*)		err_exit 'BUG_IFSGLOBS reproducer 2 fails badly' ;;
+esac
+
+IFS=?
+exp=abcd
+set a c
+got=${exp#"$*"}
+[[ $got == "$exp" ]] || err_exit 'BUG_IFSGLOBS reproducer 3' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+case abc in
+"$*")	err_exit 'BUG_IFSGLOBS reproducer 4' ;;
+esac
+[[ abc = "$*" ]] && err_exit 'BUG_IFSGLOBS reproducer 5'
+
+# https://unix.stackexchange.com/questions/411001/using-case-and-arrays-together-in-bash/411006#411006
+IFS='|'
+arr=(opt1 opt2 opt3)
+case opt2 in
+@("${arr[*]}"))
+	err_exit 'BUG_IFSGLOBS reproducer 6' ;;
+esac
+[[ opt2 == @("${arr[*]}") ]] && err_exit 'BUG_IFSGLOBS reproducer 7'
+unset arr
+
+IFS=$' \t\n'
 
 # ======
 exit $((Errors<125?Errors:125))

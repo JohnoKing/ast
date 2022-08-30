@@ -10,7 +10,7 @@
 #include <stk.h>
 
 Stk_t *stkopen(int \fIflags\fP);
-Stk_t *stkinstall(Stk_t *\fIstack\fP, char *(\fIoverflow\fP)(int));
+Stk_t *stkinstall(Stk_t *\fIstack\fP, char *(\fIoverflow\fP)(size_t));
 int stkclose(Stk_t *\fIstack\fP);
 unsigned int stklink(Stk_t *\fIstack\fP)
 
@@ -36,11 +36,13 @@ A stack is represented by the type \f3Stk_t\fP
 defined in header \f3<stk.h>\fP.
 The type \f3Stk_t\fP is compatible with the type \f3Sfio_t\fP
 defined by the \f3sfio\fP(3) library.
+.PP
 At any instant there is one active stack which can be referenced
 by the constant \f3stkstd\fP.
 Variable size objects can be
 added to the active stack
 and programs can reference these objects directly with pointers.
+.PP
 In addition, the last object on the stack
 (referred to here as the current object)
 can be built incrementally.
@@ -54,23 +56,26 @@ relative offsets ranging from zero to the current offset of the object.
 There is a preset initial active stack.
 To use an additional stack, it is necessary to create it and to
 install it as the active stack.
+.PP
 A stack is created with the \f3stkopen\fP() function.
 The \fIflags\fP argument is an options bitmask.
 If the \f3STK_SMALL\fP bit is set, the stack allocates memory in
 small blocks, optimizing for memory usage at the expense of performance.
 If the \f3STK_NULL\fP bit is set, a stack overflow will cause stack
-operations to return a null pointer instead of throwing an error.
+operations to return a null pointer instead of throwing an exception.
 If successful,
 \f3stkopen\fP() returns a pointer to a stack whose reference
 count is 1.
 Otherwise, \f3stkopen\fP() returns a null pointer.
+.PP
 The \f3stklink\fP() function increases the reference count for the
 given \fIstack\fP and returns the increased count.
+.PP
 The \f3stkinstall\fP() function
 makes the specified \fIstack\fP the active stack and returns a pointer
 to the previous active stack.
-When the \fIoverflow\fP argument is not null,
-it specifies a function that will
+If the \fIoverflow\fP argument is not null and the stack was not opened with
+the \f3STK_NULL\fP option, \fIoverflow\fP specifies a function that will
 be called whenever \f3malloc\fP(3) fails while trying to grow the
 stack.
 The \fIoverflow\fP function will be called with the size that was passed
@@ -85,6 +90,7 @@ When \fIstack\fP is a null pointer,
 the active stack is not changed
 but the \fIoverflow\fP function for the active stack can be changed
 and a pointer to the active stack is returned.
+.PP
 The \f3stkclose\fP() function decrements the reference count and
 frees the memory associated with
 the specified stack
@@ -126,6 +132,7 @@ There is a current offset associated with the current object that
 determines where subsequent operations apply.
 Initially, this offset is zero, and the offset changes as a result
 of the operations you specify.
+.PP
 The \f3stkseek\fP() function is used set the offset for the
 current object.
 The \fIoffset\fP argument to \f3stkseek\fP() specifies the new
@@ -134,6 +141,7 @@ The frame will be extended or moved
 if \f3offset\fP causes the new current offset to extend beyond the
 current frame.
 \f3stkseek\fP() returns a pointer to the beginning of the current object.
+.PP
 The \f3stktell\fP() function gives the offset of the current object.
 .PP
 The \f3stkptr\fP() function converts the given \f3offset\fP
@@ -141,6 +149,7 @@ for the current object into a memory address on the stack.
 This address is only valid until another stack operation is given.
 The result is not defined if \fIoffset\fP exceeds the size of the current
 object.
+.PP
 The \f3stkfreeze\fP()
 function terminates the current object on the
 stack and returns a pointer to the beginning of this object.
@@ -151,7 +160,6 @@ contain zero and the contents of the remaining bytes are undefined.
 The \f3stkon\fP()
 function returns non-zero if the address given by \fIaddr\fP is
 on the stack \fIstack\fP and \f30\fP otherwise.
-.PP
 .SH HISTORY
 The
 \f3stk\fP

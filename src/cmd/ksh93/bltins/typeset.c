@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -40,6 +37,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<error.h>
 #include	"path.h"
@@ -424,6 +422,9 @@ int    b_typeset(int argc,register char *argv[],Shbltin_t *context)
 				flag &= ~NV_VARNAME;
 				flag |= (NV_EXPORT|NV_IDENT);
 				break;
+			case 'g':
+				flag |= NV_GLOBAL;
+				break;
 			case ':':
 				errormsg(SH_DICT,2, "%s", opt_info.arg);
 				break;
@@ -458,9 +459,9 @@ endargs:
 		errormsg(SH_DICT,2,e_optincompat1,"-m");
 		error_info.errors++;
 	}
-	if((flag&NV_REF) && (flag&~(NV_REF|NV_IDENT|NV_ASSIGN)))
+	if((flag&NV_REF) && (flag&~(NV_REF|NV_IDENT|NV_ASSIGN|NV_GLOBAL)))
 	{
-		errormsg(SH_DICT,2,e_optincompat1,"-n");
+		errormsg(SH_DICT,2,e_optincompat2,"-n","other options except -g");
 		error_info.errors++;
 	}
 	if((flag&NV_TYPE) && (flag&~(NV_TYPE|NV_VARNAME|NV_ASSIGN)))
@@ -470,7 +471,7 @@ endargs:
 	}
 	if(troot==sh.fun_tree && ((isfloat || flag&~(NV_FUNCT|NV_TAGGED|NV_EXPORT|NV_LTOU))))
 	{
-		errormsg(SH_DICT,2,e_optincompat1,"-f");
+		errormsg(SH_DICT,2,e_optincompat2,"-f","other options except -t and -u");
 		error_info.errors++;
 	}
 	if(sflag && troot==sh.fun_tree)
@@ -487,6 +488,11 @@ endargs:
 	if(sizeof(char*)<8 && tdata.argnum > SHRT_MAX)
 	{
 		errormsg(SH_DICT,ERROR_exit(2),"option argument cannot be greater than %d",SHRT_MAX);
+		UNREACHABLE();
+	}
+	if((flag&NV_GLOBAL) && sh.mktype)
+	{
+		errormsg(SH_DICT,ERROR_exit(2),"-g: type members cannot be global");
 		UNREACHABLE();
 	}
 	if(isfloat)
@@ -520,12 +526,12 @@ endargs:
 		if(NV_CLASS[sizeof(NV_CLASS)-2]!='.')
 			sfputc(stkp,'.');
 		sfputr(stkp,tdata.prefix,0);
-		tdata.tp = nv_open(stkptr(stkp,offset),sh.var_tree,NV_VARNAME|NV_NOARRAY|NV_NOASSIGN);
+		tdata.tp = nv_open(stkptr(stkp,offset),sh.var_tree,NV_VARNAME|NV_NOARRAY);
 #if SHOPT_NAMESPACE
 		if(!tdata.tp && off)
 		{
 			*stkptr(stkp,off)=0;
-			tdata.tp = nv_open(stkptr(stkp,offset),sh.var_tree,NV_VARNAME|NV_NOARRAY|NV_NOASSIGN);
+			tdata.tp = nv_open(stkptr(stkp,offset),sh.var_tree,NV_VARNAME|NV_NOARRAY);
 		}
 #endif /* SHOPT_NAMESPACE */
 		stkseek(stkp,offset);
@@ -634,6 +640,17 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 	char *last = 0;
 	int nvflags=(flag&(NV_ARRAY|NV_NOARRAY|NV_VARNAME|NV_IDENT|NV_ASSIGN|NV_STATIC|NV_MOVE));
 	int r=0, ref=0, comvar=(flag&NV_COMVAR),iarray=(flag&NV_IARRAY);
+	Dt_t *save_vartree;
+	Namval_t *save_namespace;
+	if(flag&NV_GLOBAL)
+	{
+		save_vartree = sh.var_tree;
+		troot = sh.var_tree = sh.var_base;
+#if SHOPT_NAMESPACE
+		save_namespace = sh.namespace;
+		sh.namespace = NIL(Namval_t*);
+#endif
+	}
 	if(!sh.prefix)
 	{
 		if(!tp->pflag)
@@ -679,7 +696,7 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 					}
 #if SHOPT_NAMESPACE
 					if(sh.namespace)
-						np = sh_fsearch(name,NV_ADD|HASH_NOSCOPE);
+						np = sh_fsearch(name,NV_ADD|NV_NOSCOPE);
 					else
 #endif /* SHOPT_NAMESPACE */
 					np = nv_open(name,sh_subfuntree(1),NV_NOARRAY|NV_IDENT|NV_NOSCOPE);
@@ -694,7 +711,7 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 #if SHOPT_NAMESPACE
 					np = 0;
 					if(sh.namespace)
-						np = sh_fsearch(name,HASH_NOSCOPE);
+						np = sh_fsearch(name,NV_NOSCOPE);
 					if(!np)
 #endif /* SHOPT_NAMESPACE */
 					{
@@ -703,7 +720,7 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 							if(!is_afunction(np))
 								np = 0;
 						}
-						else if(memcmp(name,".sh.math.",9)==0 && sh_mathstd(name+9))
+						else if(strncmp(name,".sh.math.",9)==0 && sh_mathstd(name+9))
 							continue;
 					}
 				}
@@ -741,7 +758,7 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 			/* tracked alias */
 			if(troot==sh.track_tree && tp->aflag=='-')
 			{
-				np = nv_search(name,troot,NV_ADD|HASH_NOSCOPE);
+				np = nv_search(name,troot,NV_ADD|NV_NOSCOPE);
 				path_alias(np,path_absolute(nv_name(np),NIL(Pathcomp_t*),0));
 				continue;
 			}
@@ -804,16 +821,16 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 			}
 			if(troot==sh.var_tree)
 			{
-				if(sh.subshell)
+				if(sh.subshell && !sh.subshare)
 				{
 					/*
 					 * Create local scope for virtual subshell. Variables with discipline functions
 					 * (LC_*, LINENO, etc.) need to be cloned, as moving them will remove the discipline.
 					 */
-					if(!nv_isattr(np,NV_NODISC|NV_ARRAY) && !nv_isvtree(np))
-						np=sh_assignok(np,2);
+					if((flag&NV_ARRAY) && !sh.envlist && !nv_isnull(np))
+						sh_subfork();	/* work around https://github.com/ksh93/ksh/issues/409 */
 					else
-						np=sh_assignok(np,0);
+						sh_assignok(np, !nv_isattr(np,NV_NODISC|NV_ARRAY) && !nv_isvtree(np));
 				}
 				if(iarray)
 				{
@@ -906,7 +923,6 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 				{
 					if(!(flag&NV_RJUST))
 						newflag &= ~NV_RJUST;
-					
 					else if(!(flag&NV_LJUST))
 						newflag &= ~NV_LJUST;
 				}
@@ -915,8 +931,10 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 				newflag = curflag & ~flag;
 			if (tp->aflag && (tp->argnum || (curflag!=newflag)))
 			{
+				if(np==SH_LEVELNOD)
+					return(r);
 				if(sh.subshell)
-					sh_assignok(np,2);
+					sh_assignok(np,1);
 				if(troot!=sh.var_tree)
 					nv_setattr(np,newflag&~NV_ASSIGN);
 				else
@@ -1006,6 +1024,13 @@ static int     setall(char **argv,register int flag,Dt_t *troot,struct tdata *tp
 		if(r==0)
 			r = 1;  /* ensure the exit status is at least 1 */
 	}
+	if(flag&NV_GLOBAL)
+	{
+		sh.var_tree = save_vartree;
+#if SHOPT_NAMESPACE
+		sh.namespace = save_namespace;
+#endif
+	}
 	return(r);
 }
 
@@ -1025,7 +1050,6 @@ static int		maxlib;
  * always move to head of search list
  * return: 0: already loaded 1: first load
  */
-
 int sh_addlib(void* dll, char* name, Pathcomp_t* pp)
 {
 	register int	n;
@@ -1202,7 +1226,7 @@ int	b_builtin(int argc,char *argv[],Shbltin_t *context)
 		{
 			if(nv_isattr(np,BLT_SPC))
 				errmsg = "restricted name";
-			addr = (Shbltin_f)np->nvalue.bfp;
+			addr = funptr(np);
 		}
 		if(!dlete && !addr && !(np=sh_addbuiltin(arg,(Shbltin_f)0 ,0)))
 			errmsg = "not found";
@@ -1262,7 +1286,7 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 	register const char *name;
 	volatile int r;
 	Dt_t	*dp;
-	int nflag=0,all=0,isfun,jmpval,nofree_attr;
+	int nflag=0,all=0,isfun,jmpval;
 	struct checkpt buff;
 	NOT_USED(argc);
 	if(troot==sh.alias_tree)
@@ -1322,7 +1346,7 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 		{
 #if SHOPT_NAMESPACE
 			if(sh.namespace && troot!=sh.var_tree)
-				np = sh_fsearch(name,nflag?HASH_NOSCOPE:0);
+				np = sh_fsearch(name,nflag);
 			if(!np)
 #endif /* SHOPT_NAMESPACE */
 			np=nv_open(name,troot,NV_NOADD|nflag);
@@ -1361,19 +1385,9 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 					 * Create local scope for virtual subshell. Variables with discipline functions
 					 * (LC_*, LINENO, etc.) need to be cloned, as moving them will remove the discipline.
 					 */
-					if(!nv_isattr(np,NV_NODISC|NV_ARRAY) && !nv_isvtree(np))
-						np=sh_assignok(np,2);
-					else
-						np=sh_assignok(np,0);
+					sh_assignok(np, !nv_isattr(np,NV_NODISC|NV_ARRAY) && !nv_isvtree(np));
 				}
 			}
-			/*
-			 * Preset aliases have the NV_NOFREE attribute and cannot be safely freed from memory.
-			 * _nv_unset discards this flag so it's obtained now to prevent an invalid free crash.
-			 */
-			if(troot==sh.alias_tree)
-				nofree_attr = nv_isattr(np,NV_NOFREE);	/* note: returns bitmask, not boolean */
-
 			if(!nv_isnull(np) || nv_size(np) || nv_isattr(np,~(NV_MINIMAL|NV_NOFREE)))
 				_nv_unset(np,0);
 			if(troot==sh.var_tree && sh.st.real_fun && (dp=sh.var_tree->walk) && dp==sh.st.real_fun->sdict)
@@ -1390,9 +1404,9 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 			{
 				if(sh.subshell && !sh.subshare)
 					sh_subfork();	/* avoid affecting the parent shell's alias table */
-				nv_delete(np,troot,nofree_attr);
+				_nv_unset(np,nv_isattr(np,NV_NOFREE));
+				nv_delete(np,troot,0);
 			}
-
 		}
 		else if(troot==sh.alias_tree)
 			r = 1;
@@ -1405,11 +1419,11 @@ static int unall(int argc, char **argv, register Dt_t *troot)
 /*
  * print out the name and value of a name-value pair <np>
  */
-
 static int print_namval(Sfio_t *file,register Namval_t *np,register int flag, struct tdata *tp)
 {
 	register char *cp;
 	int	indent=tp->indent, outname=0, isfun;
+	char	tempexport=0;
 	sh_sigcheck();
 	if(flag)
 		flag = '\n';
@@ -1501,9 +1515,19 @@ static int print_namval(Sfio_t *file,register Namval_t *np,register int flag, st
 		print_value(file,np,tp);
 		return(0);
 	}
-	if(nv_isvtree(np))
+	if(nv_isvtree(np) && !nv_isattr(np,NV_EXPORT))
+	{
+		/*
+		 * Compound variable. Repurpose NV_EXPORT to tell walk_tree() in nvdisc.c not
+		 * to indent the nv_getval() output. Also turn it back off, or bugs will happen.
+		 */
 		nv_onattr(np,NV_EXPORT);
-	if(cp=nv_getval(np))
+		tempexport++;
+	}
+	cp = nv_getval(np);
+	if(tempexport)
+		nv_offattr(np,NV_EXPORT);
+	if(cp)
 	{
 		if(indent)
 			sfnputc(file,'\t',indent);
@@ -1550,7 +1574,6 @@ static void	print_attribute(register Namval_t *np,void *data)
  * print the nodes in tree <root> which have attributes <flag> set
  * if <option> is non-zero, no subscript or value is printed
  */
-
 static void print_scan(Sfio_t *file, int flag, Dt_t *root, int option,struct tdata *tp)
 {
 	register char **argv;
@@ -1601,7 +1624,6 @@ static void print_scan(Sfio_t *file, int flag, Dt_t *root, int option,struct tda
 				}
 				else if((flag&NV_IARRAY))
 					continue;
-				
 			}
 			tp->scanmask = flag&~NV_NOSCOPE;
 			tp->scanroot = root;
@@ -1618,7 +1640,6 @@ static void print_scan(Sfio_t *file, int flag, Dt_t *root, int option,struct tda
 /*
  * add the name of the node to the argument list argnam
  */
-
 static void pushname(Namval_t *np,void *data)
 {
 	struct tdata *tp = (struct tdata*)data;

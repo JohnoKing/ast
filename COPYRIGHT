@@ -6,24 +6,47 @@ ksh 93u+m general copyright notice
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                    <https://github.com/ksh93/ksh>                    #
 #             Derived from AT&T's ast package (see below)              #
-#       Licensed under the Eclipse Public License, Version 1.0         #
+#       Licensed under the Eclipse Public License, Version 2.0         #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                             CONTRIBUTORS                             #
 #                                                                      #
-#                   Martijn Dekker <martijn@inlv.org>                  #
-#             Johnothan King <johnothanking@protonmail.com>            #
-#          hyenias <58673227+hyenias@users.noreply.github.com>         #
-#               Anuradha Weeraman <anuradha@weeraman.com>              #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
+#         hyenias <58673227+hyenias@users.noreply.github.com>          #
+#               Anuradha Weeraman <anuradha@debian.org>                #
+#                  Lev Kujawski <int21h@mailbox.org>                   #
+#          atheik <14833674+atheik@users.noreply.github.com>           #
+#               K. Eugene Carlson <kvngncrlsn@gmail.com>               #
+#                Ryan Schmidt <ryandesign@macports.org>                #
 #                   Chase <nicetrynsa@protonmail.ch>                   #
-#                 Finnbarr P. Murphy <fpm@hotmail.com>                 #
-#                 Govind Kamat <govind_kamat@yahoo.com>                #
-#                 Harald van Dijk <harald@gigawatt.nl>                 #
-#                   Lev Kujawski <int21h@mailbox.org>                  #
+#               Vincent Mihalkovic <vmihalko@redhat.com>               #
+#                      Trey Valenta <t@trey.net>                       #
+#  Sterling Jensen <5555776+sterlingjensen@users.noreply.github.com>   #
 #                   Marc Wilson <posguy99@gmail.com>                   #
+#                 Harald van Dijk <harald@gigawatt.nl>                 #
+#                Govind Kamat <govind_kamat@yahoo.com>                 #
+#                  Andy Fiddaman <andy@omniosce.org>                   #
+#                                                                      #
+#              ALSO INCLUDES BACKPORTED CONTRIBUTIONS BY               #
+#                                                                      #
+#                  David Korn <dgk@research.att.com>                   #
+#                 Glenn Fowler <gsf@research.att.com>                  #
+#              Lefteris Koutsofios <ek@research.att.com>               #
+#              Siteshwar Vashisht <svashisht@redhat.com>               #
+#                 Kurtis Rader <krader@skepticism.us>                  #
+#               Roland Mainz <roland.mainz@nrubsig.org>                #
+#                Finnbarr P. Murphy <fpm@hotmail.com>                  #
+#               Lijo George <lijo.x.george@oracle.com>                 #
+#                  OpenSUSE ksh 93u+ patch authors                     #
+#                    Red Hat ksh 93u+ path authors                     #
+#                   Solaris ksh 93u+ patch authors                     #
+#                    Debian ksh 93u+ patch authors                     #
+#                    Apple ksh 93u+ patch authors                      #
+#                 Graphviz maintainers (libast, sfio)                  #
 #                                                                      #
 ########################################################################
 
@@ -66,7 +89,7 @@ ast package general copyright notice
 #                       Jeff Korn <@google.com>                        #
 #              Kathleen Fisher <kfisher@research.att.com>              #
 #                     Ken Church <@microsoft.com>                      #
-#             Brian Kernigham <bwk@research.bell-labs.com>             #
+#             Brian Kernighan <bwk@research.bell-labs.com>             #
 #             Dennis Ritchie <dmr@research.bell-labs.com>              #
 #              Doug McIlroy <doug@research.bell-labs.com>              #
 #                   Eduardo Krell <ekrell@adexus.cl>                   #

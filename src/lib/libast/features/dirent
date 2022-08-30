@@ -69,27 +69,19 @@ elif ( _hdr_ndir ) {
 	#ifndef _DIRENT_H
 	#define _DIRENT_H
 
-	#if defined(__STDPP__directive) && defined(__STDPP__hide)
-	__STDPP__directive pragma pp:hide closedir opendir readdir seekdir telldir
-	#else
 	#define closedir	______closedir
 	#define opendir		______opendir
 	#define readdir		______readdir
 	#define seekdir		______seekdir
 	#define telldir		______telldir
-	#endif
 
 	#include <ndir.h>
 
-	#if defined(__STDPP__directive) && defined(__STDPP__hide)
-	__STDPP__directive pragma pp:nohide closedir opendir readdir seekdir telldir
-	#else
 	#undef	closedir
 	#undef	opendir
 	#undef	readdir
 	#undef	seekdir
 	#undef	telldir
-	#endif
 
 	#ifndef dirent
 	#define dirent	direct
@@ -120,27 +112,19 @@ elif ( _sys_dir ) {
 	#ifndef _DIRENT_H
 	#define _DIRENT_H
 
-	#if defined(__STDPP__directive) && defined(__STDPP__hide)
-	__STDPP__directive pragma pp:hide closedir opendir readdir seekdir telldir
-	#else
 	#define closedir	______closedir
 	#define opendir		______opendir
 	#define readdir		______readdir
 	#define seekdir		______seekdir
 	#define telldir		______telldir
-	#endif
 
 	#include <sys/dir.h>
 
-	#if defined(__STDPP__directive) && defined(__STDPP__hide)
-	__STDPP__directive pragma pp:nohide closedir opendir readdir seekdir telldir
-	#else
 	#undef	closedir
 	#undef	opendir
 	#undef	readdir
 	#undef	seekdir
 	#undef	telldir
-	#endif
 
 	#ifndef dirent
 	#define dirent	direct

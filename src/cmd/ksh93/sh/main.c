@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,6 +24,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	<ast.h>
 #include	<sfio.h>
 #include	<stak.h>
@@ -85,7 +83,6 @@ static char	beenhere = 0;
  * search for file and exfile() it if it exists
  * 1 returned if file found, 0 otherwise
  */
-
 static int sh_source(Sfio_t *iop, const char *file)
 {
 	char*	oid;
@@ -155,23 +152,23 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 		beenhere++;
 		sh_onstate(SH_PROFILE);
 		sh.sigflag[SIGTSTP] |= SH_SIGIGNORE;
-		if(sh.ppid==1)
-			sh.login_sh++;
-		if(sh.login_sh >= 2)
-			sh_onoption(SH_LOGIN_SHELL);
 		/* decide whether shell is interactive */
 		if(!sh_isoption(SH_INTERACTIVE) && !sh_isoption(SH_TFLAG) && !sh_isoption(SH_CFLAG) &&
 		   sh_isoption(SH_SFLAG) && tty_check(0) && tty_check(ERRIO))
 			sh_onoption(SH_INTERACTIVE);
 		if(sh_isoption(SH_INTERACTIVE))
 		{
+			const struct shtable2 *tp;
 			sh_onoption(SH_BGNICE);
 			sh_onoption(SH_RC);
-			if(!sh_isoption(SH_POSIX))
+			/* preset aliases for interactive ksh/sh */
+			for(tp = shtab_aliases; *tp->sh_name; tp++)
 			{
-				/* preset aliases for interactive non-POSIX ksh */
-				dtclose(sh.alias_tree);
-				sh.alias_tree = sh_inittree(shtab_aliases);
+				Namval_t *np = sh_calloc(1,sizeof(Namval_t));
+				np->nvname = (char*)tp->sh_name;	/* alias name */
+				np->nvflag = tp->sh_number;		/* attributes (must include NV_NOFREE) */
+				np->nvalue.cp = (char*)tp->sh_value;	/* non-freeable value */
+				dtinstall(sh.alias_tree,np);
 			}
 		}
 #if SHOPT_REMOTE
@@ -348,13 +345,17 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 		sh_onstate(SH_INTERACTIVE);
 #if SHOPT_ESH
 		/* do not leave users without a line editor */
-		if(!sh_isoption(SH_GMACS)
-#if SHOPT_VSH
-		&& !sh_isoption(SH_VI)
-#endif /* SHOPT_VSH */
-		)
+		if(!sh_editor_active() && !is_option(&sh.offoptions,SH_EMACS))
 			sh_onoption(SH_EMACS);
 #endif /* SHOPT_ESH */
+	}
+	else
+	{
+		/* keep $COLUMNS and $LINES up to date even for scripts that don't trap SIGWINCH */
+		sh_winsize(NIL(int*),NIL(int*));
+#ifdef SIGWINCH
+		signal(SIGWINCH,sh_fault);
+#endif /* SIGWINCH */
 	}
 	/* (Re)set PS4 and IFS, but don't export these now even if allexport is on. */
 	i = (sh_isoption(SH_ALLEXPORT) != 0);
@@ -373,7 +374,6 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
  * iop is not null when the input is a string
  * fdin is the input file descriptor 
  */
-
 static void	exfile(register Sfio_t *iop,register int fno)
 {
 	time_t curtime;
@@ -433,7 +433,7 @@ static void	exfile(register Sfio_t *iop,register int fno)
 		sh_iorestore(0,jmpval);
 		hist_flush(sh.hist_ptr);
 		sfsync(sh.outpool);
-		sh.st.execbrk = sh.st.breakcnt = 0;
+		sh.st.breakcnt = 0;
 		/* check for return from profile or env file */
 		if(sh_isstate(SH_PROFILE) && (jmpval==SH_JMPFUN || jmpval==SH_JMPEXIT))
 		{
@@ -471,9 +471,6 @@ static void	exfile(register Sfio_t *iop,register int fno)
 	error_info.line = 1;
 	sh.inlineno = 1;
 	sh.binscript = 0;
-	sh.exittrap = 0;
-	sh.errtrap = 0;
-	sh.end_fn = 0;
 	if(sfeof(iop))
 		goto eof_or_error;
 	/* command loop */
@@ -535,7 +532,7 @@ static void	exfile(register Sfio_t *iop,register int fno)
 			{
 				buff.mode = SH_JMPERREXIT;
 #ifdef DEBUG
-				errormsg(SH_DICT,ERROR_warn(0),"%d: mode changed to JMP_EXIT",sh.current_pid);
+				errormsg(SH_DICT,ERROR_warn(0),"%lld: mode changed to SH_JMPERREXIT",(Sflong_t)sh.current_pid);
 #endif
 			}
 		}
@@ -603,7 +600,7 @@ static void	exfile(register Sfio_t *iop,register int fno)
 			{
 					execflags |= sh_state(SH_NOFORK);
 			}
-			sh.st.execbrk = 0;
+			sh.st.breakcnt = 0;
 			sh_exec(t,execflags);
 			if(sh.forked)
 			{

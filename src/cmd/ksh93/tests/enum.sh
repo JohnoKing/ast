@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -57,7 +54,7 @@ done
 typeset -T X_t=( typeset name=aha )
 typeset -a[X_t] arr
 ) 2> /dev/null
-[[ $? == 1 ]] || err_exit 'typeset -a[X_t] should generate an error message when X-t is not an enumeration type'
+[[ $? == 1 ]] || err_exit 'typeset -a[X_t] should generate an error message when X_t is not an enumeration type'
 
 typeset -a [Color_t] arr
 arr[green]=foo
@@ -167,6 +164,28 @@ got=$("$SHELL" -c 'enum trap=(BAD TYPE)' 2>&1)
 exp=': trap: is a special shell builtin'
 [[ $got == *"$exp" ]] || err_exit "enum overrides special builtin" \
 	"(expected match of *$(printf %q "$exp"); got $(printf %q "$got"))"
+
+# ======
+# Various tests backported from ksh93v- for enum type arrays.
+enum bool=(false true)
+bool -A a=( [2]=true [4]=false )
+exp=true
+got=${a[2]}
+[[ $got == $exp ]] || err_exit 'associative array assignment failure when using enums' \
+	"(expected $(printf %q "$exp"); got $(printf %q "$got"))"
+exp=2
+got=${#a[@]}
+[[ $got == $exp ]] || err_exit 'bool -A a should only have two elements' \
+	"(expected $(printf %q "$exp"); got $(printf %q "$got"))"
+
+bool -a bia
+(( bia[4]=false ))
+[[ ${bia[3]} ]] && err_exit 'empty index array element should not produce a value'
+(( bia[3] == 0 )) || err_exit 'empty index array element should be numerically 0'
+bool -A baa
+(( baa[4]=false ))
+[[ ${baa[3]} ]] && err_exit 'empty associative array element should not produce a value'
+(( baa[3] == 0 )) || err_exit 'empty associative array element should be numerically 0'
 
 # ======
 exit $((Errors<125?Errors:125))

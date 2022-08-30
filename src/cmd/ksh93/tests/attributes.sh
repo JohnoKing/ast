@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -385,7 +382,8 @@ done
 
 unset v
 typeset -H v=/dev/null
-[[ $v == *nul* ]] || err_exit 'typeset -H for /dev/null not working'
+# on cygwin, this is \\.\GLOBALROOT\Device\Null
+[[ $v == *[Nn]ul* ]] || err_exit "typeset -H for /dev/null not working (got $(printf %q "$v"))"
 
 unset x
 (typeset +C x) 2> /dev/null && err_exit 'typeset +C should be an error' 
@@ -476,7 +474,17 @@ typeset -l x=
 
 unset x
 typeset -L4 x=$'\001abcdef'
-[[ ${#x} == 5 ]] || err_exit "width of character '\001' is not zero"
+exp=$'\001abcd'
+[[ e=${#x} -eq 5 && $x == "$exp" ]] || err_exit "typeset -L: width of control character '\001' is not zero" \
+	"(expected length 5 and $(printf %q "$exp"), got length $e and $(printf %q "$x"))"
+typeset -R10 x=$'a\tb'
+exp=$'        a\tb'
+[[ e=${#x} -eq 11 && $x == "$exp" ]] || err_exit "typeset -R: width of control character '\t' is not zero" \
+	"(expected length 11 and $(printf %q "$exp"), got length $e and $(printf %q "$x"))"
+typeset -Z10 x=$'1\t2'
+exp=$'000000001\t2'
+[[ e=${#x} -eq 11 && $x == "$exp" ]] || err_exit "typeset -Z: width of control character '\t' is not zero" \
+	"(expected length 11 and $(printf %q "$exp"), got length $e and $(printf %q "$x"))"
 
 unset x
 typeset -L x=-1
@@ -499,6 +507,10 @@ export foo
 
 # ======
 # unset exported readonly variables, combined with all other possible attributes
+(
+### begin subshell
+ulimit -t unlimited 2>/dev/null # run in forked subshell to be crash-proof
+Errors=0
 typeset -A expect=(
 	[a]='typeset -x -r -a foo'
 	[b]='typeset -x -r -b foo'
@@ -552,7 +564,13 @@ do	unset foo
 			"expected $(printf %q "${expect[$flag]}"), got $(printf %q "$actual")"
 	fi
 done
-unset expect
+exit "$Errors"
+### end subshell
+)
+if let "(e=$?) > 128"
+then	err_exit "typeset -x -r test crashed with SIG$(kill -l "$e")"
+else	let "Errors += e"
+fi
 
 unset base
 for base in 0 1 65
@@ -592,6 +610,10 @@ got=$(< $tmpfile)
 # Combining -u with -F or -E caused an incorrect variable type
 # https://github.com/ksh93/ksh/pull/163
 # Allow the last numeric type to win out
+(
+### begin subshell
+ulimit -t unlimited 2>/dev/null # run in forked subshell to be crash-proof
+Errors=0
 typeset -A expect=(
 	[uF]='typeset -F a=2.0000000000'
 	[Fu]='typeset -F a=2.0000000000'
@@ -632,6 +654,14 @@ unset expect
 
 [[ $(typeset -iX12 -s a=2; typeset -p a) == 'typeset -X 12 a=0x1.000000000000p+1' ]] || err_exit "typeset -iX12 -s failed to become typeset -X 12 a=0x1.000000000000p+1."
 
+exit "$Errors"
+### end subshell
+)
+if let "(e=$?) > 128"
+then	err_exit "typeset int+float test crashed with SIG$(kill -l "$e")"
+else	let "Errors += e"
+fi
+
 # ======
 # Bug introduced in 0e4c4d61: could not alter the size of an existing justified string attribute
 # https://github.com/ksh93/ksh/issues/142#issuecomment-780931533
@@ -653,6 +683,21 @@ exp=$'typeset -L 100 s\ntypeset -Z 5 -R 5 s'
 got=$(typeset -i x=0; typeset -Z5 x; echo $x; typeset -Z3 x; echo $x; typeset -Z7 x; echo $x)
 exp=$'00000\n000\n0000000'
 [[ $got == "$exp" ]] || err_exit 'failed to zero-fill zero' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# Bug in versions 2021-02-20 to 2022-05-21: incorrect output for
+# typeset -L/-R/-Z when the variable had leading or trailing spaces
+# https://github.com/ksh93/ksh/issues/476
+exp='22/02/09'
+got=$(typeset -L8 s_date1=" 22/02/09 08:25:01"; echo "$s_date1")
+[[ $got == "$exp" ]] || err_exit 'incorrect output for typeset -L8' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+exp='9 08:25:01'
+got=$(typeset -R10 s_date1="22/02/09 08:25:01 "; echo "$s_date1")
+[[ $got == "$exp" ]] || err_exit 'incorrect output for typeset -R10' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(typeset -Z10 s_date1="22/02/09 08:25:01 "; echo "$s_date1")
+[[ $got == "$exp" ]] || err_exit 'incorrect output for typeset -Z10' \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
@@ -736,6 +781,53 @@ got=$(env | grep '^\.foo[.=]')
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 unset .foo.bar .foo
 set +o allexport
+
+# ======
+# Regression test from ksh93v- 2012-10-24 for testing the zerofill width
+# after exporting a variable.
+unset exp got
+typeset -Z4 VAR1
+VAR1=1
+exp=$(typeset -p VAR1)
+export VAR1
+got=$(typeset -p VAR1)
+got=${got/ -x/}
+[[ $got == "$exp" ]] || err_exit 'typeset -x causes zerofill width to change' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Check import of float attribute/value from environment
+exp='typeset -x -F 5 num=7.75000'
+got=$(typeset -xF5 num=7.75; "$SHELL" -c 'typeset -p num')
+[[ $got == "$exp" ]] || err_exit "floating '.' attribute/value not imported correctly" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+# try again with AST debug locale which has the comma as the radix point
+exp='typeset -x -F 5 num=7,75000'
+got=$(export LC_NUMERIC=debug; typeset -xF5 num=7,75; "$SHELL" -c 'typeset -p num')
+[[ $got == "$exp" ]] || err_exit "floating ',' attribute/value not imported correctly" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Check that assignments preceding commands correctly honour existing attributes
+# https://github.com/ksh93/ksh/issues/465
+exp='typeset -x -F 5 num=7.75000'
+got=$(typeset -F5 num; num=3.25+4.5 "$SHELL" -c 'typeset -p num')
+[[ $got == "$exp" ]] || err_exit 'assignment preceding external command call does not honour pre-set attributes' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(typeset -F5 num; num=3.25+4.5 command eval 'typeset -p num')
+[[ $got == "$exp" ]] || err_exit 'assignment preceding built-in command call does not honour pre-set attributes' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+exp='typeset -F 5 num=7.75000'
+got=$(typeset -F5 num; num=3.25+4.5 eval 'typeset -p num')
+[[ $got == "$exp" ]] || err_exit 'assignment preceding special built-in command call does not honour pre-set attributes' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+unset foo
+(
+	typeset -Z foo=
+	typeset -i foo
+) || err_exit 'failed to convert from -Z to -i'
 
 # ======
 exit $((Errors<125?Errors:125))

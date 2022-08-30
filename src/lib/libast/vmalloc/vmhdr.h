@@ -4,20 +4,16 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #ifndef _VMHDR_H
@@ -33,13 +29,11 @@
 
 #if _PACKAGE_ast
 
-#if !_UWIN
 #define getpagesize		______getpagesize
 #define _npt_getpagesize	1
 #define brk			______brk
 #define sbrk			______sbrk
 #define _npt_sbrk		1
-#endif
 
 #include	<ast.h>
 
@@ -55,10 +49,8 @@
 
 #include	<ast_common.h>
 
-#if !_UWIN
 #define _npt_getpagesize	1
 #define _npt_sbrk		1
-#endif
 
 #undef free
 #undef malloc
@@ -111,10 +103,6 @@ typedef struct _pfobj_s	Pfobj_t;
 #define VM_free		0x0008	/* disable addfreelist()		*/
 #define VM_keep		0x0010	/* disable free()			*/
 #define VM_mmap		0x0020	/* try mmap() block allocator first	*/
-
-#if _UWIN
-#include <ast_windows.h>
-#endif
 
 #ifndef DEBUG
 #ifdef _BLD_DEBUG

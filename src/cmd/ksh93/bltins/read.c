@@ -4,28 +4,26 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
- * read [-aACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count] [var?prompt] [var ...]
+ * read [-AaCprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count] [var?prompt] [var ...]
  *
  *   David Korn
  *   AT&T Labs
  *
  */
 
+#include	"shopt.h"
 #include	<ast.h>
 #include	<error.h>
 #include	"defs.h"
@@ -212,7 +210,6 @@ static void timedout(void *handle)
  *  <flags> is union of -A, -r, -s, and contains delimiter if not '\n'
  *  <timeout> is the number of milliseconds until timeout
  */
-
 int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long timeout)
 {
 	register ssize_t	c;
@@ -464,7 +461,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 			}
 		}
 		if(timeslot)
-			timerdel(timeslot);
+			sh_timerdel(timeslot);
 		if(binary && !((size=nv_size(np)) && nv_isarray(np) && c!=size))
 		{
 			if((c==size) && np->nvalue.cp && !nv_isarray(np))
@@ -500,7 +497,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 		}
 	}
 	if(timeslot)
-		timerdel(timeslot);
+		sh_timerdel(timeslot);
 	if((flags&S_FLAG) && !sh.hist_ptr)
 	{
 		sh_histinit();
@@ -801,7 +798,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 		{
 			if(name)
 			{
-				np = nv_open(name,sh.var_tree,NV_NOASSIGN|NV_VARNAME);
+				np = nv_open(name,sh.var_tree,NV_VARNAME);
 				name = *++names;
 			}
 			else

@@ -4,20 +4,18 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*          atheik <14833674+atheik@users.noreply.github.com>           *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -176,8 +174,6 @@ static unsigned char	map[UCHAR_MAX];
 
 static Optstate_t	state;
 
-#if 0 /* #if !_PACKAGE_astsa  // this somehow corrupts "Or:" usage messages, e.g. in 'typeset -\?' */
-
 #define ID		ast.id
 
 #define C(s)		ERROR_catalog(s)
@@ -199,18 +195,6 @@ translate(const char* cmd, const char* cat, const char* msg)
 		cat = (const char*)ID;
 	return errorx(NiL, cmd, cat, msg);
 }
-
-#else
-
-static char		ID[] = "ast";
-
-#define C(s)		s
-#define D(s)		(state.msgdict && dtmatch(state.msgdict, (s)))
-#define T(i,c,m)	m
-#define X(c)		0
-#define Z(x)		C(x),sizeof(x)-1
-
-#endif
 
 static const List_t	help_head[] =
 {
@@ -337,23 +321,9 @@ static Msg_t		C_LC_MESSAGES_libast[] =
 /*
  * 2007-03-19 move opt_info from _opt_info_ to (*_opt_data_)
  *	      to allow future Opt_t growth
- *            by 2009 _opt_info_ can be static
  */
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		extern __EXPORT__
-#endif
-
-extern Opt_t	_opt_info_;
-
-Opt_t		_opt_info_ = { 0,0,0,0,0,0,0,{0},{0},0,0,0,{0},{0},&state };
-
-#undef	extern
-
-__EXTERN__(Opt_t, _opt_info_);
-
-__EXTERN__(Opt_t*, _opt_infop_);
-
+static Opt_t	_opt_info_ = { 0,0,0,0,0,0,0,{0},{0},0,0,0,{0},{0},&state };
 Opt_t*		_opt_infop_ = &_opt_info_;
 
 Optstate_t*
@@ -931,10 +901,8 @@ init(register char* s, Optpass_t* p)
 	if (!state.localized)
 	{
 		state.localized = 1;
-#if !_PACKAGE_astsa
 		if (!ast.locale.serial)
 			setlocale(LC_ALL, "");
-#endif
 		state.xp = sfstropen();
 		if (!map[OPT_FLAGS[0]])
 			for (n = 0, t = OPT_FLAGS; *t; t++)
@@ -1656,9 +1624,10 @@ args(register Sfio_t* sp, register char* p, register int n, int flags, int style
 				sfputr(sp, b, -1);
 				if (X(catalog))
 				{
+					char	*cp;
 					sfwrite(ip, p, i);
-					if (b = sfstruse(ip))
-						sfputr(sp, T(id, catalog, b), -1);
+					if (cp = sfstruse(ip))
+						sfputr(sp, T(id, catalog, cp), -1);
 					else
 						sfwrite(sp, p, i);
 				}
@@ -2140,7 +2109,7 @@ textout(Sfio_t* sp, register char* s, char* conform, int conformlen, int style, 
 								}
 							}
 						}
-						else if (!*s)
+						else if (*s != OG)
 						{
 							if (!(tsp = psp))
 								break;
@@ -2148,8 +2117,6 @@ textout(Sfio_t* sp, register char* s, char* conform, int conformlen, int style, 
 							psp = psp->next;
 							free(tsp);
 						}
-						else if (*s != OG)
-							break;
 						else
 						{
 							s++;
@@ -4291,19 +4258,6 @@ optget(register char** argv, const char* oopts)
 	Optcache_t*	pcache;
 	Optpass_t*	pass;
 
-#if !_PACKAGE_astsa && !_YOU_FIGURED_OUT_HOW_TO_GET_ALL_DLLS_TO_DO_THIS_
-	/*
-	 * these are not initialized by all dlls!
-	 */
-
-	extern Error_info_t	_error_info_;
-	extern Opt_t		_opt_info_;
-
-	if (!_error_infop_)
-		_error_infop_ = &_error_info_;
-	if (!_opt_infop_)
-		_opt_infop_ = &_opt_info_;
-#endif
 	if (!oopts)
 		return 0;
 	state.pindex = opt_info.index;
@@ -4595,6 +4549,8 @@ optget(register char** argv, const char* oopts)
 		{
 			if (cache)
 			{
+				if (c >= 0 && c < sizeof(map) && map[c] && cache->equiv[map[c]])
+					c = cache->equiv[map[c]];
 				if (k = cache->flags[map[c]])
 				{
 					opt_info.arg = 0;
@@ -5025,6 +4981,7 @@ optget(register char** argv, const char* oopts)
 						v = f;
 						for (;;)
 						{
+							char	eqv;
 							if (isdigit(*f) && isdigit(*(f + 1)))
 								while (isdigit(*(f + 1)))
 									f++;
@@ -5033,12 +4990,17 @@ optget(register char** argv, const char* oopts)
 							else
 								cache->flags[map[*f]] = m;
 							j = 0;
+							/*
+							 * parse and cache short option equivalents,
+							 * e.g. x|y|z means -y and -z yield -x
+							 */
+							eqv = *f;
 							while (*(f + 1) == '|')
 							{
 								f += 2;
 								if (!(j = *f) || j == '!' || j == '=' || j == ':' || j == '?' || j == ']')
 									break;
-								cache->flags[map[j]] = m;
+								cache->equiv[map[j]] = eqv;
 							}
 							if (j != '!' || (m & OPT_cache_invert))
 								break;

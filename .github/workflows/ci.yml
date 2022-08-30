@@ -19,7 +19,7 @@ jobs:
         export TZ=UTC
         ulimit -n 1024
         : default regression tests &&
-        script -q -e -c "bin/shtests" &&
+        script -q -e -c "bin/package test" &&
         : regression tests with OS-provided multibyte locales &&
         LANG=nl_NL.UTF-8 script -q -e -c "bin/shtests --locale --nocompile" &&
         LANG=ja_JP.SJIS  script -q -e -c "bin/shtests --locale --nocompile" &&

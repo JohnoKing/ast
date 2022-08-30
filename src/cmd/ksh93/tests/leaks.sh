@@ -2,21 +2,18 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
 #                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
+#          atheik <14833674+atheik@users.noreply.github.com>           #
 #                                                                      #
 ########################################################################
 
@@ -69,7 +66,7 @@ fi
 # lucky. If the OS decides to randomly grow the memory heap, it may take more tries, but hopefully not more than
 # $max_iter iterations. If the loop counter reaches $max_iter, then we assume a memory leak and throw a test failure.
 
-typeset -ir max_iter=16384 block_iter=128 min_good_blocks=16
+typeset -ir max_iter=65536 block_iter=128 min_good_blocks=16
 
 # Set up test block construct.
 # Known leaks can be marked known=y to turn them into non-fail warnings.
@@ -418,10 +415,27 @@ DO
 DONE
 
 # ======
-TEST title='showing --man info' known=y url=https://github.com/ksh93/ksh/issues/407
+TEST title='showing --man info'
 DO
 	set --man 2>/dev/null
 	ulimit --man 2>/dev/null
+DONE
+
+# ======
+# Possible memory leak when using the += operator on variables
+# in an invocation-local scope.
+bintrue=$(whence -p true)
+testfunc() { true; }
+alias testalias=testfunc
+TEST title='+= operator used before command'
+DO
+	baz=bar
+	baz+=baz :          # Special builtin
+	baz+=foo true       # Regular builtin
+	baz+=foo "$bintrue" # External command
+	baz+=foo testfunc   # Function
+	baz+=foo testalias  # Alias
+	unset baz
 DONE
 
 # ======

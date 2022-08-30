@@ -4,20 +4,16 @@
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #pragma clang diagnostic ignored "-Wdeprecated-register"
@@ -653,10 +649,6 @@ main(int argc, char** argv)
 	fprintf(hf, "\tunsigned int\t\tflags;\n");
 	fprintf(hf, "} Lc_category_t;\n");
 	fprintf(hf, "\n");
-	fprintf(hf, "#if _BLD_ast && defined(__EXPORT__)\n");
-	fprintf(hf, "#define extern\t\t__EXPORT__\n");
-	fprintf(hf, "#endif\n");
-	fprintf(hf, "\n");
 	fprintf(hf, "extern size_t\t\tlccanon(Lc_t*, unsigned long flags, char*, size_t);\n");
 	fprintf(hf, "extern Lc_category_t*\tlccategories(void);\n");
 	fprintf(hf, "extern int\t\tlcindex(int, int);\n");
@@ -664,7 +656,6 @@ main(int argc, char** argv)
 	fprintf(hf, "extern Lc_t*\t\tlcmake(const char*);\n");
 	fprintf(hf, "extern Lc_t*\t\tlcscan(Lc_t*);\n");
 	fprintf(hf, "\n");
-	fprintf(hf, "#undef\textern\n");
 	fprintf(lf, "\nconst Lc_charset_t lc_charsets[] =\n{\n");
 	for (cp = (Charset_t*)state.charset.root; cp; cp = (Charset_t*)cp->link.next)
 	{

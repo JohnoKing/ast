@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *               Glenn Fowler <glenn.s.fowler@gmail.com>                *
 *                    David Korn <dgkorn@gmail.com>                     *
 *                     Phong Vo <phongvo@gmail.com>                     *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -67,23 +63,9 @@ static const Namval_t		options[] =
 /*
  * 2007-03-19 move tm_info from _tm_info_ to (*_tm_infop_)
  *	      to allow future Tm_info_t growth
- *            by 2009 _tm_info_ can be static
  */
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		extern __EXPORT__
-#endif
-
-extern Tm_info_t	_tm_info_;
-
-#undef	extern
-
-Tm_info_t		_tm_info_ = { 0 };
-
-__EXTERN__(Tm_info_t, _tm_info_);
-
-__EXTERN__(Tm_info_t*, _tm_infop_);
-
+static Tm_info_t	_tm_info_ = { 0 };
 Tm_info_t*		_tm_infop_ = &_tm_info_;
 
 #if _tzset_environ

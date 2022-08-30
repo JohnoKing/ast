@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #ifndef _CDTLIB_H
@@ -75,31 +71,6 @@ typedef struct _dtlib_s
 	Dtmethod_t**	methods;	/* method list */
 } Dtlib_t;
 
-#if _BLD_cdt
-
-#define CDTLIB(m)	__DEFINE__(Dtmethod_t*,m,&_##m);
-
-#else
-
-#define CDTLIB(m) \
-	void* cdt_lib(const char* name, Dtdisc_t* disc, const char* type) \
-	{ \
-		int	i; \
-		int	n; \
-		if (!type) \
-			return &cdt_lib_##m; \
-		n = strlen(cdt_lib_##m.prefix); \
-		if (!strncmp(type, cdt_lib_##m.prefix, n)) \
-			type += n; \
-		for (i = 0; cdt_lib_##m.methods[i]; i++) \
-			if (!strcmp(type, cdt_lib_##m.methods[i]->name + n)) \
-				return cdt_lib_##m.methods[i]; \
-		return 0; \
-	} \
-	unsigned long plugin_version(void) { return CDT_PLUGIN_VERSION; }
-
-#endif /* _BLD_cdt */
-
 /* these macros lock/unlock dictionaries. DTRETURN substitutes for "return" */
 #define DTSETLOCK(dt)		(((dt)->data->type&DT_SHARE) ? asolock(&(dt)->data->lock,1,ASO_LOCK) : 0 )
 #define DTCLRLOCK(dt)		(((dt)->data->type&DT_SHARE) ? asolock(&(dt)->data->lock,1,ASO_UNLOCK) : 0 )
@@ -139,15 +110,9 @@ typedef struct _dtlib_s
 #define LLSHIFT(x,t)	((t) = (x)->_rght->_rght, (x)->_rght->_rght = (t)->_left, \
 			 (t)->_left = (x), (x) = (t) )
 
-#if _BLD_cdt && defined(__EXPORT__)
-#define extern	__EXPORT__
-#endif
-
 extern Dtlink_t*	_dtmake(Dt_t*, void*, int);
 extern void		_dtfree(Dt_t*, Dtlink_t*, int);
 extern int		_dtlock(Dt_t*, int);
-
-#undef	extern
 
 #if !_PACKAGE_ast
 extern void*		malloc(size_t);

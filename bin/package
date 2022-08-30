@@ -4,18 +4,15 @@
 #          Copyright (c) 1994-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                 Glenn Fowler <gsf@research.att.com>                  #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#                      Trey Valenta <t@trey.net>                       #
 #                                                                      #
 ########################################################################
 ### this sh script is POSIX compliant and compatible with shell bugs ###
@@ -109,13 +106,13 @@ command=${0##*/}
 case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
 0123)	USAGE=$'
 [-?
-@(#)$Id: '$command$' (ksh 93u+m) 2022-01-02 $
+@(#)$Id: '$command$' (ksh 93u+m) 2022-08-20 $
 ]
 [-author?Glenn Fowler <gsf@research.att.com>]
 [-author?Contributors to https://github.com/ksh93/ksh]
 [-copyright?(c) 1994-2012 AT&T Intellectual Property]
 [-copyright?(c) 2020-2022 Contributors to https://github.com/ksh93/ksh]
-[-license?http://www.eclipse.org/org/documents/epl-v10.html]
+[-license?https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html]
 [+NAME?'$command$' - build, test and install ksh 93u+m]
 [+DESCRIPTION?The \b'$command$'\b command is the main control script
     for building and installing KornShell 93u+m.
@@ -196,7 +193,17 @@ case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
                     release incompatibilities has for the most part been
                     futile.]
             }
-        [+install\b To be reimplemented.]
+        [+install\b [ \adest_dir\a ]] [ \acommand\a ... ]]?Install commands
+            from the \b$INSTALLROOT\b tree
+            into appropriate subdirectories of \adest_dir\a.
+            If \adest_dir\a does not exist,
+            then it and any necessary subdirectories are created.
+            \adest_dir\a can be a directory like \a/usr/local\a
+            to install the \acommand\as directly,
+            or a temporary directory like \a/tmp/pkgtree/usr\a
+            to prepare for packaging with operating system-specific tools.
+            If no \acommand\a is specified,
+            then \aksh\a and \ashcomp\a are assumed.]
         [+make\b [ \apackage\a ]] [ \aoption\a ... ]] [ \atarget\a ... ]]?Build
 	    and install. The default \atarget\a is \binstall\b, which makes
 	    and installs \apackage\a. If the standard output is a terminal
@@ -215,24 +222,24 @@ case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
             must contain an \begrep\b(1) expression of result lines to be
             ignored. \bfailed\b lists failures only and \bpath\b lists the
             results file path name only.]
-        [+test\b [ \aargument\a ... ]]?Run the regression tests for
-            \bksh\b. If the standard output is a terminal then the
+        [+test\b [ \b\adir\a\b ]]\b?Run all available default regression tests.
+            If the optional \adir\a argument (such as \bsrc/cmd/ksh93\b) is given,
+            only the tests in that directory are run.
+            If the standard output is a terminal then the
             output is also captured in \b$INSTALLROOT/lib/package/gen/test.out\b.
-            \bksh\b must be made before it can be tested.
-            All \aargument\as following \atest\a are passed to \bbin/shtests\b.
+            Programs must be made before they can be tested.
+            For \bksh\b, a separate \bshtests\b command is available that allows
+            passing arguments to select and tune the regression tests.
             See \bbin/shtests --man\b for more information.]
-        [+use\b [ \auid\a | \apackage\a | . [ 32 | 64 ]] | 32 | 64 | - ]] [ command ...]]?Run
+        [+use\b [ \auid\a | \apackage\a | . | - [ command ... ]] ]]?Run
             \acommand\a, or an interactive shell if \acommand\a is omitted,
-            with the environment initialized for using the package (can you
-            say \ashared\a \alibrary\a or \adll\a without cussing?) If
+            with the environment initialized for using the package. If
             \auid\a or \apackage\a or \a.\a is specified then it is used
 	    to determine a \b$PACKAGEROOT\b, possibly different from
 	    the current directory. For example, to try out bozo'\'$'s package:
             \bpackage use bozo\b. The \buse\b action may be run from any
             directory. If the file \b$INSTALLROOT/lib/package/profile\b is
-            readable then it is sourced to initialize the environment. 32 or 64
-	    implies \b$PACKAGEROOT\b of . and specifies the target architecture
-	    word size (which may be silently ignored).]
+            readable then it is sourced to initialize the environment.]
         [+view\b?Initialize the architecture specific viewpath
             hierarchy. The \bmake\b action implicitly calls this action.]
     }
@@ -246,7 +253,7 @@ case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
 [+?Independent \b$PACKAGEROOT\b hierarchies can be combined by
     appending \b$INSTALLROOT:$PACKAGEROOT\b pairs to \bVPATH\b. The
     \bVPATH\b viewing order is from left to right.]
-[+?\b$HOSTYPE\b names the current binary architecture and is determined
+[+?\b$HOSTTYPE\b names the current binary architecture and is determined
     by the output of \b'$command$'\b (no arguments). The \b$HOSTTYPE\b naming
     scheme is used to separate incompatible executable and object formats.
     All architecture specific binaries are placed under \b$INSTALLROOT\b
@@ -255,7 +262,7 @@ case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
     makefile compiler workarounds, e.g., if \b$HOSTTYPE\b matches \bhp.*\b
     then turn off the optimizer for these objects. All other architecture
     dependent logic is handled either by the \bAST\b \biffe\b(1) command or
-    by component specific configure scripts. Explicit \b$HOSTYPE\b
+    by component specific configure scripts. Explicit \b$HOSTTYPE\b
     values matching *,*cc*[,-*,...]] optionally set the default \bCC\b and
     \bCCFLAGS\b. This is handy for build farms that support different
     compilers on the same architecture.]
@@ -454,7 +461,14 @@ DESCRIPTION
                   similar, predictable style. OS point release information is
                   avoided as much as possible, but vendor resistance to release
                   incompatibilities has for the most part been futile.
-    install To be reimplemented.
+    install [ dest_dir ] [ command ... ]
+          Install commands from the $INSTALLROOT tree into appropriate
+          subdirectories of dest_dir. If dest_dir does not exist, then it and
+          any necessary subdirectories are created. dest_dir can be a directory
+          like /usr/local to install the commands directly, or a temporary
+          directory like /tmp/pkgtree/usr to prepare for packaging with
+          operating system-specific tools. If no command is specified, then ksh
+          and shcomp are assumed.
     make [ package ] [ option ... ] [ target ... ]
           Build and install. The default target is install, which makes and
           installs package. If the standard output is a terminal then the
@@ -471,23 +485,23 @@ DESCRIPTION
           $HOME/.pkgresults, if it exists, must contain an egrep(1) expression
           of result lines to be ignored. failed lists failures only and path
           lists the results file path name only.
-    test [ argument ... ]
-          Run the regression tests for ksh. If the standard output is a
-          terminal then the output is also captured in
-          $INSTALLROOT/lib/package/gen/test.out. ksh must be made before it can
-          be tested. All arguments following test are passed to bin/shtests.
-          See bin/shtests --man for more information.
-    use [ uid | package | . [ 32 | 64 ] | 32 | 64 | - ] [ command ...]
+    test [ dir ]
+          Run all available default regression tests. If the optional dir
+          argument (such as src/cmd/ksh93) is given, only the tests in that
+          directory are run. If the standard output is a terminal then the
+          output is also captured in $INSTALLROOT/lib/package/gen/test.out.
+          Programs must be made before they can be tested. For ksh, a separate
+          shtests command is available that allows passing arguments to select
+          and tune the regression tests. See bin/shtests --man for more
+          information.
+    use [ uid | package | . | - [ command ... ] ]
           Run command, or an interactive shell if command is omitted, with the
-          environment initialized for using the package (can you say shared
-          library or dll without cussing?) If uid or package or . is specified
-          then it is used to determine a $PACKAGEROOT, possibly different from
-          the current directory. For example, to try out bozo'\''s package:
-          package use bozo. The use action may be run from any directory. If
-          the file $INSTALLROOT/lib/package/profile is readable then it is
-          sourced to initialize the environment. 32 or 64 implies $PACKAGEROOT
-          of . and specifies the target architecture word size (which may be
-          silently ignored).
+          environment initialized for using the package. If uid or package or .
+          is specified then it is used to determine a $PACKAGEROOT, possibly
+          different from the current directory. For example, to try out bozo'\''s
+          package: package use bozo. The use action may be run from any
+          directory. If the file $INSTALLROOT/lib/package/profile is readable
+          then it is sourced to initialize the environment.
     view  Initialize the architecture specific viewpath hierarchy. The make
           action implicitly calls this action.
 
@@ -503,7 +517,7 @@ DETAILS
   $INSTALLROOT:$PACKAGEROOT pairs to VPATH. The VPATH viewing order is from
   left to right.
 
-  $HOSTYPE names the current binary architecture and is determined by the
+  $HOSTTYPE names the current binary architecture and is determined by the
   output of package (no arguments). The $HOSTTYPE naming scheme is used to
   separate incompatible executable and object formats. All architecture
   specific binaries are placed under $INSTALLROOT
@@ -512,7 +526,7 @@ DETAILS
   workarounds, e.g., if $HOSTTYPE matches hp.* then turn off the optimizer for
   these objects. All other architecture dependent logic is handled either by
   the AST iffe(1) command or by component specific configure scripts. Explicit
-  $HOSTYPE values matching *,*cc*[,-*,...] optionally set the default CC and
+  $HOSTTYPE values matching *,*cc*[,-*,...] optionally set the default CC and
   CCFLAGS. This is handy for build farms that support different compilers on
   the same architecture.
 
@@ -532,12 +546,12 @@ SEE ALSO
   mamake(1), pax(1), pkgadd(1), pkgmk(1), rpm(1), sh(1), tar(1), optget(3)
 
 IMPLEMENTATION
-  version         package (ksh 93u+m) 2022-01-02
+  version         package (ksh 93u+m) 2022-08-20
   author          Glenn Fowler <gsf@research.att.com>
   author          Contributors to https://github.com/ksh93/ksh
   copyright       (c) 1994-2012 AT&T Intellectual Property
   copyright       (c) 2020-2022 Contributors to https://github.com/ksh93/ksh
-  license         http://www.eclipse.org/org/documents/epl-v10.html'
+  license         https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html'
 		case $1 in
 		html)	echo "</pre></body></html>" ;;
 		esac
@@ -602,7 +616,7 @@ case $_PACKAGE_HOSTTYPE_ in
 	;;
 esac
 KEEP_PACKAGEROOT=0
-KEEP_SHELL=0
+KEEP_SHELL=0	# set to 1 if SHELL is a known-good system shell, 2 if SHELL supplied by user
 USER_VPATH=
 args=
 assign=
@@ -640,7 +654,7 @@ do	case $i in
 		;;
 	SHELL=*)eval $n='$'v
 		case $SHELL in
-		?*)	KEEP_SHELL=1 ;;
+		?*)	KEEP_SHELL=2 ;;
 		esac
 		;;
 	VPATH=*)eval USER_$n='$'v
@@ -668,111 +682,11 @@ case $CC in
 *)	export CC ;;
 esac
 
-# Add build type flags via KSH_RELFLAGS, which is used in src/cmd/ksh93/Mamfile.
-# (Avoid using CCFLAGS; setting it would overwrite autodetected optimization flags.)
-ksh_relflags=
-case $(git branch 2>/dev/null) in
-'' | *\*\ [0-9]*.[0-9]*)
-	# If we're not on a git branch (tarball) or on a branch that starts
-	# with a number (release branch), then compile as a release version
-	ksh_relflags="${ksh_relflags:+$ksh_relflags }-D_AST_ksh_release" ;;
-*)	# Otherwise, add 8-character git commit hash if available, and if the working dir is clean
-	git_commit=$(git status >/dev/null 2>&1 && git diff-index --quiet HEAD && git rev-parse --short=8 HEAD)
-	case $git_commit in
-	????????)
-		ksh_relflags="${ksh_relflags:+$ksh_relflags }-D_AST_git_commit=\\\"$git_commit\\\"" ;;
-	esac
-	unset git_commit ;;
-esac
-case $ksh_relflags in
-?*)	# add the extra flags as an argument to mamake
-	assign="${assign:+$assign }KSH_RELFLAGS=\"\$ksh_relflags\"" ;;
-esac
-
-# Add ksh compile-options via KSH_SHOPTFLAGS.
-SHOPT()
-{
-	case $1 in
-	*=?*)	ksh_shoptflags="${ksh_shoptflags:+$ksh_shoptflags }-DSHOPT_$1" ;;
-	esac
-}
-ksh_shoptflags=
-shopt_sh='src/cmd/ksh93/SHOPT.sh'	# this script calls SHOPT() to set options
-if	test -f "$shopt_sh"
-then	. "$shopt_sh"
-else	echo "WARNING: $shopt_sh is missing" >&2
-fi
-case $ksh_shoptflags in
-?*)	# add the extra flags as an argument to mamake
-	assign="${assign:+$assign }KSH_SHOPTFLAGS=\"\$ksh_shoptflags\"" ;;
-esac
-
 # grab action specific args
 
 case $action in
 use)	case $1 in
-	.|32|64)case $1 in
-		32|64)	bit=$1 ;;
-		esac
-		shift
-
-		# HOSTTYPE specific setup
-
-		case $HOSTTYPE in
-		win32.*)sys=uwin
-			wow=$(uname -i)
-			case $bit in
-			32)	case $HOSTTYPE in
-				*-64)	HOSTTYPE=${HOSTTYPE%-64} ;;
-				esac
-				;;
-			64)	case $HOSTTYPE in
-				*-64)	;;
-				*)	HOSTTYPE=$HOSTTYPE-64 ;;
-				esac
-				case $wow in
-				*/32)	err_out "cannot build $bit-bit on $wow $sys" ;;
-				esac
-				;;
-			esac
-			case $bit in
-			'')	PS1="($sys) " ;;
-			*)	PS1="($sys-$bit) " ;;
-			esac
-
-			$exec umask 002
-			$exec unset MAKESKIP
-
-			P=$PWD
-			A=$P/arch/$HOSTTYPE
-
-			$exec export CDPATH=:..:$A/src/cmd:$A/src/lib:$A/src/uwin:$P/lib/package
-			$exec export INSTALLROOT=$A
-			$exec export PACKAGEROOT=$P
-			$exec export PATH=$A/bin:$P/bin:$PATH
-			$exec export PS1="$PS1"
-			$exec export VPATH=$A:$P
-			$exec export nativepp=/usr/lib
-
-			if	test '' != "$INSTALLROOT" -a -d $INSTALLROOT/include/ast
-			then	$exec export PACKAGE_ast=$INSTALLROOT
-			elif	test -d ${PWD%/*}/ast/arch/$HOSTTYPE
-			then	$exec export PACKAGE_ast=${PWD%/*}/ast/arch/$HOSTTYPE
-			fi
-
-			# run the command
-
-			case $# in
-			0)	case $show in
-				':')	$exec exec $SHELL ;;
-				esac
-				;;
-			*)	$exec exec $SHELL -c "$@"
-				;;
-			esac
-			exit
-			;;
-		esac
+	.)	shift
 		PACKAGEROOT=$PWD
 		$show export PACKAGEROOT
 	esac
@@ -783,7 +697,7 @@ esac
 
 packageroot() # dir
 {
-	test -d $1/lib/$command -o -x $1/bin/$command
+	test -d "$1/lib/$command" || test -x "$1/bin/$command"
 }
 
 # true if arg is executable
@@ -791,8 +705,8 @@ packageroot() # dir
 executable() # [!] command
 {
 	case $1 in
-	'!')	test ! -x "$2" -a ! -x "$2.exe"; return ;;
-	*)	test -x "$1" -o -x "$1.exe"; return ;;
+	'!')	test ! -x "$2" && test ! -x "$2.exe" ;;
+	*)	test -x "$1" || test -x "$1.exe" ;;
 	esac
 }
 
@@ -1493,7 +1407,7 @@ int main()
 			type=unixware
 			;;
 		UTS*|uts*)
-			if	test -x /bin/u370 -o -x /bin/u390
+			if	test -x /bin/u370 || test -x /bin/u390
 			then	type=uts.390
 			else	case $arch in
 				'')	arch=$mach ;;
@@ -1799,6 +1713,14 @@ err_out()
 	exit 1
 }
 
+trace()
+(
+	PS4="${action}: executing: "
+	exec 2>&1  # trace to standard output
+	set -o xtrace
+	"$@"
+)
+
 # cc checks
 #
 #	CC: compiler base name name
@@ -1879,12 +1801,6 @@ esac
 run=-
 case $x in
 1)	: accept the current package use environment
-
-	OK=ok
-	KSH=$EXECROOT/bin/ksh
-	MAKE=mamake
-	SUM=$EXECROOT/bin/sum
-	TEE=$EXECROOT/bin/tee
 	INITROOT=$PACKAGEROOT/src/cmd/INIT
 	checkcc
 	;;
@@ -2294,17 +2210,8 @@ cat $INITROOT/$i.sh
 	$show export EXECROOT
 	export EXECROOT
 
-	# use these if possible
-
-	OK=ok
-	KSH=$EXECROOT/bin/ksh
-	MAKE=mamake
-	SUM=$EXECROOT/bin/sum
-	TEE=$EXECROOT/bin/tee
-
 	# grab a decent default shell
 
-	checksh "$SHELL" || KEEP_SHELL=0
 	case $KEEP_SHELL in
 	0)	save_PATH=$PATH
 		if	PATH=$(getconf PATH 2>/dev/null)
@@ -2539,7 +2446,7 @@ checkaout()	# cmd ...
 	'')	_PACKAGE_cc=0
 		;;
 	*)	_PACKAGE_cc=1
-		test -f $INITROOT/hello.c -a -f $INITROOT/p.c || {
+		test -f "$INITROOT/hello.c" && test -f "$INITROOT/p.c" || {
 			note "$INITROOT: INIT package source not found"
 			return 1
 		}
@@ -2689,7 +2596,7 @@ capture() # file command ...
 			cmd='case $error_status in 0) r=done;; *) r=failed;; esac;'
 			cmd=$cmd' echo "$command: $action $r at $(date) in $INSTALLROOT"'
 			case $quiet in
-			0)	cmd="$cmd 2>&1 | \$TEE -a $o" ;;
+			0)	cmd="$cmd 2>&1 | tee -a $o" ;;
 			*)	cmd="$cmd >> $o" ;;
 			esac
 			trap "$cmd" 0
@@ -2698,10 +2605,7 @@ capture() # file command ...
 			;;
 		esac
 		case $quiet in
-		0)	if	executable ! $TEE
-			then	TEE=tee
-			fi
-			# Connect 'tee' to a FIFO instead of a pipe, so that we can obtain
+		0)	# Connect 'tee' to a FIFO instead of a pipe, so that we can obtain
 			# the build's exit status and use it for $error_status
 			rm -f $o.fifo
 			mkfifo -m 600 $o.fifo || exit
@@ -2710,7 +2614,7 @@ capture() # file command ...
 				# unlink early
 				exec rm $o.fifo
 			) &
-			$TEE -a $o < $o.fifo &
+			tee -a $o < $o.fifo &
 			tee_pid=$!
 			o=$o.fifo
 			;;
@@ -2743,6 +2647,48 @@ make_recurse() # dir
 	do	if	view - $1/$_make_recurse_j
 		then	return
 		fi
+	done
+}
+
+do_install() # dir [ command ... ]
+{
+	cd "$INSTALLROOT"
+	printf 'install: installing from %s\n' "$PWD"
+	set -o errexit
+	dd=$1
+	shift
+	case $dd in
+	'' | [!/]*)
+		err_out "ERROR: destination directory '$dd' must begin with a /" ;;
+	esac
+	# commands to install by default
+	test "$#" -eq 0 && set -- ksh shcomp  # pty suid_exec
+	for f
+	do	test -f "bin/$f" || err_out "Not found: $f" "Build first? Run $0 make"
+	done
+	# set install directories
+	bindir=$dd/bin
+	mandir=$dd/share/man
+	man1dir=$mandir/man1
+	# and off we go
+	trace mkdir -p "$bindir" "$man1dir"
+	for f
+	do	# install executable
+		trace cp "bin/$f" "$bindir/"
+		# install manual
+		case $f in
+		ksh)	trace cp "$PACKAGEROOT/src/cmd/ksh93/sh.1" "$man1dir/ksh.1"
+			;;
+		*)	# AT&T --man, etc. is a glorified error message: writes to stderr and exits with status 2 :-/
+			manfile=$man1dir/${f##*/}.1
+			bin/ksh -c '"$@" 2>&1; exit 0' _ "bin/$f" --nroff >$manfile
+			# ...so we cannot check for success; instead, check the result.
+			if	grep -q '^.TH .* 1' "$manfile"
+			then	printf "install: wrote '%s --nroff' output into %s\n" "bin/$f" "$manfile"
+			else	rm "$manfile"
+			fi
+			;;
+		esac
 	done
 }
 
@@ -2816,9 +2762,9 @@ export)	case $INSTALLROOT in
 	;;
 
 install)cd $PACKAGEROOT
-	echo "A proper installation command is coming back soon, sorry." >&2
-	echo "Meanwhile, copy ksh and shcomp from: $INSTALLROOT/arch/$HOSTTYPE/bin" >&2
-	exit 1
+	# TODO: breaks on directories with spaces or glob characters; make arguments handling robust
+	test -n "$args" || err_out "Usage: $0 install ROOTDIR [ COMMANDNAME ... ]"
+	capture do_install $args
 	;;
 
 make|view)
@@ -2827,7 +2773,7 @@ make|view)
 	# check for some required commands
 
 	must="$AR"
-	warn="$NM yacc bison"
+	warn="$NM"
 	test="$must $warn"
 	have=
 	IFS=:
@@ -2851,14 +2797,6 @@ make|view)
 			esac
 		done
 	done
-	case " $have " in
-	*" bison "*)	;;
-	*" yacc "*)	have="$have bison" ;;
-	esac
-	case " $have " in
-	*" yacc "*)	;;
-	*" bison "*)	have="$have yacc" ;;
-	esac
 	for t in $test
 	do	case " $have " in
 		*" $t "*)
@@ -2885,7 +2823,7 @@ make|view)
 	for i in arch arch/$HOSTTYPE
 	do	test -d $PACKAGEROOT/$i || $exec mkdir $PACKAGEROOT/$i || exit
 	done
-	for i in bin bin/$OK bin/$OK/lib fun include lib lib/package lib/package/gen src man man/man1 man/man3 man/man8
+	for i in bin bin/ok bin/ok/lib fun include lib lib/package lib/package/gen src man man/man1 man/man3 man/man8
 	do	test -d $INSTALLROOT/$i || $exec mkdir $INSTALLROOT/$i || exit
 	done
 	make_recurse src
@@ -3087,7 +3025,7 @@ make|view)
 		k=$INITROOT/make.probe
 		case $(ls -t $i $j $k 2>/dev/null) in
 		$i*)	;;
-		*)	if	test -f $j -a -f $k
+		*)	if	test -f "$j" && test -f "$k"
 			then	note "update $i"
 				shellmagic
 				case $exec in
@@ -3120,19 +3058,19 @@ cat $j $k
 	then	execrate=execrate
 		$make cd $INSTALLROOT/bin
 		for i in chmod chgrp cmp cp ln mv rm
-		do	if	test ! -x $OK/$i -a -x /bin/$i.exe
+		do	if	test ! -x "ok/$i" && test -x "/bin/$i.exe"
 			then	shellmagic
 				case $exec in
-				'')	echo "$SHELLMAGIC"'execrate /bin/'$i' "$@"' > $OK/$i
-					chmod +x $OK/$i
+				'')	echo "$SHELLMAGIC"'execrate /bin/'$i' "$@"' > ok/$i
+					chmod +x ok/$i
 					;;
-				*)	$exec echo \'"$SHELLMAGIC"'execrate /bin/'$i' "$@"'\'' >' $OK/$i
-					$exec chmod +x $OK/$i
+				*)	$exec echo \'"$SHELLMAGIC"'execrate /bin/'$i' "$@"'\'' >' ok/$i
+					$exec chmod +x ok/$i
 					;;
 				esac
 			fi
 		done
-		PATH=$INSTALLROOT/bin/$OK:$PATH
+		PATH=$INSTALLROOT/bin/ok:$PATH
 		export PATH
 	else	execrate=
 	fi
@@ -3143,7 +3081,7 @@ cat $j $k
 	# check against previous compiler and flags
 
 	err=
-	for	var in CC CCFLAGS CCLDFLAGS LDFLAGS KSH_RELFLAGS
+	for	var in CC CCFLAGS CCLDFLAGS LDFLAGS
 	do	store=$INSTALLROOT/lib/package/gen/$var
 		eval "new=\$$var"
 		if	test -f $store
@@ -3205,7 +3143,7 @@ cat $j $k
 	# mamprobe data should have been generated by this point
 
 	case $exec in
-	'')	if	test ! -f $INSTALLROOT/bin/.paths -o -w $INSTALLROOT/bin/.paths
+	'')	if	test ! -f "$INSTALLROOT/bin/.paths" || test -w "$INSTALLROOT/bin/.paths"
 		then	N='
 '
 			b= f= h= n= p= u= B= L=
@@ -3297,32 +3235,29 @@ cat $j $k
 			ksh tee cp ln mv rm \
 			*ast*.dll *cmd*.dll *dll*.dll *shell*.dll
 		do	executable $i && {
-				cmp -s $i $OK/$i 2>/dev/null || {
-					test -f $OK/$i &&
-					$exec $execrate $rm $OK/$i </dev/null
-					test -f $OK/$i &&
-					$exec $execrate $mv $OK/$i $OK/$i.old </dev/null
-					test -f $OK/$i &&
+				cmp -s $i ok/$i 2>/dev/null || {
+					test -f ok/$i &&
+					$exec $execrate $rm ok/$i </dev/null
+					test -f ok/$i &&
+					$exec $execrate $mv ok/$i ok/$i.old </dev/null
+					test -f ok/$i &&
 					case $exec:$i in
 					:ksh)
-						err_out "$OK/$i: cannot update [may be in use by a running process] remove manually and try again"
+						err_out "ok/$i: cannot update [may be in use by a running process] remove manually and try again"
 						;;
 					esac
-					$exec $execrate $cp $i $OK/$i
+					$exec $execrate $cp $i ok/$i
 				}
 			}
 		done
-		if	executable $OK/tee
-		then	TEE=$INSTALLROOT/bin/$OK/tee
-		fi
-		if	test "$KEEP_SHELL" != 1 && executable $OK/ksh
-		then	SHELL=$INSTALLROOT/bin/$OK/ksh
+		if	test "$KEEP_SHELL" -eq 0 && executable ok/ksh
+		then	SHELL=$INSTALLROOT/bin/ok/ksh
 			export SHELL
 		fi
 		case :$PATH: in
-		*:$INSTALLROOT/bin/$OK:*)
+		*:$INSTALLROOT/bin/ok:*)
 			;;
-		*)	PATH=$INSTALLROOT/bin/$OK:$PATH
+		*)	PATH=$INSTALLROOT/bin/ok:$PATH
 			export PATH
 			;;
 		esac
@@ -3404,10 +3339,6 @@ results)set '' $target
 			;;
 		make|test|view)
 			def=$1
-			case $filter:$1:$SHELL in
-			errors:*:*)	;;
-			*:test:*/ksh*)	filter=rt ;;
-			esac
 			;;
 		old)	suf=old
 			;;
@@ -3424,7 +3355,6 @@ results)set '' $target
 		path)	path=1
 			;;
 		test)	def=test
-			filter=rt
 			;;
 		*)	break
 			;;
@@ -3477,8 +3407,6 @@ results)set '' $target
 					;;
 				errors)	$exec egrep -i '\*\*\*|FAIL[ES]|^TEST.* [123456789][0123456789]* error|core.*dump' $j | sed -e '/^TEST.\//s,/[^ ]*/,,'
 					;;
-				rt)	$exec $KSH rt - $j
-					;;
 				*)	$exec egrep -i '^TEST|FAIL' $j
 					;;
 				esac
@@ -3522,12 +3450,25 @@ results)set '' $target
 	esac
 	;;
 
-test)	# pass control to ksh 93u+m test script
-	capture "$SHELL" "$PACKAGEROOT/bin/shtests" $args
+test)	# run all available default regression tests, using our newly compiled shell unless overridden
+
+	cd "$INSTALLROOT" || err_out "run '$0 make' first"
+	if	test "$KEEP_SHELL" -lt 2
+	then	executable bin/ksh || err_out "build ksh first, or supply a SHELL=/path/to/ksh argument"
+		SHELL=$INSTALLROOT/bin/ksh
+	fi
+	export SHELL
+	set -f
+	set -- ${args:-src}
+	cd "$1" || exit
+	capture mamake test
 	;;
 
 use)	# finalize the environment
 
+	if	test "$KEEP_SHELL" -lt 2 && executable "$INSTALLROOT/bin/ksh"
+	then	SHELL=$INSTALLROOT/bin/ksh
+	fi
 	x=:..
 	for d in $( cd $PACKAGEROOT; ls src/*/Mamfile 2>/dev/null | sed 's,/[^/]*$,,' | sort -u )
 	do	x=$x:$INSTALLROOT/$d

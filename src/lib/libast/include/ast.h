@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
@@ -209,22 +206,46 @@ typedef struct
  * multibyte macros
  */
 
-#define mbmax()		(ast.mb_cur_max)
-#define mberr()		(ast.tmp_int<0)
+#if !AST_NOMULTIBYTE
 
-#define mbcoll()	(ast.mb_xfrm!=0)
-#define mbwide()	(mbmax()>1)
+#define mbmax()		( ast.mb_cur_max )
+#define mberr()		( ast.tmp_int < 0 )
 
-#define mb2wc(w,p,n)	(*ast.mb_towc)(&w,(char*)p,n)
-#define mbchar(p)	(mbwide()?((ast.tmp_int=(*ast.mb_towc)(&ast.tmp_wchar,(char*)(p),mbmax()))>0?((p+=ast.tmp_int),ast.tmp_wchar):(p+=ast.mb_sync+1,ast.tmp_int)):(*(unsigned char*)(p++)))
-#define mbnchar(p,n)	(mbwide()?((ast.tmp_int=(*ast.mb_towc)(&ast.tmp_wchar,(char*)(p),n))>0?((p+=ast.tmp_int),ast.tmp_wchar):(p+=ast.mb_sync+1,ast.tmp_int)):(*(unsigned char*)(p++)))
-#define mbinit()	(mbwide()?(*ast.mb_towc)((wchar_t*)0,(char*)0,mbmax()):0)
-#define mbsize(p)	(mbwide()?(*ast.mb_len)((char*)(p),mbmax()):((p),1))
-#define mbnsize(p,n)	(mbwide()?(*ast.mb_len)((char*)(p),n):((p),1))
-#define mbconv(s,w)	(ast.mb_conv?(*ast.mb_conv)(s,w):((*(s)=(w)),1))
-#define mbwidth(w)	(ast.mb_width?(*ast.mb_width)(w):1)
-#define mbxfrm(t,f,n)	(mbcoll()?(*ast.mb_xfrm)((char*)(t),(char*)(f),n):0)
-#define mbalpha(w)	(ast.mb_alpha?(*ast.mb_alpha)(w):isalpha((w)&0xff))
+#define mbcoll()	( ast.mb_xfrm != 0 )
+#define mbwide()	( mbmax() > 1 )
+
+#define mb2wc(w,p,n)	( *ast.mb_towc)(&w, (char*)p, n )
+#define	mbchar(p)	mbnchar(p, mbmax())
+#define mbnchar(p,n)	( mbwide() ? ( (ast.tmp_int = (*ast.mb_towc)(&ast.tmp_wchar, (char*)(p), n)) > 0 ? \
+				( (p+=ast.tmp_int),ast.tmp_wchar) : (p+=ast.mb_sync+1,ast.tmp_int) ) : (*(unsigned char*)(p++)) )
+#define mbinit()	( ast.mb_sync = 0 )
+#define mbsize(p)	mbnsize(p, mbmax())
+#define mbnsize(p,n)	( mbwide() ? (*ast.mb_len)((char*)(p), n) : ((p), 1) )
+#define mbconv(s,w)	( ast.mb_conv ? (*ast.mb_conv)(s,w) : ((*(s)=(w)), 1) )
+#define mbwidth(w)	( ast.mb_width ? (*ast.mb_width)(w) : (w >= 0 && w <= 255 && !iscntrl(w) ? 1 : -1) )
+#define mbxfrm(t,f,n)	( mbcoll() ? (*ast.mb_xfrm)((char*)(t), (char*)(f), n) : 0 )
+#define mbalpha(w)	( ast.mb_alpha ? (*ast.mb_alpha)(w) : isalpha((w) & 0xff) )
+
+#else
+
+#define mbmax()		1
+#define mberr()		0
+
+#define mbcoll()	0
+#define mbwide()	0
+
+#define mb2wc(w,p,n)	( (w) = *(unsigned char*)(p), 1 )
+#define mbchar(p)	( *(unsigned char*)(p++) )
+#define mbnchar(p,n)	mbchar(p)
+#define mbinit()	0
+#define mbsize(p)	1
+#define mbnsize(p,n)	1
+#define mbconv(s,w)	( (*(s)=(w)), 1 )
+#define mbwidth(w)	( w >= 0 && w <= 255 && !iscntrl(w) ? 1 : -1 )
+#define mbxfrm(t,f,n)	0
+#define mbalpha(w)	( isalpha((w) & 0xff) )
+
+#endif /* !AST_NOMULTIBYTE */
 
 /*
  * common macros
@@ -266,10 +287,6 @@ typedef int (*Error_f)(void*, void*, int, ...);
 typedef int (*Ast_confdisc_f)(const char*, const char*, const char*);
 typedef int (*Strcmp_context_f)(const char*, const char*, void*);
 typedef int (*Strcmp_f)(const char*, const char*);
-
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
 
 extern char*		astgetconf(const char*, const char*, const char*, int, Error_f);
 extern char*		astconf(const char*, const char*, const char*);
@@ -408,8 +425,6 @@ extern int		struniq(char**, int);
 extern int		strvcmp(const char*, const char*);
 extern int		wc2utf8(char*, uint32_t);
 
-#undef			extern
-
 /*
  * C library global data symbols not prototyped by <unistd.h>
  */
@@ -441,12 +456,6 @@ extern char**		environ;
 #undef	AST_PLUGIN_VERSION
 #define AST_PLUGIN_VERSION(v)	((v)>AST_VERSION?(v):AST_VERSION)
 
-#if defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
-
 extern unsigned long	plugin_version(void);
-
-#undef	extern
 
 #endif

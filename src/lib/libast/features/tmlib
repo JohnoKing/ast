@@ -5,7 +5,7 @@ _cc_export_dynamic = note{ probe CC.EXPORT.DYNAMIC supported }end run{
 }end
 
 tst	tzset_environ note{ tzset() bypasses user getenv() }end execute{
-	#if _UWIN || !_cc_export_dynamic
+	#if !_cc_export_dynamic
 	int main()
 	{
 		return 0;

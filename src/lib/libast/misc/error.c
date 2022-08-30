@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -47,16 +43,9 @@
 /*
  * 2007-03-19 move error_info from _error_info_ to (*_error_infop_)
  *	      to allow future Error_info_t growth
- *            by 2009 _error_info_ can be static
  */
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		extern __EXPORT__
-#endif
-
-extern Error_info_t	_error_info_;
-
-Error_info_t	_error_info_ =
+static Error_info_t	_error_info_ =
 {
 	2, exit, write,
 	0,0,0,0,0,0,0,0,
@@ -68,14 +57,7 @@ Error_info_t	_error_info_ =
 	translate,
 	0			/* catalog			*/
 };
-
-#undef	extern
-
-__EXTERN__(Error_info_t, _error_info_);
-
-__EXTERN__(Error_info_t*, _error_infop_);
-
-Error_info_t*	_error_infop_ = &_error_info_;
+Error_info_t*		_error_infop_ = &_error_info_;
 
 /*
  * these should probably be in error_info
@@ -366,10 +348,8 @@ errorv(const char* id, int level, va_list ap)
 	int		line;
 	char*		file;
 
-#if !_PACKAGE_astsa
 	unsigned long	d;
 	struct tms	us;
-#endif
 
 	if (!error_info.init)
 	{
@@ -476,14 +456,12 @@ errorv(const char* id, int level, va_list ap)
 				sfprintf(stkstd, "%s %d: ", ERROR_translate(NiL, NiL, ast.id, "line"), error_info.line);
 			}
 		}
-#if !_PACKAGE_astsa
 		if (error_info.time)
 		{
 			if ((d = times(&us)) < error_info.time || error_info.time == 1)
 				error_info.time = d;
 			sfprintf(stkstd, " %05lu.%05lu.%05lu ", d - error_info.time, (unsigned long)us.tms_utime, (unsigned long)us.tms_stime);
 		}
-#endif
 		switch (level)
 		{
 		case 0:

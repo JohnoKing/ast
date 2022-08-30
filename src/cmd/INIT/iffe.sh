@@ -4,18 +4,15 @@
 #          Copyright (c) 1994-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                 Glenn Fowler <gsf@research.att.com>                  #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 # Glenn Fowler & Phong Vo
@@ -424,7 +421,7 @@ noisy()
 copy() # "output-file" "data-that-must-not-be-processed-by-echo"
 {
 	# Some ksh88 clones (pdksh, mksh) lack 'printf' as a built-in utility, so if a
-	# ksh-type shell was detected, use the 'print' built-in for better peformance.
+	# ksh-type shell was detected, use the 'print' built-in for better performance.
 	case $1 in
 	-)	case $shell in
 		ksh)	print -r - "$2"
@@ -643,7 +640,7 @@ case $( (getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null ) in
 [-author?Phong Vo <kpv@research.att.com>]
 [-copyright?(c) 1994-2012 AT&T Intellectual Property]
 [-copyright?(c) 2020-2021 Contributors to https://github.com/ksh93/ksh]
-[-license?http://www.eclipse.org/org/documents/epl-v10.html]
+[-license?https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html]
 [+NAME?iffe - C compilation environment feature probe]
 [+DESCRIPTION?\biffe\b is a command interpreter that probes the C
 	compilation environment for features. A feature is any file, option
@@ -3579,10 +3576,7 @@ $inc
 						[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ]:[\\/]*|[\\/]*)
 							success
 							case $o in
-							lcl)	echo "#if defined(__STDPP__directive)"
-								echo "__STDPP__directive pragma pp:hosted"
-								echo "#endif"
-								echo "#include <$i>	/* the native <$f.h> */"
+							lcl)	echo "#include <$i>	/* the native <$f.h> */"
 								echo "#undef	$m"
 								usr="$usr$nl#define $m 1"
 								echo "#define $m	1"

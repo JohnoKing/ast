@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -28,6 +25,7 @@
  *  This is the parser for a shell language
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<fcin.h>
 #include	<error.h>
@@ -187,11 +185,11 @@ static void check_typedef(struct comnod *tp, char intypeset)
 		struct argnod *ap = tp->comarg;
 		while(ap = ap->argnxt.ap)
 		{
-			if(!(ap->argflag&ARG_RAW) || memcmp(ap->argval,"--",2))
+			if(!(ap->argflag&ARG_RAW) || strncmp(ap->argval,"--",2))
 				break;
 			if(sh_isoption(SH_NOEXEC))
 				typeset_order(ap->argval,tp->comline);
-			if(memcmp(ap->argval,"-T",2)==0)
+			if(strncmp(ap->argval,"-T",2)==0)
 			{
 				if(ap->argval[2])
 					cp = ap->argval+2;
@@ -219,11 +217,11 @@ static void check_typedef(struct comnod *tp, char intypeset)
 				return;
 			cp = argv[opt_info.index];
 		}
-		else while((cp = *argv++) && memcmp(cp,"--",2))
+		else while((cp = *argv++) && strncmp(cp,"--",2))
 		{
 			if(sh_isoption(SH_NOEXEC))
 				typeset_order(cp,tp->comline);
-			if(memcmp(cp,"-T",2)==0)
+			if(strncmp(cp,"-T",2)==0)
 			{
 				if(cp[2])
 					cp = cp+2;
@@ -240,7 +238,7 @@ static void check_typedef(struct comnod *tp, char intypeset)
 			dcl_tree = dtopen(&_Nvdisc, Dtoset);
 			dtview(sh.bltin_tree, dcl_tree);
 		}
-		nv_onattr(sh_addbuiltin(cp, (Shbltin_f)SYSTRUE->nvalue.bfp, NIL(void*)), NV_BLTIN|BLT_DCL);
+		nv_onattr(sh_addbuiltin(cp, b_true, NIL(void*)), NV_BLTIN|BLT_DCL);
 	}
 }
 /*
@@ -376,7 +374,6 @@ static Shnode_t	*makelist(Lex_t *lexp, int type, Shnode_t *l, Shnode_t *r)
  * entry to shell parser
  * Flag can be the union of SH_EOF|SH_NL
  */
-
 void	*sh_parse(Sfio_t *iop, int flag)
 {
 	register Shnode_t	*t;
@@ -507,7 +504,6 @@ Shnode_t *sh_dolparen(Lex_t* lp)
 /*
  * remove temporary files and stacks
  */
-
 void	sh_freeup(void)
 {
 	if(sh.st.staklist)
@@ -520,7 +516,6 @@ void	sh_freeup(void)
  * decrease reference count for each stack in function list when flag<=0
  * stack is freed when reference count is zero
  */
-
 void sh_funstaks(register struct slnod *slp,int flag)
 {
 	register struct slnod *slpold;
@@ -529,10 +524,24 @@ void sh_funstaks(register struct slnod *slp,int flag)
 		if(slp->slchild)
 			sh_funstaks(slp->slchild,flag);
 		slp = slp->slnext;
-		if(flag<=0)
-			stakdelete(slpold->slptr);
-		else
-			staklink(slpold->slptr);
+		if(slpold->slptr)
+		{
+			if(flag<=0)
+			{
+				/*
+				 * Since we're dealing with a linked list of stacks, slpold may be inside the allocated region
+				 * pointed to by slpold->slptr, meaning the stakdelete() call may invalidate slpold as well as
+				 * slpold->slptr. So if we do 'stakdelete(slpold->slptr); slpold->slptr = NIL(Stak_t*)' as may
+				 * seem obvious, the assignment may be a use-after-free of slpold. Therefore, save the pointer
+				 * value and reset the pointer before closing/freeing the stack.
+				 */
+				Stak_t *sp = slpold->slptr;
+				slpold->slptr = NIL(Stak_t*);
+				stakdelete(sp);
+			}
+			else
+				staklink(slpold->slptr);
+		}
 	}
 }
 /*
@@ -542,7 +551,6 @@ void sh_funstaks(register struct slnod *slp,int flag)
  *	list & [ cmd ]
  *	list [ ; cmd ]
  */
-
 static Shnode_t	*sh_cmd(Lex_t *lexp, register int sym, int flag)
 {
 	register Shnode_t	*left, *right;
@@ -873,7 +881,7 @@ static Shnode_t *funct(Lex_t *lexp)
 			}
 			nargs = argv-argv0;
 			size += sizeof(struct dolnod)+(nargs+ARG_SPARE)*sizeof(char*);
-			if(sh.shcomp && memcmp(".sh.math.",t->funct.functnam,9)==0)
+			if(sh.shcomp && strncmp(".sh.math.",t->funct.functnam,9)==0)
 			{
 				Namval_t *np= nv_open(t->funct.functnam,sh.fun_tree,NV_ADD|NV_VARNAME);
 				np->nvalue.rp = new_of(struct Ufunction,sh.funload?sizeof(Dtlink_t):0);
@@ -955,7 +963,9 @@ static Shnode_t *funct(Lex_t *lexp)
 		if(slp && slp->slptr)
 		{
 			sh.st.staklist = slp->slnext;
-			stakdelete(slp->slptr);
+			Stak_t *slptr_save = slp->slptr;
+			slp->slptr = NIL(Stak_t*);
+			stakdelete(slptr_save);
 		}
 		siglongjmp(*sh.jmplist,jmpval);
 	}
@@ -1199,7 +1209,6 @@ static struct argnod *assign(Lex_t *lexp, register struct argnod *ap, int type)
  *	case ... in ... esac
  *	begin ... end
  */
-
 static Shnode_t	*item(Lex_t *lexp,int flag)
 {
 	register Shnode_t	*t;
@@ -1503,7 +1512,7 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 			lexp->token = LBRACE;
 			break;
 		}
-		if(associative && argp->argval[0]!='[')
+		if(associative && (argp->argval[0]!='[' || !strstr(argp->argval,"]=")))
 			sh_syntax(lexp);
 		/* check for assignment argument */
 		if((argp->argflag&ARG_ASSIGN) && assignment!=2)
@@ -1560,7 +1569,7 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 						cmdarg++;
 					else if(np==SYSEXEC || np==SYSREDIR)
 						lexp->inexec = 1;
-					else if(np->nvalue.bfp==(Nambfp_f)b_getopts)
+					else if(funptr(np)==b_getopts)
 						opt_get |= FOPTGET;
 				}
 			}
@@ -1578,8 +1587,9 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 			type = NV_ARRAY;
 		if(tok==LABLSYM && (flag&SH_ASSIGN))
 			lexp->token = tok = 0;
-		if((tok==IPROCSYM || tok==OPROCSYM))
+		if(tok==IPROCSYM || tok==OPROCSYM)
 		{
+	procsub:
 			argp = process_sub(lexp,tok);
 			argno = -1;
 			*argtail = argp;
@@ -1641,7 +1651,6 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 				lexp->comp_assign = 2;
 				goto retry;
 			}
-			
 		}
 		if(!(flag&SH_NOIO))
 		{
@@ -1653,6 +1662,8 @@ static Shnode_t *simple(Lex_t *lexp,int flag, struct ionod *io)
 			}
 			else
 				t->comio = io = inout(lexp,(struct ionod*)0,0);
+			if((tok = lexp->token)==IPROCSYM || tok==OPROCSYM)
+				goto procsub;
 		}
 	}
 	*argtail = 0;
@@ -1740,7 +1751,7 @@ static int	skipnl(Lex_t *lexp,int flag)
 }
 
 /*
- * check for and process and i/o redirections
+ * check for and process I/O redirections
  * if flag>0 then an alias can be in the next word
  * if flag<0 only one redirection will be processed
  */
@@ -1751,6 +1762,9 @@ static struct ionod	*inout(Lex_t *lexp,struct ionod *lastio,int flag)
 	Stk_t			*stkp = sh.stk;
 	char *iovname=0;
 	register int		errout=0;
+	/* return if a process substitution is found without a redirection */
+	if(token==IPROCSYM || token==OPROCSYM)
+		return(lastio);
 	if(token==IOVNAME)
 	{
 		iovname=lexp->arg->argval+1;
@@ -1897,7 +1911,6 @@ static struct ionod	*inout(Lex_t *lexp,struct ionod *lastio,int flag)
 /*
  * convert argument chain to argument list when no special arguments
  */
-
 static struct argnod *qscan(struct comnod *ac,int argn)
 {
 	register char **cp;

@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -518,6 +515,15 @@ then
 		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 fi
 
+# Check that adding '-x' runs an external command, also bypassing path-bound builtins
+if	! test -x /opt/ast/bin/cat	# a physical external utility here would invalidate these tests
+then
+	got=$( PATH=/opt/ast/bin; command -x cat --about 2>&1 )
+	[[ $got == *version*'cat ('* ]] && err_exit 'command -x fails to bypass path-bound built-in found in PATH search'
+	got=$( command -x /opt/ast/bin/cat --about 2>&1 )
+	[[ $got == *version*'cat ('* ]] && err_exit 'command -x fails to bypass path-bound built-in by direct pathname'
+fi
+
 # ======
 # 'command -x' used to hang in an endless E2BIG loop on Linux and macOS
 ofile=$tmp/command_x_chunks.sh
@@ -944,6 +950,28 @@ cd "$tmp/testdir"
 wait "$!" 2>/dev/null
 ((!(e = $?))) || err_exit 'shell crashes on failure obtain the PWD on init' \
 	"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
+cd "$tmp"
+
+# ======
+# https://github.com/ksh93/ksh/issues/467
+[[ -d emptydir ]] || mkdir emptydir
+got=$(unset PWD; "$SHELL" -c 'echo "$PWD"; pwd; cd emptydir' 2>&1)
+exp=$PWD$'\n'$PWD
+[[ $got == "$exp" ]] || err_exit "child shell failed to obtain PWD" \
+        "(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Test backported from ksh93v- 2013-06-28 for deleting
+# a loaded libcmd builtin.
+if builtin cat 2> /dev/null
+then	path=$PATH
+	PATH=/bin:/usr/bin
+	if [[ $(type -t cat) == builtin ]]
+	then	builtin -d cat
+		[[ $(type -t cat) == builtin ]] && err_exit 'builtin -d does not delete builtin libcmd builtin'
+	fi
+fi
+PATH=$path
 
 # ======
 exit $((Errors<125?Errors:125))

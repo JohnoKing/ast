@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -790,16 +787,17 @@ hash -r
 
 # ======
 # Variables set in functions inside of a virtual subshell should not affect the
-# outside environment. This regression test must be run from the disk.
-testvars=$tmp/testvars.sh
-cat >| "$testvars" << 'EOF'
+# outside environment. This regression test must be run as a separate script.
+got=$("$SHELL" -c '
 c=0
 function set_ac { a=1; c=1; }
 function set_abc { ( set_ac ; b=1 ) }
 set_abc
 echo "a=$a b=$b c=$c"
-EOF
-v=$($SHELL $testvars) && [[ "$v" == "a= b= c=0" ]] || err_exit 'variables set in subshells are not confined to the subshell'
+')
+exp='a= b= c=0'
+[[ $got == "$exp" ]] || err_exit 'variables set in subshells are not confined to the subshell' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 got=$("$SHELL" -c '
@@ -1111,6 +1109,78 @@ fi
 e1=$( (f() { return 267; }; f); echo $? )
 e2=$( (ulimit -t unlimited 2>/dev/null; f() { return 267; }; f); echo $? )
 ((e1==11 && e2==11)) || err_exit "exit status of virtual ($e1) and real ($e2) subshell should both be clipped to 8 bits (11)"
+
+# ======
+# Regression test backported from ksh93v- 2014-04-15 for
+# a nonexistent command at the end of a pipeline in ``
+"$SHELL" -c 'while((SECONDS<3)); do test -z `/bin/false | /bin/false | /bin/doesnotexist`; done; :' 2> /dev/null || \
+	err_exit 'nonexistent last command in pipeline causes `` command substitution to fail'
+
+# Regression test backported from ksh93v- 2013-07-19 for the
+# effects of .sh.value on shared-state command substitutions.
+function foo
+{
+       .sh.value=bam
+}
+got=${ foo; }
+[[ $got ]] && err_exit "setting .sh.value in a function affects shared-state command substitution output when it shouldn't print anything" \
+	"(got $(printf %q "$got"))"
+
+# Regression test from ksh93v- 2012-11-21 for testing nested
+# command substitutions with a 2>&1 redirection.
+fun()
+{
+	echo=$(whence -p echo)
+	foo=` $echo foo`
+	print -n stdout=$foo
+	print -u2 stderr=$foo
+}
+[[ `set +x; fun 2>&1` == 'stdout=foostderr=foo' ]] || err_exit 'nested command substitution with 2>&1 not working'
+
+# Various regression tests from ksh93v- 2012-10-04 and 2012-10-24
+$SHELL > /dev/null -c 'echo $(for x in whatever; do case y in *) true;; esac; done)' || err_exit 'syntax error with case in command substitution'
+
+print 'print OK' | got=$("$SHELL")
+exp=OK
+[[ $got == $exp ]] || err_exit '$() command substitution not waiting for process completion' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+print 'print OK' | out=$( "$SHELL" 2>&1 )
+got="${out}$?"
+exp=OK0
+[[ $got == $exp ]] || err_exit "capturing output from ksh when piped doesn't work correctly" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# A virtual subshell should trim its exit status to 8 bits just like a real subshell, but if
+# its last command was killed by a signal then that should still be reflected in the 9th bit.
+sig=USR1
+exp=$((${ kill -l "$sig"; }|0x100))
+{ (:; "$SHELL" -c "kill -s $sig \$\$"); } 2>/dev/null
+let "(got=$?)==exp" || err_exit "command killed by signal in virtual subshell: expected status $exp, got status $got"
+{ (ulimit -t unlimited; "$SHELL" -c "kill -s $sig \$\$"); } 2>/dev/null
+let "(got=$?)==exp" || err_exit "command killed by signal in real subshell: expected status $exp, got status $got"
+{ (trap : EXIT; "$SHELL" -c "kill -s $sig \$\$"); } 2>/dev/null
+let "(got=$?)==exp" || err_exit "command killed by signal in virtual subshell with trap: expected status $exp, got status $got"
+{ (ulimit -t unlimited; trap : EXIT; "$SHELL" -c "kill -s $sig \$\$"); } 2>/dev/null
+let "(got=$?)==exp" || err_exit "command killed by signal in real subshell with trap: expected status $exp, got status $got"
+(:; exit "$exp")
+let "(got=$?)==(exp&0xFF)" || err_exit "fake signal exit from virtual subshell: expected status $((exp&0xFF)), got status $got"
+(ulimit -t unlimited 2>/dev/null; exit "$exp")
+let "(got=$?)==(exp&0xFF)" || err_exit "fake signal exit from real subshell: expected status $((exp&0xFF)), got status $got"
+
+# ======
+got=$(set +x; { "$SHELL" -c 'trap "echo OK" TERM; (kill -s TERM $$)'; } 2>&1)
+exp=OK
+[[ $got == "$exp" ]] || err_exit 'trap ignored when signalled from a subshell that is the last command' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# if this fails with empty output, sh_subtmpfile() is not getting called where it should be
+exp='some output'
+{ got=$(eval 'print -r -- "$exp" | "$bincat"'); } >/dev/null
+[[ $got == "$exp" ]] || err_exit 'command substitution did not catch output' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

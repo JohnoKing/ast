@@ -1,3 +1,7 @@
+This file is of historical interest only. For recent changes in both ksh 93u+m
+and the accompanying libraries, see the file NEWS in the top-level directory.
+____
+
 12-06-25 getconf.c: don't defer to native getconf if we are it -- doh
 12-06-19 tail.c: be nice and use sh_sigcheck() and tvsleep() to verify interrupts
 12-05-31 cat,head,tee: use errno==EPIPE => ERROR_PIPE(errno)

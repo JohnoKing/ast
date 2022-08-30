@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -31,6 +27,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	"jobs.h"
 #include	"builtins.h"
@@ -85,7 +82,7 @@ int	b_trap(int argc,char *argv[],Shbltin_t *context)
 				 * if function semantics can be worked out then it
 				 * may merit a -d/--default option
 				 */
-				else if(*action=='+' && action[1]==0 && sh.st.self == &sh.global)
+				else if(*action=='+' && action[1]==0 && sh.st.self == &sh.global && !sh_isoption(SH_POSIX))
 				{
 					clear++;
 					dflag++;
@@ -135,13 +132,6 @@ int	b_trap(int argc,char *argv[],Shbltin_t *context)
 						sh.trapnote = 0;
 
 				}
-				if(sig == SH_ERRTRAP)
-				{
-					if(clear)
-						sh.errtrap = 0;
-					else if(!sh.fn_depth || sh.end_fn)
-						sh.errtrap = 1;
-				}
 				continue;
 			}
 			if(sig > sh.sigmax)
@@ -158,13 +148,18 @@ int	b_trap(int argc,char *argv[],Shbltin_t *context)
 			else if(clear)
 			{
 				sh_sigclear(sig);
-				if(sig == 0)
-					sh.exittrap = 0;
 				if(dflag)
 					signal(sig,SIG_DFL);
 			}
 			else
 			{
+				/*
+				 * Trap or ignore a real signal. A virtual subshell needs to fork in
+				 * order to receive signals correctly and (because other commands
+				 * may cause a virtual subshell to fork) to ensure a persistent PID.
+				 */
+				if(sh.subshell && !sh.subshare)
+					sh_subfork();
 				if(sig >= sh.st.trapmax)
 					sh.st.trapmax = sig+1;
 				arg = sh.st.trapcom[sig];
@@ -172,8 +167,39 @@ int	b_trap(int argc,char *argv[],Shbltin_t *context)
 				sh.st.trapcom[sig] = (sh.sigflag[sig]&SH_SIGOFF) ? Empty : sh_strdup(action);
 				if(arg && arg != Empty)
 					free(arg);
-				if(sig == 0 && (!sh.fn_depth || sh.end_fn))
-					sh.exittrap = 1;
+			}
+		}
+		/*
+		 * Set a flag for sh_exec() to disable exec-without-fork optimizations if any trap is set and non-empty.
+		 * (In ksh functions, there may be parent scope traps, so do not reset to 0 if in a ksh function.)
+		 */
+		if(sh.fn_depth==0)
+			sh.st.trapdontexec = 0;
+		if(!sh.st.trapdontexec)
+		{
+			/* EXIT and real signals */
+			for(sig=0; sig<=sh.sigmax; sig++)
+			{
+				/* these cannot be trapped */
+				if(sig==SIGKILL || sig==SIGSTOP)
+					continue;
+				if(sh.st.trapcom[sig] && *sh.st.trapcom[sig])
+				{
+					sh.st.trapdontexec++;
+					break;
+				}
+			}
+		}
+		if(!sh.st.trapdontexec)
+		{
+			/* other pseudosignals -- exclude DEBUG as it is executed before the command */
+			for(sig=0; sig<SH_DEBUGTRAP; sig++)
+			{
+				if(sh.st.trap[sig] && *sh.st.trap[sig])
+				{
+					sh.st.trapdontexec++;
+					break;
+				}
 			}
 		}
 	}
@@ -316,7 +342,6 @@ int	b_suspend(int argc,char *argv[],Shbltin_t *context)
 /*
  * Given the name or number of a signal return the signal number
  */
-
 static int sig_number(const char *string)
 {
 	const Shtable_t	*tp;
@@ -341,7 +366,7 @@ static int sig_number(const char *string)
 		}
 		while(c);
 		stakseek(o);
-		if(memcmp(stakptr(o),"SIG",3)==0)
+		if(strncmp(stakptr(o),"SIG",3)==0)
 		{
 			sig = 1;
 			o += 3;

@@ -37,9 +37,6 @@ done
 for i in $probe_header
 do	echo "#include <$i>"
 done
-echo '#ifdef _UWIN'
-echo "int _Pr0b3_uwin=_UWIN;"
-echo '#endif'
 echo '#ifdef __BORLANDC__'
 echo "int _Pr0b3_version_BORLAND=__BORLANDC__;"
 echo '#endif'
@@ -67,7 +64,6 @@ echo '#endif'
 } > easy.c
 
 include=
-uwin=
 
 $cc -E easy.c 2>&1 |
 egrep -i '^(#(line)? 1 .*\.[hH]| *int +_Pr0b3_[a-zA-Z_]* *= *[0-9])' |
@@ -213,18 +209,10 @@ CC.STATIC = -Bstatic
 			then	stdlib="$stdlib $d"
 			fi
 		done
-		case $uwin in
-		[0-9]*)	cat <<!
-CC.STDINCLUDE = /usr/include $stdinc
-CC.STDLIB = /usr/lib$lib $stdlib
-!
-			;;
-		*)	cat <<!
+		cat <<!
 CC.STDINCLUDE = $stdinc
 CC.STDLIB = $stdlib
 !
-			;;
-		esac
 		cat <<!
 CC.STRICT =
 CC.STRIP = strip

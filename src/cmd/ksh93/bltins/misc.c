@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -39,6 +35,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	"variables.h"
 #include	"shnodes.h"
@@ -229,7 +226,6 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 	volatile struct dolnod   *argsave=0;
 	struct checkpt buff;
 	Sfio_t *iop=0;
-	short level;
 	NOT_USED(context);
 	while (n = optget(argv,sh_optdot)) switch (n)
 	{
@@ -247,7 +243,7 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 		errormsg(SH_DICT,ERROR_usage(2),"%s",optusage((char*)0));
 		UNREACHABLE();
 	}
-	if(sh.dot_depth+1 > DOTMAX)
+	if(sh.dot_depth >= DOTMAX)
 	{
 		errormsg(SH_DICT,ERROR_exit(1),e_toodeep,script);
 		UNREACHABLE();
@@ -287,14 +283,12 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 	}
 	*prevscope = sh.st;
 	sh.st.lineno = np?((struct functnod*)nv_funtree(np))->functline:1;
-	sh.st.var_local = sh.st.save_tree = sh.var_tree;
+	sh.st.save_tree = sh.var_tree;
 	if(filename)
 	{
 		sh.st.filename = filename;
 		sh.st.lineno = 1;
 	}
-	level  = sh.fn_depth+sh.dot_depth+1;
-	nv_putval(SH_LEVELNOD,(char*)&level,NV_INT16);
 	sh.st.prevst = prevscope;
 	sh.st.self = &savst;
 	sh.topscope = (Shscope_t*)sh.st.self;
@@ -307,10 +301,13 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 	if(np || argv[1])
 		argsave = sh_argnew(argv,&saveargfor);
 	sh_pushcontext(&buff,SH_JMPDOT);
+	errorpush(&buff.err,0);
+	error_info.id = argv[0];
 	jmpval = sigsetjmp(buff.buff,0);
 	if(jmpval == 0)
 	{
 		sh.dot_depth++;
+		update_sh_level();
 		if(np)
 			sh_exec((Shnode_t*)(nv_funtree(np)),sh_isstate(SH_ERREXIT));
 		else
@@ -327,6 +324,7 @@ int    b_dot_cmd(register int n,char *argv[],Shbltin_t *context)
 	if(!np)
 		free(tofree);
 	sh.dot_depth--;
+	update_sh_level();
 	if((np || argv[1]) && jmpval!=SH_JMPSCRIPT)
 		sh_argreset((struct dolnod*)argsave,saveargfor);
 	else
@@ -518,8 +516,8 @@ static void	print_times(struct timeval utime, struct timeval stime)
 	int st_min = stime.tv_sec / 60;
 	int st_sec = stime.tv_sec % 60;
 	int st_ms = stime.tv_usec / 1000;
-	char radix = GETDECIMAL(0);
-	sfprintf(sfstdout, "%dm%02d%c%06ds %dm%02d%c%06ds\n", ut_min, ut_sec, radix, ut_ms, st_min, st_sec, radix, st_ms);
+	sfprintf(sfstdout, sh_isoption(SH_POSIX) ? "%dm%d%c%03ds %dm%d%c%03ds\n" : "%dm%02d%c%03ds %dm%02d%c%03ds\n",
+		ut_min, ut_sec, sh.radixpoint, ut_ms, st_min, st_sec, sh.radixpoint, st_ms);
 }
 #if _lib_getrusage
 /* getrusage tends to have higher precision */

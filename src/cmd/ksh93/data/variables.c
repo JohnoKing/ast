@@ -4,21 +4,18 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 
+#include	"shopt.h"
 #include	<ast.h>
 #include	"FEATURE/options"
 #include	"FEATURE/dynamic"
@@ -63,7 +60,7 @@ const struct shtable2 shtab_variables[] =
 	"VISUAL",	0,				(char*)0,
 	"COLUMNS",	0,				(char*)0,
 	"LINES",	0,				(char*)0,
-	"PPID",		NV_NOFREE|NV_INTEGER,		(char*)0,
+	"PPID",		NV_NOFREE|NV_PID,		(char*)0,
 	"_",		NV_EXPORT,			(char*)0,
 	"TMOUT",	NV_NOFREE|NV_INTEGER,		(char*)0,
 	"SECONDS",	NV_NOFREE|NV_INTEGER|NV_DOUBLE,	(char*)0,
@@ -91,18 +88,17 @@ const struct shtable2 shtab_variables[] =
 	".sh.subscript",0,				(char*)0,
 	".sh.value",	0,				(char*)0,
 	".sh.version",	NV_NOFREE,			(char*)(&e_version[10]),
-	".sh.dollar",	0,				(char*)0,
 	".sh.match",	0,				(char*)0,
 	".sh.command",	0,				(char*)0,
 	".sh.file",	0,				(char*)0,
 	".sh.fun",	0,				(char*)0,
 	".sh.subshell",	NV_INTEGER|NV_NOFREE,		(char*)0,
-	".sh.level",	0,				(char*)0,
+	".sh.level",	NV_INT16|NV_NOFREE|NV_RDONLY,	(char*)0,
 	".sh.lineno",	NV_INTEGER|NV_NOFREE,		(char*)0,
 	".sh.stats",	0,				(char*)0,
 	".sh.math",	0,				(char*)0,
-	".sh.pool",	0,				(char*)0,
-	".sh.pid",	NV_INTEGER|NV_NOFREE,		(char*)0,
+	".sh.pid",	NV_PID|NV_NOFREE,		(char*)0,
+	".sh.ppid",	NV_PID|NV_NOFREE,		(char*)0,
 	".sh.tilde",	0,				(char*)0,
 	"SHLVL",	NV_INTEGER|NV_NOFREE|NV_EXPORT,	(char*)0,
 	"",	0,					(char*)0

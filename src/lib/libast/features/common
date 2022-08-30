@@ -1,34 +1,24 @@
 iff	AST_COMMON
-hdr	pthread,stdarg,stddef,stdint,stdnoreturn,inttypes,types,unistd
+hdr	pthread,stdarg,stddef,stdint,inttypes,types,unistd
 sys	types
 typ	long.double,size_t,ssize_t
 typ	__va_list stdio.h
 
 mac	SF_APPEND,SF_CLOSE	sys/stat.h sys/socket.h
 
-dll	import note{ Microsoft import/export nonsense }end execute{
-	__declspec(dllimport) int foo;
-	int main() { return foo == 5 ? 0 : 1; }
-	int	bar = 5;
-	int*	_imp__foo = &bar;
-}end
-
-std	proto note{ standard C prototypes ok }end compile{
-	extern int foo(int, int);
-	bar() { foo(1, 1); }
-}end
-
-tst	ptr_void note{ standard C void* ok }end compile{
-	extern void* foo();
-	void* bar() { return foo(); }
+std	noreturn note{ noreturn ok }end compile{
+	#include <stdlib.h>
+	#include <stdnoreturn.h>
+	noreturn void foo(void) { exit(0); }
+	int main(void) { foo(); }
 }end
 
 cat{
 	#pragma clang diagnostic ignored "-Wdeprecated-register"
-	#pragma clang diagnostic ignored "-Wmacro-redefined"
 	#pragma clang diagnostic ignored "-Wparentheses"
 	#pragma clang diagnostic ignored "-Wstring-plus-int"
 	#pragma clang diagnostic ignored "-Wunused-value"
+	#pragma GCC diagnostic ignored "-Wunused-result"
 
 	/* AST backwards compatibility macros */
 	#undef	_NIL_
@@ -43,6 +33,10 @@ cat{
 	#define	_BEGIN_EXTERNS_
 	#undef	_END_EXTERNS_
 	#define	_END_EXTERNS_
+	#undef __EXTERN__
+	#define __EXTERN__(T,obj)	extern T obj
+	#undef __DEFINE__
+	#define __DEFINE__(T,obj,val)	T obj = val
 	#undef	__STD_C
 	#define	__STD_C		1
 	#undef	Void_t
@@ -60,7 +54,8 @@ cat{
 	#endif
 
 	/* Windows variants and veneers */
-	#if !defined(_WINIX) && (_UWIN || __CYGWIN__ || __EMX__)
+	/* (as of 2022-07-21, only Cygwin) */
+	#if !defined(_WINIX) && __CYGWIN__
 	#	define _WINIX		1
 	#endif
 
@@ -71,40 +66,8 @@ cat{
 	#		define _DLL		1
 	#	endif
 	#endif
-	#if _dll_import
-	#	if _BLD_STATIC && !_BLD_DLL
-	#		undef	_DLL
-	#	else
-	#		if !_UWIN && !defined(_DLL)
-	#			define _DLL		1
-	#		endif
-	#	endif
-	#	if !defined(__EXPORT__) && _BLD_DLL
-	#		define __EXPORT__	__declspec(dllexport)
-	#	endif
-	#	if !defined(__IMPORT__) && ( _BLD_DLL || defined(_DLL) )
-	#		define __IMPORT__	__declspec(dllimport)
-	#	endif
-	#	if _BLD_DLL && _UWIN
-	#	define __DYNAMIC__(v)		(_ast_getdll()->_ast_ ## v)
-	#	endif
-	#endif
-	#if !defined(_astimport)
-	#	if defined(__IMPORT__) && defined(_DLL)
-	#		define _astimport	__IMPORT__
-	#	else
-	#		define _astimport	extern
-	#	endif
-	#endif
-	#if _dll_import && ( !_BLD_DLL || _WINIX && !_UWIN )
-	#	define __EXTERN__(T,obj)	extern T obj; T* _imp__ ## obj = &obj
-	#	define __DEFINE__(T,obj,val)	T obj = val; T* _imp__ ## obj = &obj
-	#else
-	#	define __EXTERN__(T,obj)	extern T obj
-	#	define __DEFINE__(T,obj,val)	T obj = val
-	#endif
 
-	#if !_hdr_stdnoreturn
+	#if !_std_noreturn
 	#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4))
 	#define noreturn __attribute__((noreturn))
 	#else
@@ -112,7 +75,7 @@ cat{
 	#endif /* __GNUC__ */
 	#else
 	#include <stdnoreturn.h>
-	#endif /* _hdr_stdnoreturn */
+	#endif /* _std_noreturn */
 }end
 
 if	tst - note{ <stdarg.h>+<wchar.h> works }end compile{
@@ -517,12 +480,6 @@ tst	- -DTRY=1 - -DTRY=1 -Dvoid=char - -DTRY=2 - -DTRY=3 - -DTRY=4 output{
 			printf("/* va_arg() va_list type */\n");
 	#endif /*TRY == 4*/
 	
-	#if _UWIN
-		printf("#ifndef va_copy\n");
-		printf("#define va_copy(to,fr) ((to)=(fr))\t");
-			printf("/* copy va_list fr -> to */\n");
-		printf("#endif\n");
-	#else
 	#if !defined(va_copy)
 	#if defined(__va_copy)
 		printf("#ifndef va_copy\n");
@@ -540,7 +497,6 @@ tst	- -DTRY=1 - -DTRY=1 -Dvoid=char - -DTRY=2 - -DTRY=3 - -DTRY=4 output{
 		printf("#define va_copy(to,fr) ((to)=(fr))\t");
 			printf("/* copy va_list fr -> to */\n");
 		printf("#endif\n");
-	#endif
 	#endif
 	#endif
 	#endif
@@ -605,6 +561,7 @@ tst - note{ does this compiler have __builtin_unreachable() }end output{
 	 * argc should never be zero on init, but hopefully optimizers aren't that smart.
 	 */
 	#include <stdio.h>
+	#include "releaseflags.h"
 	void testfn(int a)
 	{
 		switch(a)
@@ -612,11 +569,11 @@ tst - note{ does this compiler have __builtin_unreachable() }end output{
 		case 0:
 			__builtin_unreachable();
 		default:
-			printf("#if _AST_ksh_release\n");
+	#if _AST_release
 			printf("#   define UNREACHABLE()\t__builtin_unreachable()\n");
-			printf("#else\n");
+	#else
 			printf("#   define UNREACHABLE()\tabort()\n");
-			printf("#endif\n");
+	#endif
 		}
 	}
 	int main(int argc, char *argv[])
@@ -625,9 +582,5 @@ tst - note{ does this compiler have __builtin_unreachable() }end output{
 		return 0;
 	}
 }end fail{
-	echo '#if _AST_ksh_release'
-	echo '#   define UNREACHABLE()	0'
-	echo '#else'
-	echo '#   define UNREACHABLE()	abort()'
-	echo '#endif'
+	echo '#define UNREACHABLE()	abort()'
 }end

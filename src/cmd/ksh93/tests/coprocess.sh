@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 # test the behavior of co-processes
@@ -215,23 +212,21 @@ do
 	trap - TERM
 	[[ $sleep_pid ]] && kill $sleep_pid
 	
-# TODO: The /bin/cat iteration of this test is known to hang intermittently on Debian and
-# derived systems (such as Ubuntu). See: https://github.com/ksh93/ksh/issues/132
-# It is temporarily disabled here to avoid Github CI failures due to this known issue
-# while we work on other things. Export DEBUG_COPROCESS to include it in the tests.
-if [[ $cat != "$bincat" || -v DEBUG_COPROCESS ]]; then
 	trap 'sleep_pid=; kill $pid; err_exit "$cat coprocess 2 hung"' TERM
 	{ sleep 5; kill $$; } &
 	sleep_pid=$!
 	$cat |&
 	pid=$!
-	print foo >&p 2> /dev/null || err_exit "first write of foo to $cat coprocess failed"
-	print foo >&p 2> /dev/null || err_exit "second write of foo to coprocess failed"
+	print foo1 >&p 2> /dev/null || err_exit "first write to $cat coprocess failed" 
+	print foo2 >&p 2> /dev/null || err_exit "second write to $cat coprocess failed" 
+	# avoid race between '$cat |&' initialising and 'kill $pid': read from the coprocess
+	# before 'kill' so that $cat is known to be fully initialised and ready to catch SIGTERM
+	read <&p && [[ $REPLY == foo1 ]] || err_exit "first read from $cat coprocess failed"
+	read <&p && [[ $REPLY == foo2 ]] || err_exit "second read from $cat coprocess failed"
 	kill $pid
 	wait $pid 2> /dev/null
 	trap - TERM
 	[[ $sleep_pid ]] && kill $sleep_pid
-fi
 	
 	trap 'sleep_pid=; kill $pid; err_exit "$cat coprocess 3 hung"' TERM
 	{ sleep 5; kill $$; } &

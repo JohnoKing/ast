@@ -2,21 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1992-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,7 +24,7 @@
  */
 
 static const char usage[] =
-"[-?\n@(#)$Id: wc (AT&T Research) 2009-11-28 $\n]"
+"[-?\n@(#)$Id: wc (ksh 93u+m) 2022-08-30 $\n]"
 "[--catalog?" ERROR_CATALOG "]"
 "[+NAME?wc - print the number of bytes, words, and lines in files]"
 "[+DESCRIPTION?\bwc\b reads one or more input files and, by default, "
@@ -50,8 +47,8 @@ static const char usage[] =
 "[c:bytes|chars:chars?List the byte counts.]"
 "[m|C:multibyte-chars?List the character counts.]"
 "[q:quiet?Suppress invalid multibyte character warnings.]"
-"[L:longest-line|max-line-length?List the longest line length; the newline,"
-    "if any, is not counted in the length.]"
+"[L:longest-line|max-line-length?List the longest line length; the newline "
+    "(if any) is not counted in the length.]"
 "[N!:utf8?For \bUTF-8\b locales \b--noutf8\b disables \bUTF-8\b "
     "optimizations and relies on the native \bmbtowc\b(3).]"
 "\n"
@@ -115,7 +112,6 @@ b_wc(int argc,register char **argv, Shbltin_t* context)
 				mode |= WC_NOUTF8;
 			continue;
 		case 'm':
-		case 'C':
 			mode |= WC_MBYTE;
 			continue;
 		case 'q':

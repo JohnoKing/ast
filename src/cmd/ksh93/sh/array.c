@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,6 +24,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<stak.h>
 #include	"name.h"
@@ -155,12 +153,10 @@ static void array_setptr(register Namval_t *np, struct index_array *old, struct 
 	register Namfun_t **fp = &np->nvfun;
 	while(*fp && *fp!= &old->header.hdr)
 		fp = &((*fp)->next);
-	if(*fp)
-	{
-		new->header.hdr.next = (*fp)->next;
-		*fp = &new->header.hdr;
-	}
-	else sfprintf(sfstderr,"discipline not replaced\n");
+	if(!*fp)
+		abort();
+	new->header.hdr.next = (*fp)->next;
+	*fp = &new->header.hdr;
 }
 
 /*
@@ -609,7 +605,6 @@ static void array_putval(Namval_t *np, const char *string, int flags, Namfun_t *
 		if(mp && mp!=np)
 		{
 			if(!is_associative(ap) && string && !(flags&NV_APPEND) && !nv_type(np) && nv_isvtree(mp) && !(ap->nelem&ARRAY_TREE))
-
 			{
 				if(!nv_isattr(np,NV_NOFREE))
 					_nv_unset(mp,flags&NV_RDONLY);
@@ -813,7 +808,7 @@ static struct index_array *array_grow(Namval_t *np, register struct index_array 
 	register int newsize = arsize(arp,maxi+1);
 	if (maxi >= ARRAY_MAX)
 	{
-		errormsg(SH_DICT,ERROR_exit(1),e_subscript, fmtbase((long)maxi,10,0));
+		errormsg(SH_DICT,ERROR_exit(1),e_subscript, fmtbase((intmax_t)maxi,10,0));
 		UNREACHABLE();
 	}
 	i = (newsize-1)*sizeof(union Value)+newsize;
@@ -1200,7 +1195,7 @@ Namval_t *nv_putsub(Namval_t *np,register char *sp,register long mode)
 			if(size==0 && !(mode&ARRAY_FILL))
 				return(NIL(Namval_t*));
 			if(sh.subshell)
-				np = sh_assignok(np,1);
+				sh_assignok(np,1);
 			ap = array_grow(np, ap,size);
 		}
 		ap->header.nelem &= ~ARRAY_UNDEF;
@@ -1234,7 +1229,7 @@ Namval_t *nv_putsub(Namval_t *np,register char *sp,register long mode)
 			else if(!(sp=(char*)ap->val[size].cp) || sp==Empty)
 			{
 				if(sh.subshell)
-					np = sh_assignok(np,1);
+					sh_assignok(np,1);
 				if(ap->header.nelem&ARRAY_TREE)
 				{
 					char *cp;
@@ -1633,11 +1628,6 @@ int nv_aindex(register Namval_t* np)
 	return(((struct index_array*)(ap))->cur&ARRAY_MASK);
 }
 
-int nv_arraynsub(register Namarr_t* ap)
-{
-	return(array_elem(ap));
-}
-
 int nv_aimax(register Namval_t* np)
 {
 	struct index_array *ap = (struct index_array*)nv_arrayptr(np);
@@ -1751,9 +1741,9 @@ void *nv_associative(register Namval_t *np,const char *sp,int mode)
 				return(0);
 			type = nv_isattr(np,NV_PUBLIC&~(NV_ARRAY|NV_CHILD|NV_MINIMAL));
 			if(mode)
-				mode = NV_ADD|HASH_NOSCOPE;
+				mode = NV_ADD|NV_NOSCOPE;
 			else if(ap->header.nelem&ARRAY_NOSCOPE)
-				mode = HASH_NOSCOPE;
+				mode = NV_NOSCOPE;
 			if(*sp==0 && sh_isoption(SH_XTRACE) && (mode&NV_ADD))
 				errormsg(SH_DICT,ERROR_warn(0),"adding empty subscript"); 
 			if(sh.subshell && (mp=nv_search(sp,ap->header.table,0)) && nv_isnull(mp))
@@ -1788,7 +1778,7 @@ void *nv_associative(register Namval_t *np,const char *sp,int mode)
 				ap->nextpos = (Namval_t*)dtnext(ap->header.table,mp);
 			}
 			else if(!mp && *sp && mode==0)
-				mp = nv_search(sp,ap->header.table,NV_ADD|HASH_NOSCOPE);
+				mp = nv_search(sp,ap->header.table,NV_ADD|NV_NOSCOPE);
 			np = mp;
 			if(ap->pos && ap->pos==np)
 				ap->header.nelem |= ARRAY_SCAN;

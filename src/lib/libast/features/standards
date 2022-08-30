@@ -165,6 +165,22 @@ elif tst note{ GNU (glibc) or Cygwin }end compile{
 		#endif
 		#define basename	basename	/* avoid string.h defining this in conflict with AST basename(3) */
 	}
+elif tst note{ QNX }end compile{
+		/*
+		 * QNX Neutrino, tested on version 6.5.0 as of April 2022.
+		 */
+		#define _QNX_SOURCE	1
+		#if !__QNX__
+		#error not QNX
+		#endif
+	}end {
+		#ifndef _QNX_SOURCE
+		#define _QNX_SOURCE	1
+		#endif
+		#ifndef _FILE_OFFSET_BITS
+		#define _FILE_OFFSET_BITS 64
+		#endif
+	}
 elif tst note{ _ALL_SOURCE & _POSIX_SOURCE & _POSIX_C_SOURCE & _XOPEN_SOURCE & __EXTENSIONS__ works }end compile{
 		#define _ALL_SOURCE	1
 		#define _POSIX_SOURCE	1

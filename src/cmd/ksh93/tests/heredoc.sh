@@ -2,20 +2,17 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -121,11 +118,15 @@ $0
 $SHELL -c 'x=$(
 cat << EOF
 EOF)' 2> /dev/null || err_exit 'here-doc cannot be terminated by )'
-if	[[ $( IFS=:;cat <<-!
+
+got=$(	IFS=:; cat <<-!
 			$IFS$(print hi)$IFS
-		!) != :hi: ]]
-then	err_exit '$IFS unset by command substitution in here docs'
-fi
+	!
+)
+exp=:hi:
+[[ $got == "$exp" ]] || err_exit '$IFS unset by command substitution in here docs' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
 if	x=$($SHELL -c 'cat <<< "hello world"' 2> /dev/null)
 then	[[ $x == 'hello world' ]] || err_exit '<<< documents not working'
 	x=$($SHELL -c 'v="hello  world";cat <<< $v' 2> /dev/null)
@@ -515,6 +516,14 @@ EOF' 2>&1)
 $SHELL -c '$(true << !)
 !' 2> /dev/null && err_exit "a here-doc that isn't completed before the closing ) in a command substitution doesn't cause an error"
 
+# Here-document test backported from ksh93v- 2014-04-15 for backtick
+# command substitutions.
+x=$("$SHELL" -c 'test=`"$SHELL" 2>&1 << EOF
+print $?
+EOF`
+print $test')
+[[ $x == 0 ]] || err_exit  '`` command substitution containing here-doc not working'
+
 # ======
 # Check that ${p}, where p is a special parameter, does not cause a syntax error in a here-document.
 # Bug for ${!} and ${$} reported at: https://github.com/ksh93/ksh/issues/127
@@ -524,6 +533,15 @@ ${'"$p"'}
 EOF
 ' 2>&1) || err_exit "special parameter \${$p} throws syntax error in here-document (got \"$err\")"
 done
+
+# ======
+# Regression test for the cat builtin backported from
+# ksh93v- 2013-08-29.
+if builtin cat 2> /dev/null; then
+	exp='foo bar baz bork blah blarg'
+	got=$(cat <<<"foo bar baz" 3<&0 <<<"$(</dev/fd/3) bork blah blarg")
+	[[ $got == "$exp" ]] || '3<%0 does not work when 0 is <<< here-doc'
+fi
 
 # ======
 exit $((Errors<125?Errors:125))

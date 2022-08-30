@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
+#                  Martijn Dekker <martijn@inlv.org>                   #
 #                                                                      #
 ########################################################################
 
@@ -818,6 +815,28 @@ typeset -a foo=(typeset -a [1]=([2]=bar) )
 got=$(typeset -p foo)
 [[ $exp == "$got" ]] || err_exit "Output from 'typeset -p' for indexed array cannot be used for reinput" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Regression test for 'typeset -a' from ksh93v- 2013-04-02
+"$SHELL" -c 'a=(foo bar); [[ $(typeset -a) == *"a=("*")"* ]]' || err_exit "'typeset -a' doesn't work correctly"
+
+# ======
+# https://github.com/ksh93/ksh/issues/409
+got=$(typeset -a a=(1 2 3); (typeset -A a; typeset -p a); typeset -p a)
+exp=$'typeset -A a=([0]=1 [1]=2 [2]=3)\ntypeset -a a=(1 2 3)'
+[[ $got == "$exp" ]] || err_exit 'conversion of indexed array to associative fails in subshell' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# spurious command execution of a word starting with '[' but not containing ']=' in associative array assignments
+# https://github.com/ksh93/ksh/issues/427
+exp='*: syntax error at line *: `\[badword]'\'' unexpected'
+got=$(set +x; PATH=/dev/null; eval 'typeset -A badword=([x]=1 \[badword])' 2>&1)
+case $((e=$?)),$got in
+3,$exp)	;;
+*)	err_exit 'spurious command execution in invalid associative array assignment' \
+		"(expected status 3 and $(printf %q "$exp"), got status $e and $(printf %q "$got"))" ;;
+esac
 
 # ======
 exit $((Errors<125?Errors:125))

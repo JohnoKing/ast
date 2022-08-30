@@ -5,19 +5,16 @@
 #                    Copyright (c) 2012 Roland Mainz                   #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                    David Korn <dgkorn@gmail.com>                     #
 #                Roland Mainz <roland.mainz@nrubsig.org>               #
+#            Johnothan King <johnothanking@protonmail.com>             #
+#                  Martijn Dekker <martijn@inlv.org>                   #
 #                                                                      #
 ########################################################################
 
@@ -210,7 +207,7 @@ cat >"${testscript}" <<-TEST1SCRIPT
 			printf '\\n'
 		} >"\${tmpfile}"
 
-		diff -u <( printf '%s\\n' "\${xtext}") "\${tmpfile}"
+		diff -u <( printf '%s\\n' "\${xtext}") "\${tmpfile}" | sed '/No differences encountered/d'
 		if cmp <( printf '%s\\n' "\${xtext}") "\${tmpfile}" ; then
 			printf "#input and output OK (%d characters).\\n" "\$(wc -m <"\${tmpfile}")"
 		else

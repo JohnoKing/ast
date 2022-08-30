@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*          atheik <14833674+atheik@users.noreply.github.com>           *
 *                                                                      *
 ***********************************************************************/
 
@@ -27,6 +24,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<fcin.h>
 #include	<ls.h>
@@ -211,7 +209,6 @@ static int	onintr(struct addrinfo*);
  * return <protocol>/<host>/<service> fd
  * If called with flags==O_NONBLOCK return 1 if protocol is supported
  */
-
 static int
 inetopen(const char* path, int flags)
 {
@@ -914,6 +911,10 @@ int sh_iomovefd(register int fdold)
 int	sh_pipe(register int pv[])
 {
 	int fd[2];
+#ifdef pipe
+	if(sh_isoption(SH_POSIX))
+		return(sh_rpipe(pv));
+#endif
 	if(pipe(fd)<0 || (pv[0]=fd[0])<0 || (pv[1]=fd[1])<0)
 	{
 		errormsg(SH_DICT,ERROR_system(1),e_pipe);
@@ -1088,8 +1089,7 @@ static char *io_usename(char *name, int *perm, int fno, int mode)
 		ep = sp;
 		stakseek(0);
 	}
-	stakputc('.');
-	sfprintf(stkstd,"%<#d_%d{;.tmp",sh.current_pid,fno);
+	sfprintf(stkstd, ".<#%lld_%d{;.tmp", (Sflong_t)sh.current_pid, fno);
 	tname = stakfreeze(1);
 	switch(mode)
 	{
@@ -1179,7 +1179,7 @@ int	sh_redirect(struct ionod *iop, int flag)
 		np = 0;
 		if(iop->iovname)
 		{
-			np = nv_open(iop->iovname,sh.var_tree,NV_NOASSIGN|NV_VARNAME);
+			np = nv_open(iop->iovname,sh.var_tree,NV_VARNAME);
 			if(nv_isattr(np,NV_RDONLY))
 			{
 				errormsg(SH_DICT,ERROR_exit(1),e_readonly, nv_name(np));
@@ -1237,16 +1237,12 @@ int	sh_redirect(struct ionod *iop, int flag)
 					}
 					if(sh.subshell && dupfd==1)
 					{
-						if(sfset(sfstdout,0,0)&SF_STRING)
+						if(sh.subshell)
 							sh_subtmpfile();
-						if(sh.comsub==1)
-							sh.subdup |= 1<<fn;
 						dupfd = sffileno(sfstdout);
 					}
 					else if(sh.sftable[dupfd])
 						sfsync(sh.sftable[dupfd]);
-					if(dupfd!=1 && fn < 10)
-						sh.subdup &= ~(1<<fn);
 				}
 				else if(fd=='-' && fname[1]==0)
 				{
@@ -1603,9 +1599,7 @@ static int io_heredoc(register struct ionod *iop, const char *name, int traceon)
 		}
 		if(!(iop->iofile&IOQUOTE))
 		{
-			char *lastpath = sh.lastpath;
 			sh_machere(infile,outfile,iop->ioname);
-			sh.lastpath = lastpath;
 			if(infile)
 				sfclose(infile);
 		}
@@ -1927,7 +1921,7 @@ static ssize_t piperead(Sfio_t *iop,void *buff,register size_t size,Sfdisc_t *ha
 		errno = EINTR;
 		return(-1);
 	}
-	if(sh_isstate(SH_INTERACTIVE) && sffileno(iop)==0 && io_prompt(iop,sh.nextprompt)<0 && errno==EIO)
+	if(sh_isstate(SH_INTERACTIVE) && fd==0 && io_prompt(iop,sh.nextprompt)<0 && errno==EIO)
 		return(0);
 	sh_onstate(SH_TTYWAIT);
 	if(!(sh.fdstatus[fd]&IOCLEX) && (sfset(iop,0,0)&SF_SHARE))
@@ -1944,7 +1938,7 @@ static ssize_t piperead(Sfio_t *iop,void *buff,register size_t size,Sfdisc_t *ha
 static ssize_t slowread(Sfio_t *iop,void *buff,register size_t size,Sfdisc_t *handle)
 {
 	int	(*readf)(void*, int, char*, int, int);
-	int	reedit=0, rsize;
+	int	reedit=0, rsize, n, fno;
 #if SHOPT_HISTEXPAND
 	char    *xp=0;
 #endif /* SHOPT_HISTEXPAND */
@@ -1969,15 +1963,23 @@ static ssize_t slowread(Sfio_t *iop,void *buff,register size_t size,Sfdisc_t *ha
 		errno = EINTR;
 		return(-1);
 	}
+	fno = sffileno(iop);
+#ifdef O_NONBLOCK
+	if((n=fcntl(fno,F_GETFL,0))!=-1 && n&O_NONBLOCK)
+	{
+		n &= ~O_NONBLOCK;
+		fcntl(fno, F_SETFL, n);
+	}
+#endif /* O_NONBLOCK */
 	while(1)
 	{
 		if(io_prompt(iop,sh.nextprompt)<0 && errno==EIO)
 			return(0);
 		if(sh.timeout)
 			timeout = (void*)sh_timeradd(sh_isstate(SH_GRACE)?1000L*TGRACE:1000L*sh.timeout,0,time_grace,&sh);
-		rsize = (*readf)(sh.ed_context, sffileno(iop), (char*)buff, size, reedit);
+		rsize = (*readf)(sh.ed_context, fno, (char*)buff, size, reedit);
 		if(timeout)
-			timerdel(timeout);
+			sh_timerdel(timeout);
 		timeout=0;
 #if SHOPT_HISTEXPAND
 		if(rsize && *(char*)buff != '\n' && sh.nextprompt==1 && sh_isoption(SH_HISTEXPAND))
@@ -2032,7 +2034,6 @@ static ssize_t slowread(Sfio_t *iop,void *buff,register size_t size,Sfdisc_t *ha
 /*
  * check and return the attributes for a file descriptor
  */
-
 int sh_iocheckfd(register int fd)
 {
 	register int flags, n;
@@ -2109,7 +2110,6 @@ int sh_iocheckfd(register int fd)
 /*
  * Display prompt PS<flag> on standard error
  */
-
 static int	io_prompt(Sfio_t *iop,register int flag)
 {
 	register char *cp;
@@ -2117,17 +2117,12 @@ static int	io_prompt(Sfio_t *iop,register int flag)
 	char *endprompt;
 	static short cmdno;
 	int sfflags;
-	int was_ttywait_on;
 	if(flag<3 && !sh_isstate(SH_INTERACTIVE))
 		flag = 0;
 	if(flag==2 && sfpkrd(sffileno(iop),buff,1,'\n',0,1) >= 0)
 		flag = 0;
 	if(flag==0)
 		return(sfsync(sfstderr));
-	/* Temporarily disable 'set -o notify' while expanding the prompt to avoid
-	   possible crashes (https://github.com/ksh93/ksh/issues/103). */
-	was_ttywait_on = sh_isstate(SH_TTYWAIT);
-	sh_offstate(SH_TTYWAIT);
 	sfflags = sfset(sfstderr,SF_SHARE|SF_PUBLIC|SF_READ,0);
 	if(!(sh.prompt=(char*)sfreserve(sfstderr,0,0)))
 		sh.prompt = "";
@@ -2189,8 +2184,6 @@ static int	io_prompt(Sfio_t *iop,register int flag)
 done:
 	if(*sh.prompt && (endprompt=(char*)sfreserve(sfstderr,0,0)))
 		*endprompt = 0;
-	if(was_ttywait_on)
-		sh_onstate(SH_TTYWAIT);  /* re-enable 'set -o notify' */
 	sfset(sfstderr,sfflags&SF_READ|SF_SHARE|SF_PUBLIC,1);
 	return(sfsync(sfstderr));
 }
@@ -2230,7 +2223,7 @@ static void	sftrack(Sfio_t* sp, int flag, void* data)
 #ifdef DEBUG
 	if(flag==SF_READ || flag==SF_WRITE)
 	{
-		char *z = fmtbase((long)sh.current_pid,0,0);
+		char *z = fmtbase((intmax_t)sh.current_pid,0,0);
 		write(ERRIO,z,strlen(z));
 		write(ERRIO,": ",2);
 		write(ERRIO,"attempt to ",11);
@@ -2311,7 +2304,6 @@ struct eval
 /*
  * Create a stream consisting of a space separated argv[] list 
  */
-
 Sfio_t *sh_sfeval(register char *argv[])
 {
 	register Sfio_t *iop;
@@ -2337,7 +2329,6 @@ Sfio_t *sh_sfeval(register char *argv[])
 /*
  * This code gets called whenever an end of string is found with eval
  */
-
 static int eval_exceptf(Sfio_t *iop,int type, void *data, Sfdisc_t *handle)
 {
 	register struct eval *ep = (struct eval*)handle;
@@ -2377,7 +2368,6 @@ static int eval_exceptf(Sfio_t *iop,int type, void *data, Sfdisc_t *handle)
  * the stream <sp> starting at offset <offset>
  * The stream can be read with the normal stream operations
  */
-
 static Sfio_t *subopen(Sfio_t* sp, off_t offset, long size)
 {
 	register struct subfile *disp;
@@ -2451,8 +2441,8 @@ void	sh_menu(Sfio_t *outfile,int argn,char *argv[])
 	register char **arg;
 	int nrow, ncol=1, ndigits=1;
 	int fldsize, wsize = ed_window();
-	char *cp = nv_getval(sh_scoped(LINES));
-	nrow = (cp?1+2*((int)strtol(cp, (char**)0, 10)/3):NROW);
+	sh_winsize(&nrow,NIL(int*));
+	nrow = nrow ? (2 * (nrow / 3) + 1) : NROW;
 	for(i=argn;i >= 10;i /= 10)
 		ndigits++;
 	if(argn < nrow)
@@ -2596,7 +2586,6 @@ mode_t	sh_umask(mode_t m)
  * <fd> must be a non-negative number ofr SH_IOCOPROCESS or SH_IOHISTFILE. 
  * returns NULL on failure and may set errno.
  */
-
 Sfio_t *sh_iogetiop(int fd, int mode)
 {
 	int n;

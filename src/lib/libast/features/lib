@@ -630,19 +630,6 @@ tst	- output{
 	int
 	main()
 	{
-	#if _UWIN
-		printf("\n");
-		printf("/* override some UWIN feature tests */\n");
-		printf("#undef	_lib_execlp\n");
-		printf("#undef	_lib_execvp\n");
-		printf("#undef	_lib_execvpe\n");
-		printf("#undef	_lib_fork\n");
-		printf("#undef	_std_string\n");
-		printf("#define _std_string	1\n");
-		printf("#undef	_stream_peek\n");
-		printf("\n");
-	#endif
-
 	#if _lib_posix_spawn || _lib_spawn_mode || _lib_spawn && _hdr_spawn && _mem_pgroup_inheritance || _lib_vfork && _real_vfork
 		printf("#if !_AST_no_spawnveg\n");
 		printf("#define _use_spawnveg	1\n");

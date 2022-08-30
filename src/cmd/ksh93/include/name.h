@@ -2,20 +2,16 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #ifndef _NV_PRIVATE
@@ -30,8 +26,6 @@
 
 #include	<ast.h>
 #include	<cdt.h>
-
-typedef int (*Nambfp_f)(int, char**, void*);
 
 /* Nodes can have all kinds of values */
 union Value
@@ -54,7 +48,7 @@ union Value
 	struct Ufunction 	*rp;	/* shell user defined functions */
 	struct Namfun		*funp;	/* discipline pointer */
 	struct Namref		*nrp;	/* name reference */
-	Nambfp_f		bfp;	/* builtin entry point function pointer */
+	void			*bfp;	/* pointer to built-in command's entry function (typecast to Shbltin_f) */
 };
 
 #include	"nval.h"
@@ -128,7 +122,6 @@ struct Ufunction
 #define NV_TYPE		0x1000000
 #define NV_STATIC	0x2000000
 #define NV_COMVAR	0x4000000
-#define NV_UNJUST	0x800000		/* clear justify attributes */
 #define NV_FUNCTION	(NV_RJUST|NV_FUNCT)	/* value is shell function */
 #define NV_FPOSIX	NV_LJUST		/* POSIX function semantics */
 #define NV_FTMP		NV_ZFILL		/* function source in tmpfile */
@@ -141,7 +134,7 @@ struct Ufunction
 #define BLT_ENV		(NV_RDONLY)		/* non-stoppable,
 						 * can modify environment */
 #define BLT_SPC		(NV_LJUST)		/* special built-ins */
-#define BLT_EXIT	(NV_RJUST)		/* exit value can be > 255 */
+#define BLT_EXIT	(NV_RJUST)		/* exit value can be > 255 or < 0 */
 #define BLT_DCL		(NV_TAGGED)		/* declaration command */
 #define BLT_NOSFIO	(NV_IMPORT)		/* doesn't use sfio */
 #define NV_OPTGET	(NV_BINARY)		/* function calls getopts */
@@ -149,7 +142,6 @@ struct Ufunction
 #define is_abuiltin(n)	(nv_isattr(n,NV_BLTIN|NV_INTEGER)==NV_BLTIN)
 #define is_afunction(n)	(nv_isattr(n,NV_FUNCTION|NV_REF)==NV_FUNCTION)
 #define	nv_funtree(n)	((n)->nvalue.rp->ptree)
-#define	funptr(n)	((n)->nvalue.bfp)
 
 /* NAMNOD MACROS */
 /* ... for attributes */
@@ -172,7 +164,9 @@ struct Ufunction
 #undef nv_size
 #define nv_size(np)	((np)->nvsize)
 #define _nv_hasget(np)  ((np)->nvfun && (np)->nvfun->disc && nv_hasget(np))
-#define nv_isnull(np)	(!(np)->nvalue.cp && !_nv_hasget(np))
+/* for nv_isnull we must exclude non-pointer value attributes (NV_INT16, NV_UINT16) before accessing cp in union Value */
+#define nv_isnonptr(np)	(nv_isattr(np,NV_INT16P)==NV_INT16)
+#define nv_isnull(np)	(!nv_isnonptr(np) && !(np)->nvalue.cp && !_nv_hasget(np))
 
 /* ...	for arrays */
 
@@ -187,10 +181,7 @@ extern int		nv_arrayisset(Namval_t*, Namarr_t*);
 extern int		nv_arraysettype(Namval_t*, Namval_t*,const char*,int);
 extern int		nv_aimax(Namval_t*);
 extern int		nv_atypeindex(Namval_t*, const char*);
-extern int		nv_setnotify(Namval_t*,char **);
-extern int		nv_unsetnotify(Namval_t*,char **);
 extern void		nv_setlist(struct argnod*, int, Namval_t*);
-extern struct argnod*	nv_onlist(struct argnod*, const char*);
 extern void 		nv_optimize(Namval_t*);
 extern void		nv_outname(Sfio_t*,char*, int);
 extern void 		nv_unref(Namval_t*);
@@ -205,11 +196,9 @@ extern void		nv_dirclose(void*);
 extern char		*nv_getvtree(Namval_t*, Namfun_t*);
 extern void		nv_attribute(Namval_t*, Sfio_t*, char*, int);
 extern Namval_t		*nv_bfsearch(const char*, Dt_t*, Namval_t**, char**);
-extern Namval_t		*nv_mkclone(Namval_t*);
 extern Namval_t		*nv_mktype(Namval_t**, int);
 extern Namval_t		*nv_addnode(Namval_t*, int);
 extern Namval_t		*nv_parent(Namval_t*);
-extern char		*nv_getbuf(size_t);
 extern Namval_t		*nv_mount(Namval_t*, const char *name, Dt_t*);
 extern Namval_t		*nv_arraychild(Namval_t*, Namval_t*, int);
 extern int		nv_compare(Dt_t*, void*, void*, Dtdisc_t*);

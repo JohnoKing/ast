@@ -4,22 +4,20 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
+((!.sh.level))||err_exit ".sh.level should be 0 after dot script, is ${.sh.level}"
 
 [[ ${.sh.version} == "$KSH_VERSION" ]] || err_exit '.sh.version != KSH_VERSION'
 unset ss
@@ -35,7 +33,7 @@ fi
 # use the same pseudorandom seed as the main shell.
 # https://github.com/ksh93/ksh/issues/285
 # These tests sometimes fail as duplicate numbers can occur randomly, so try up to $N times.
-integer N=3 i rand1 rand2
+integer N=5 i rand1 rand2
 RANDOM=123
 function rand_print {
 	ulimit -t unlimited 2> /dev/null
@@ -69,6 +67,7 @@ done
 (( rand1 == rand2 )) && err_exit "Test 3: \$RANDOM seed in subshell doesn't change" \
 	"(both results are $rand1)"
 # $RANDOM should be reseeded for the ( simple_command & ) optimization
+# (which was removed on 2022-06-13, but let's keep the test)
 for((i=0; i<N; i++))
 do	( echo $RANDOM & ) >|r1
 	( echo $RANDOM & ) >|r2
@@ -79,7 +78,7 @@ do	( echo $RANDOM & ) >|r1
 	do	((giveup)) && break
 	done
 	if	((giveup))
-	then	err_exit "Test 4: ( echo $RANDOM & ) does not write output"
+	then	err_exit 'Test 4: ( echo $RANDOM & ) does not write output'
 	fi
 	kill $! 2>/dev/null
 	trap - USR1
@@ -114,6 +113,15 @@ got=$(RANDOM=789; ulimit -t unlimited 2> /dev/null; echo $RANDOM)
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 unset N i rand1 rand2
 
+# Running an external command or background job should not influence the sequence
+exp=$(RANDOM=1; print $RANDOM; print $RANDOM)
+got=$(RANDOM=1; print $RANDOM; /dev/null/x 2>/dev/null; print $RANDOM)
+[[ $got == "$exp" ]] || err_exit "External command influences reproducible $RANDOM sequence" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(RANDOM=1; print $RANDOM; :& print $RANDOM)
+[[ $got == "$exp" ]] || err_exit "Background job influences reproducible $RANDOM sequence" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
 # SECONDS
 float secElapsed=0.0 secSleep=0.001
 let SECONDS=$secElapsed
@@ -136,9 +144,16 @@ fi
 # PPID
 exp=$$
 got=${ $SHELL -c 'print $PPID'; }
-if	[[ ${ $SHELL -c 'print $PPID'; } != $$ ]]
-then	err_exit "PPID variable failed -- expected '$exp', got '$got'"
-fi
+[[ $got == $$ ]] || err_exit "PPID variable failed in -c script -- expected '$exp', got '$got'"
+print 'print $PPID' >ppid.sh
+chmod +x ppid.sh
+./ppid.sh >|out
+got=$(<out)
+[[ $got == $$ ]] || err_exit "PPID variable failed in script without #! -- expected '$exp', got '$got'"
+print -r "#!$SHELL"$'\nprint $PPID' >|ppid.sh
+./ppid.sh >|out
+got=$(<out)
+[[ $got == $$ ]] || err_exit "PPID variable failed in script with #! -- expected '$exp', got '$got'"
 # OLDPWD
 old=$PWD
 cd /
@@ -561,6 +576,10 @@ actual=$*
 [[ $actual == "$expect" ]] || err_exit "IFS failed with invalid multi-byte character" \
 	"(expected $(printf %q "$expect"), got $(printf %q "$actual"))"
 
+# Backported test from ksh93v- 2013-06-28 for 'unset IFS'
+unset IFS
+[[ ${IFS+abc} ]] && err_exit "testing for unset IFS not working"
+
 # ^^^ end: IFS tests ^^^
 # restore default split:
 unset IFS
@@ -981,11 +1000,11 @@ set -- $(
 	IFS=\"
 	while	read -r first varname junk
 	do	[[ $first == '};' ]] && exit
-		[[ -z $junk ]] && continue
+		[[ -z $junk || $junk == *[![:alpha:]]NV_RDONLY[![:alpha:]]* ]] && continue
 		[[ -n $varname && $varname != '.sh' ]] && print -r -- "$varname"
 	done
 )
-(($# >= 66)) || err_exit "could not read shtab_variables[]; adjust test script ($# items read)"
+(($# >= 64)) || err_exit "could not read shtab_variables[]; adjust test script ($# items read)"
 
 # ... unset
 $SHELL -c '
@@ -1064,10 +1083,7 @@ $SHELL -c '
 $SHELL -c '
 	errors=0
 	for var
-	do	if	[[ $var == .sh.level ]]
-		then	continue	# known to fail
-		fi
-		if	eval "($var=bug); [[ \${$var} == bug ]]" 2>/dev/null
+	do	if	eval "($var=bug); [[ \${$var} == bug ]]" 2>/dev/null
 		then	echo "	$0: special variable $var leaks out of subshell" >&2
 			let errors++
 		fi
@@ -1083,10 +1099,10 @@ $SHELL -c '
 	typeset -l lower
 	errors=0
 	PS1=/dev/null/test_my_case_too
-	PS2=$PS1 PS3=$PS1 PS4=$PS1 OPTARG=$PS1 IFS=$PS1 FPATH=$PS1 FIGNORE=$PS1 CSWIDTH=$PS1
+	PS2=$PS1 PS3=$PS1 PS4=$PS1 OPTARG=$PS1 IFS=$PS1 FPATH=$PS1 FIGNORE=$PS1
 	for var
 	do	case $var in
-		RANDOM | HISTCMD | _ | SECONDS | LINENO | JOBMAX | .sh.stats)
+		RANDOM | HISTCMD | _ | SECONDS | LINENO | JOBMAX | .sh.stats | .sh.match)
 			# these are expected to fail below as their values change; just test against crashing
 			typeset -u "$var"
 			typeset -l "$var"
@@ -1379,6 +1395,94 @@ exp=$((SHLVL+1))$'\n'$((SHLVL+2))$'\n'$((SHLVL+1))
 got=$("$SHELL" -c 'echo $SHLVL; "$SHELL" -c "echo \$SHLVL"; exec "$SHELL" -c "echo \$SHLVL"')
 [[ $got == "$exp" ]] || err_exit "SHLVL not increased correctly" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# The += operator should not free variables outside of its
+# scope when used in an invocation-local assignment.
+exp='baz_foo
+baz'
+got=$("$SHELL" -c $'foo=baz; foo+=_foo "$SHELL" -c \'print $foo\'; print $foo')
+[[ $exp == "$got" ]] || err_exit "using the += operator for invocation-local assignments changes variables outside of the invocation-local scope" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Crash when setting attribute after getn (numeric get) discipline
+# https://github.com/ksh93/ksh/issues/435#issuecomment-1148813866
+got=$("$SHELL" -c 'foo.getn() { .sh.value=2.3*4.5; }; typeset -F2 foo; typeset -p foo' 2>&1)
+exp='typeset -F 2 foo=10.35'
+[[ $got == "$exp" ]] || err_exit "Setting attribute after setting getn discipline fails" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# As of 2022-07-12, the current scope is restored after changing .sh.level in a DEBUG trap
+exp=$'a: 2 CHILD\nb: 1 PARENT\nc: 2 CHILD\nd: 1 PARENT'
+function leveltest
+{
+	typeset scope=PARENT
+	function f
+	{
+		typeset scope=CHILD
+		print "a: ${.sh.level} $scope"
+		trap 'let ".sh.level=$1"; print "b: ${.sh.level} $scope"' DEBUG
+		trap - DEBUG
+		print "c: ${.sh.level} $scope"
+	}
+	f "${.sh.level}"
+	print "d: ${.sh.level} $scope"
+}
+got=$(ulimit -t unlimited 2>/dev/null; set +x; redirect 2>&1; leveltest)
+((!(e = $?))) && [[ $got == "$exp" ]] || err_exit "DEBUG trap does not restore scope after execution" \
+	"(expected status 0 and $(printf %q "$exp")," \
+	"got status $e$( ((e>128)) && print -n /SIG && kill -l "$e") and $(printf %q "$got"))"
+unset -f leveltest
+
+cat >dotlevel <<\EOF
+echo ${.sh.level}
+trap '.sh.level=${.sh.level}; echo ${.sh.level}' DEBUG
+trap - DEBUG
+EOF
+got=$(trap "echo ${.sh.level}" DEBUG; trap - DEBUG; . ./dotlevel)
+exp=$'0\n1\n1'
+[[ $got == "$exp" ]] || err_exit '${.sh.level} in dot script not correct' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# setting a .sh.value or .sh.level discipline makes no sense, but should be an error, not crash the shell
+for v in .sh.value .sh.level
+do
+	for d in get set append
+	do
+		exp=": $v.$d: invalid discipline function"
+		got=$(set +x; { "$SHELL" -c "$v.$d() { .sh.value=foo; }; $v=13; $v+=13; : \${$v}"; } 2>&1)
+		(((e = $?)==1)) && [[ $got == *"$exp" ]] || err_exit "attempt to set $v.get discipline does not fail gracefully" \
+			"(expected status 1 and match of *$(printf %q "$exp")," \
+			"got status $e$( ((e>128)) && print -n /SIG && kill -l "$e") and $(printf %q "$got"))"
+	done
+done
+
+# ======
+var1.get() { .sh.value=one; : $var2; }
+var2.get() { .sh.value=two; }
+got=$var1
+unset var1 var2
+[[ $got == one ]] || err_exit ".sh.value not restored after second .get discipline call (got $(printf %q "$got"))"
+
+# ======
+# TODO: this is known to fail with a .get or .getn discipline function
+for disc in set append unset
+do
+	for type in i F E
+	do
+		got=$(eval "
+			typeset -$type x
+			function x.$disc { :; }
+			x[0]=0
+			unset x
+			typeset -p x
+		")
+		[[ -z $got ]] || err_exit "-$type array with .$disc discipline fails to be unset (got $(printf %q "$got"))"
+	done
+done
 
 # ======
 exit $((Errors<125?Errors:125))

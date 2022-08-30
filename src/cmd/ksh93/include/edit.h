@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #ifndef SEARCHSIZE
@@ -57,19 +53,6 @@ typedef struct _edit_pos
 	unsigned short line;
 	unsigned short col;
 } Edpos_t;
-
-#if SHOPT_EDPREDICT
-typedef struct Histmatch
-{
-	struct Histmatch	*next;
-	int			index;
-	short			len;
-	short			count;
-	char			data[1];
-} Histmatch_t;
-#endif /* SHOPT_EDPREDICT */
-
-
 
 typedef struct edit
 {
@@ -143,14 +126,6 @@ typedef struct edit
 	Namval_t *e_default;	/* variable containing default value */
 	Namval_t *e_term;	/* TERM variable */
 	char 	e_termname[80];	/* terminal name */
-#if SHOPT_EDPREDICT
-	Histmatch_t	**hlist;
-	Histmatch_t	*hfirst;
-	unsigned short	nhlist;
-	unsigned short	hoff;
-	unsigned short	hmax;
-	char		hpat[40];
-#endif /* SHOPT_EDPREDICT */
 } Edit_t;
 
 #undef MAXWINDOW
@@ -174,7 +149,6 @@ typedef struct edit
 		(c<'J'?c+1-'A':(c+10-'J'))))))))))))))))
 #endif
 
-extern void	ed_crlf(Edit_t*);
 extern void	ed_putchar(Edit_t*, int);
 extern void	ed_ringbell(void);
 extern void	ed_setup(Edit_t*,int, int);
@@ -199,12 +173,6 @@ extern void	*ed_open(void);
 	extern void ed_genncpy(genchar*,const genchar*,int);
 	extern int ed_genlen(const genchar*);
 #endif /* SHOPT_MULTIBYTE */
-#if SHOPT_EDPREDICT
-    extern int	ed_histgen(Edit_t*, const char*);
-#   if SHOPT_ESH || SHOPT_VSH
-        extern void	ed_histlist(Edit_t*, int);
-#   endif /* SHOPT_ESH || SHOPT_VSH */
-#endif /* SHOPT_EDPREDICT */
 
 extern const char	e_runvi[];
 

@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -163,14 +160,14 @@ got=$(
 
 # Listing members of the hash table with 'alias -pt' should work
 exp='alias -t cat
-vi: tracked alias not found
+ls: tracked alias not found
 alias -t cat
 alias -t chmod'
 got=$(
 	set +x
 	redirect 2>&1
 	hash -r cat chmod
-	alias -pt cat vi  # vi shouldn't be added to the hash table
+	alias -pt cat ls  # ls shouldn't be added to the hash table
 	alias -pt
 )
 [[ $exp == $got ]] || err_exit "Listing members of the hash table with 'alias -pt' doesn't work" \
@@ -228,12 +225,12 @@ ret=$?
 	"(expected 2, got $ret)"
 
 # Detect zombie aliases with 'alias'.
-exp='vi: alias not found
+exp='ls: alias not found
 chmod: alias not found'
 got=$($SHELL -c '
-	hash vi chmod
+	hash ls chmod
 	hash -r
-	alias vi chmod
+	alias ls chmod
 ' 2>&1)
 ret=$?
 [[ $exp == $got ]] || err_exit "Listing removed tracked aliases with 'alias' should fail with an error message" \
@@ -242,12 +239,12 @@ ret=$?
 	"(expected 2, got $ret)"
 
 # Detect zombie aliases with 'alias -p'.
-exp='vi: alias not found
+exp='ls: alias not found
 chmod: alias not found'
 got=$($SHELL -c '
-	hash vi chmod
+	hash ls chmod
 	hash -r
-	alias -p vi chmod
+	alias -p ls chmod
 ' 2>&1)
 ret=$?
 [[ $exp == $got ]] || err_exit "Listing removed tracked aliases with 'alias -p' should fail with an error message" \
@@ -256,12 +253,12 @@ ret=$?
 	"(expected 2, got $ret)"
 
 # Detect zombie tracked aliases.
-exp='vi: tracked alias not found
+exp='ls: tracked alias not found
 chmod: tracked alias not found'
 got=$($SHELL -c '
-	hash vi chmod
+	hash ls chmod
 	hash -r
-	alias -pt vi chmod
+	alias -pt ls chmod
 ' 2>&1)
 ret=$?
 [[ $exp == $got ]] || err_exit "Listing removed tracked aliases with 'alias -pt' should fail with an error message" \
@@ -292,6 +289,16 @@ got=$(alias foo='echo "$? $$"'; eval foo)
 got=$(unalias foo; echo "$? $$")
 [[ $got == "$exp" ]] || err_exit "unalias in subshell: expected $(printf %q "$exp"), got $(printf %q "$got")"
 unalias foo
+
+# ======
+# Redefining a predefined alias, then unsetting it, caused a crash on trying to free a non-allocated pointer
+# https://github.com/ksh93/ksh/discussions/503#discussioncomment-3337172
+got=$({ "$SHELL" -i -c 'alias r=foo; unalias r'; } 2>&1) \
+|| err_exit "crash on redefining and unsetting predefined alias (got $(printf %q "$got"))"
+echo : >|script
+chmod +x script
+got=$({ "$SHELL" -i -c 'alias r=foo; ./script'; } 2>&1) \
+|| err_exit "crash on running script after redefining predefined alias (got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

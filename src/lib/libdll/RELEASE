@@ -1,3 +1,7 @@
+This file is of historical interest only. For recent changes in both ksh 93u+m
+and the accompanying libraries, see the file NEWS in the top-level directory.
+____
+
 12-07-25 add debug diagnostics
 11-10-11 dll_lib.c: add { dllnames() dll_lib() }
 10-10-20 dllscan.c: version arg "-" => 0

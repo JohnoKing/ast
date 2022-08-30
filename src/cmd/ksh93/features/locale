@@ -32,14 +32,4 @@ cat{
 	#	endif /* LC_MESSAGES */
 	#   endif /* _hdr_locale */
 	#endif /* _PACKAGE_ast */
-	#ifdef _hdr_locale
-	#   ifdef _lib_localeconv
-		static struct lconv *lp;
-	#	define GETDECIMAL(x)  (((lp=localeconv()) && lp->decimal_point && *lp->decimal_point) ?  *lp->decimal_point : '.' )
-	#   else
-	#	define GETDECIMAL(x)	('.')
-	#   endif /* _lib_localeconv */
-	#else
-	#   define GETDECIMAL(x)	('.')
-	#endif /* _hdr_locale */
 }end

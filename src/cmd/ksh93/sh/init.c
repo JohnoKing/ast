@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -27,6 +24,7 @@
  *
  */
 
+#include	"shopt.h"
 #include        "defs.h"
 #include        <stak.h>
 #include        <ccode.h>
@@ -146,9 +144,6 @@ char e_version[]	= "\n@(#)$Id: Version "
 
 #define RANDMASK	0x7fff
 
-#ifndef ARG_MAX
-#   define ARG_MAX	(1*1024*1024)
-#endif
 #ifndef CHILD_MAX
 #   define CHILD_MAX	(1*1024)
 #endif
@@ -229,12 +224,11 @@ static int		shlvl;
 static int		rand_shift;
 
 /*
- * out of memory routine for stak routines
+ * Exception callback routine for stk(3)/stak(3) and sh_*alloc wrappers.
  */
-static noreturn char *nomemory(int unused)
+static noreturn char *nomemory(size_t s)
 {
-	NOT_USED(unused);
-	errormsg(SH_DICT, ERROR_SYSTEM|ERROR_PANIC, "out of memory");
+	errormsg(SH_DICT, ERROR_SYSTEM|ERROR_PANIC, "out of memory (needed %llu bytes)", (uintmax_t)s);
 	UNREACHABLE();
 }
 
@@ -246,7 +240,7 @@ void *sh_malloc(size_t size)
 {
 	void *cp = malloc(size);
 	if(!cp)
-		nomemory(0);
+		nomemory(size);
 	return(cp);
 }
 
@@ -254,7 +248,7 @@ void *sh_realloc(void *ptr, size_t size)
 {
 	void *cp = realloc(ptr, size);
 	if(!cp)
-		nomemory(0);
+		nomemory(size);
 	return(cp);
 }
 
@@ -262,7 +256,7 @@ void *sh_calloc(size_t nmemb, size_t size)
 {
 	void *cp = calloc(nmemb, size);
 	if(!cp)
-		nomemory(0);
+		nomemory(size);
 	return(cp);
 }
 
@@ -270,7 +264,7 @@ char *sh_strdup(const char *s)
 {
 	char *dup = strdup(s);
 	if(!dup)
-		nomemory(0);
+		nomemory(strlen(s)+1);
 	return(dup);
 }
 
@@ -278,7 +272,7 @@ void *sh_memdup(const void *s, size_t n)
 {
 	void *dup = memdup(s, n);
 	if(!dup)
-		nomemory(0);
+		nomemory(n);
 	return(dup);
 }
 
@@ -286,7 +280,7 @@ char *sh_getcwd(void)
 {
 	char *cwd = getcwd(NIL(char*), 0);
 	if(!cwd && errno==ENOMEM)
-		nomemory(0);
+		nomemory(PATH_MAX);
 	return(cwd);
 }
 
@@ -428,6 +422,17 @@ static void put_cdpath(register Namval_t* np,const char *val,int flags,Namfun_t 
 	sh.cdpathlist = (void*)path_addpath((Pathcomp_t*)sh.cdpathlist,val,PATH_CDPATH);
 }
 
+static void init_radixpoint(void)
+{
+#if _hdr_locale && _lib_localeconv
+	struct lconv *lp;
+	if((lp = localeconv()) && lp->decimal_point && *lp->decimal_point)
+		sh.radixpoint = *lp->decimal_point;
+	else
+#endif
+		sh.radixpoint = '.';
+}
+
 #ifdef _hdr_locale
     /* Trap for the LC_* and LANG variables */
     static void put_lang(Namval_t* np,const char *val,int flags,Namfun_t *fp)
@@ -468,12 +473,14 @@ static void put_cdpath(register Namval_t* np,const char *val,int flags,Namfun_t 
 #endif
 		if(!r && val)
 		{
-			if(!sh_isstate(SH_INIT) || sh.login_sh==0)
+			if(!sh_isstate(SH_INIT) || !sh_isoption(SH_LOGIN_SHELL))
 				errormsg(SH_DICT,0,e_badlocale,val);
 			return;
 		}
 	}
 	nv_putv(np, val, flags, fp);
+	if(type==LC_ALL || type==LC_NUMERIC || type==LC_LANG)
+		init_radixpoint();
 	if(CC_NATIVE!=CC_ASCII && (type==LC_ALL || type==LC_LANG || type==LC_CTYPE))
 	{
 		if(sh_lexstates[ST_BEGIN]!=sh_lexrstates[ST_BEGIN])
@@ -549,6 +556,18 @@ static void put_ifs(register Namval_t* np,const char *val,int flags,Namfun_t *fp
 	}
 }
 
+/* Invalidate IFS state table */
+void sh_invalidate_ifs(void)
+{
+	Namval_t *np = sh_scoped(IFSNOD);
+	if(np)
+	{
+		struct ifs *ip = (struct ifs*)np->nvfun;
+		if(ip)
+			ip->ifsnp = 0;
+	}
+}
+
 /*
  * This is the lookup function for IFS
  * It keeps the sh.ifstable up to date
@@ -574,7 +593,8 @@ static char* get_ifs(register Namval_t* np, Namfun_t *fp)
 					continue;
 				}
 				n = S_DELIM;
-				if(c== *cp)
+				/* Treat a repeated char as S_DELIM even if whitespace, unless --posix is on */
+				if(c==*cp && !sh_isoption(SH_POSIX))
 					cp++;
 				else if(c=='\n')
 					n = S_NL;
@@ -693,7 +713,7 @@ static Sfdouble_t nget_rand(register Namval_t* np, Namfun_t *fp)
 
 static char* get_rand(register Namval_t* np, Namfun_t *fp)
 {
-	register long n = nget_rand(np,fp);
+	intmax_t n = (intmax_t)nget_rand(np,fp);
 	return(fmtbase(n, 10, 0));
 }
 
@@ -704,7 +724,7 @@ void sh_reseed_rand(struct rand *rp)
 	static unsigned int	seq;
 	timeofday(&tp);
 	time = (unsigned int)remainder(dtime(&tp) * 10000.0, (double)UINT_MAX);
-	srand(rp->rand_seed = sh.current_pid ^ time ^ ++seq);
+	srand(rp->rand_seed = (unsigned int)sh.current_pid ^ time ^ ++seq);
 	rp->rand_last = -1;
 }
 
@@ -743,7 +763,7 @@ static void put_lineno(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 
 static char* get_lineno(register Namval_t* np, Namfun_t *fp)
 {
-	long n = (long)nget_lineno(np,fp);
+	intmax_t n = (intmax_t)nget_lineno(np,fp);
 	return(fmtbase(n, 10, 0));
 }
 
@@ -1069,7 +1089,7 @@ static char* get_math(register Namval_t* np, Namfun_t *fp)
 	mp = (Namval_t*)dtprev(sh.fun_tree,&fake);
 	while(mp=(Namval_t*)dtnext(sh.fun_tree,mp))
 	{
-		if(memcmp(mp->nvname,".sh.math.",9))
+		if(strncmp(mp->nvname,".sh.math.",9))
 			break;
 		if(first++)
 			sfputc(sh.strbuf,' ');
@@ -1077,7 +1097,6 @@ static char* get_math(register Namval_t* np, Namfun_t *fp)
 	}
 	val = sfstruse(sh.strbuf);
 	return(val);
-	
 }
 
 static char *setdisc_any(Namval_t *np, const char *event, Namval_t *action, Namfun_t *fp)
@@ -1169,7 +1188,6 @@ int sh_type(register const char *path)
 {
 	register const char*	s;
 	register int		t = 0;
-	
 	if (s = (const char*)strrchr(path, '/'))
 	{
 		if (*path == '-')
@@ -1194,7 +1212,7 @@ int sh_type(register const char *path)
 				continue;
 			}
 		}
-		if (!(t & (SH_TYPE_PROFILE|SH_TYPE_RESTRICTED)))
+		if (!(t & SH_TYPE_RESTRICTED))
 		{
 			if (*s == 'r')
 			{
@@ -1224,7 +1242,7 @@ int sh_type(register const char *path)
 		if (!isalnum(*s))
 			return t;
 	}
-	return t & ~(SH_TYPE_KSH|SH_TYPE_PROFILE|SH_TYPE_RESTRICTED);
+	return t & ~(SH_TYPE_KSH|SH_TYPE_RESTRICTED);
 }
 
 
@@ -1254,16 +1272,13 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 		sh_regress_init();
 #endif
 		sh.current_pid = sh.pid = getpid();
-		sh.ppid = getppid();
+		sh.current_ppid = sh.ppid = getppid();
 		sh.userid=getuid();
 		sh.euserid=geteuid();
 		sh.groupid=getgid();
 		sh.egroupid=getegid();
-		sh.lim.arg_max = astconf_long(CONF_ARG_MAX);
 		sh.lim.child_max = (int)astconf_long(CONF_CHILD_MAX);
 		sh.lim.clk_tck = (int)astconf_long(CONF_CLK_TCK);
-		if(sh.lim.arg_max <=0)
-			sh.lim.arg_max = ARG_MAX;
 		if(sh.lim.child_max <=0)
 			sh.lim.child_max = CHILD_MAX;
 		if(sh.lim.clk_tck <=0)
@@ -1334,7 +1349,7 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 	{
 		type = sh_type(*argv);
 		if(type&SH_TYPE_LOGIN)
-			sh.login_sh = 2;
+			sh_onoption(SH_LOGIN_SHELL);
 		if(type&SH_TYPE_POSIX)
 		{
 			sh_onoption(SH_POSIX);
@@ -1443,8 +1458,7 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 		}
 		if(beenhere==1)
 		{
-			struct lconv*	lc;
-			sh.decomma = (lc=localeconv()) && lc->decimal_point && *lc->decimal_point==',';
+			init_radixpoint();
 			beenhere = 2;
 		}
 	}
@@ -1464,14 +1478,6 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 		else
 #endif /* SHOPT_P_SUID */
 			sh_onoption(SH_PRIVILEGED);
-#ifdef SHELLMAGIC
-		/* careful of #! setuid scripts with name beginning with - */
-		if(sh.login_sh && argv[1] && strcmp(argv[0],argv[1])==0)
-		{
-			errormsg(SH_DICT,ERROR_exit(1),e_prohibited);
-			UNREACHABLE();
-		}
-#endif /*SHELLMAGIC*/
 	}
 	else
 		sh_offoption(SH_PRIVILEGED);
@@ -1503,9 +1509,6 @@ Shell_t *sh_init(register int argc,register char *argv[], Shinit_f userinit)
 	astintercept(&sh.bltindata,1);
 	if(sh.userinit=userinit)
 		(*userinit)(&sh, 0);
-	sh.exittrap = 0;
-	sh.errtrap = 0;
-	sh.end_fn = 0;
 	error_info.exit = sh_exit;
 #ifdef BUILD_DTKSH
 	{
@@ -1624,9 +1627,8 @@ int sh_reinit(char *argv[])
 		if((dp = sh.alias_tree)->walk)
 			dp = dp->walk;
 		npnext = (Namval_t*)dtnext(sh.alias_tree,np);
-		nofree = nv_isattr(np,NV_NOFREE);			/* note: returns bitmask, not boolean */
-		_nv_unset(np,NV_RDONLY);				/* also clears NV_NOFREE attr, if any */
-		nv_delete(np,dp,nofree);
+		_nv_unset(np,nv_isattr(np,NV_NOFREE));
+		nv_delete(np,dp,0);
 	}
 	/* Delete hash table entries */
 	for(np = dtfirst(sh.track_tree); np; np = npnext)
@@ -1690,12 +1692,9 @@ int sh_reinit(char *argv[])
 	sh.inpipe = sh.outpipe = 0;
 	job_clear();
 	job.in_critical = 0;
-	sh.exittrap = 0;
-	sh.errtrap = 0;
-	sh.end_fn = 0;
-	/* update ${.sh.pid}, $$, $PPID */
-	sh.ppid = sh.current_pid;
-	sh.current_pid = sh.pid = getpid();
+	/* update $$, $PPID */
+	sh.ppid = sh.current_ppid;
+	sh.pid = sh.current_pid;
 	/* call user init function, if any */
 	if(sh.userinit)
 		(*sh.userinit)(&sh, 1);
@@ -1902,7 +1901,7 @@ static Init_t *nv_init(void)
 	nv_putval(SECONDS, (char*)&d, NV_DOUBLE);
 	nv_stack(RANDNOD, &ip->RAND_init.hdr);
 	nv_putval(RANDNOD, (char*)&d, NV_DOUBLE);
-	sh_reseed_rand((struct rand *)RANDNOD->nvfun);
+	sh_invalidate_rand_seed();
 	nv_stack(LINENO, &ip->LINENO_init);
 	SH_MATCHNOD->nvfun =  &ip->SH_MATCH_init.hdr;
 	nv_putsub(SH_MATCHNOD,(char*)0,10);
@@ -1919,6 +1918,7 @@ static Init_t *nv_init(void)
 #endif /* _hdr_locale */
 	(PPIDNOD)->nvalue.pidp = (&sh.ppid);
 	(SH_PIDNOD)->nvalue.pidp = (&sh.current_pid);
+	(SH_PPIDNOD)->nvalue.pidp = (&sh.current_ppid);
 	(SH_SUBSHELLNOD)->nvalue.ip = (&sh.realsubshell);
 	(TMOUTNOD)->nvalue.lp = (&sh.st.tmout);
 	(MCHKNOD)->nvalue.lp = (&sh_mailchk);
@@ -1950,7 +1950,6 @@ static Init_t *nv_init(void)
 /*
  * initialize name-value pairs
  */
-
 Dt_t *sh_inittree(const struct shtable2 *name_vals)
 {
 	register Namval_t *np;
@@ -1981,12 +1980,13 @@ Dt_t *sh_inittree(const struct shtable2 *name_vals)
 		}
 		np->nvenv = 0;
 		if(name_vals==(const struct shtable2*)shtab_builtins)
-			np->nvalue.bfp = (Nambfp_f)((struct shtable3*)tp)->sh_value;
+			np->nvalue.bfp = (void*)((struct shtable3*)tp)->sh_value;
 		else
 		{
 			if(name_vals == shtab_variables)
 				np->nvfun = &sh.nvfun;
-			np->nvalue.cp = (char*)tp->sh_value;
+			if(!nv_isnonptr(np))
+				np->nvalue.cp = (char*)tp->sh_value;
 		}
 		nv_setattr(np,tp->sh_number);
 		if(nv_isattr(np,NV_TABLE))
@@ -2008,7 +2008,6 @@ Dt_t *sh_inittree(const struct shtable2 *name_vals)
  *
  * Returns pointer to A__z env var from which to import attributes, or 0.
  */
-
 static char *env_init(void)
 {
 	register char		*cp;
@@ -2068,17 +2067,17 @@ static void env_import_attributes(char *next)
 				/* check for floating */
 				char *dp, *val = nv_getval(np);
 				strtol(val,&dp,10);
-				if(*dp=='.' || *dp=='e' || *dp=='E')
+				if(*dp==sh.radixpoint || *dp=='e' || *dp=='E')
 				{
 					char *lp;
 					flag |= NV_DOUBLE;
-					if(*dp=='.')
+					if(*dp==sh.radixpoint)
 					{
 						strtol(dp+1,&lp,10);
 						if(*lp)
 							dp = lp;
 					}
-					if(*dp && *dp!='.')
+					if(*dp && *dp!=sh.radixpoint)
 					{
 						flag |= NV_EXPNOTE;
 						size = dp-val;

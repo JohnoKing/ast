@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -392,7 +389,7 @@ function closure
 	done
 	return $r
 }
-closure 0 || err_exit -u2 'for loop function optimization bug2'
+closure 0 || err_exit 'for loop function optimization bug'
 dir=$tmp/dir
 mkdir $dir
 cd $dir || { err_exit "cd $dir failed"; exit 1; }
@@ -984,29 +981,25 @@ function _Dbg_debug_trap_handler
 	done
 }
 
-(
-: 'Disabling xtrace while running _Dbg_* functions'
-set +x	# TODO: the _Dbg_* functions are incompatible with xtrace. To expose the regression
-	# test failures, run 'bin/shtests -x -p functions'. Is this a bug in ksh?
 ((baseline=LINENO+2))
 trap '_Dbg_debug_trap_handler' DEBUG
 .  $tmp/debug foo bar
 trap '' DEBUG
-exit $Errors
-)
-Errors=$?
 
 caller() {
   integer .level=.sh.level .max=.sh.level-1
   while((--.level>=0))
   do
-      ((.sh.level = .level))
-      print -r -- "${.sh.lineno}"
+      # as of 2022-07-12, .sh.level can only be changed inside a DEBUG trap;
+      # the trap is executed right before turning it off with 'trap - DEBUG'
+      trap '((.sh.level = .level)); print -r -- "${.sh.lineno}"' DEBUG
+      trap - DEBUG
   done
 }
 bar() { caller;}
 set -- $(bar)
-[[ $1 == $2 ]] && err_exit ".sh.inline optimization bug"
+[[ $1 == $2 ]] && err_exit ".sh.lineno optimization bug (got values: $*)"
+
 ( $SHELL  -c ' function foo { typeset x=$1;print $1;};z=();z=($(foo bar)) ') 2> /dev/null ||  err_exit 'using a function to set an array in a command sub fails'
 
 {
@@ -1041,9 +1034,22 @@ function foo
 	typeset pid
 	$tmp1 > $tmp2 & pid=$!
 	wait $!
-	[[ $(< $tmp2) == $pid ]] || err_exit 'wrong PID for & job in function'
+	got=$(< $tmp2)
+	[[ $got == "$pid" ]] || err_exit 'wrong PID for & job in function' \
+		"(expected $(printf %q "$pid"), got $(printf %q "$got"))"
 }
 foo
+foo()
+{
+	$tmp1 > $tmp2 & pid=$!
+	wait $!
+	got=$(< $tmp2)
+	[[ $got == "$pid" ]] || err_exit 'wrong PID for & job in POSIX function' \
+		"(expected $(printf %q "$pid"), got $(printf %q "$got"))"
+}
+foo
+unset pid
+unset -f foo
 # make sure compiled functions work
 [[ $(tmp=$tmp $SHELL <<- \++++
 	cat > $tmp/functions <<- \EOF
@@ -1274,10 +1280,30 @@ got=$( { "$SHELL" -c 'PATH=/dev/null; function fn { unset -f fn; true; }; fn; fn
 # ======
 # Check if environment variables passed while invoking a function are exported
 # https://github.com/att/ast/issues/32
-unset foo
-function f2 { env | grep -q "^foo" || err_exit "Environment variable is not propagated from caller function"; }
-function f1 { f2; env | grep -q "^foo" || err_exit "Environment variable is not passed to a function"; }
-foo=bar f1
+# https://github.com/ksh93/ksh/issues/465
+exp='typeset -x -F 5 num=7.75000'
+exp=$exp$'\n'$exp$'\n'$exp
+got=$(
+	function f1 { typeset -p num; f2; }
+	function f2 { typeset -p num; f3; }
+	function f3 { typeset -p num; }
+	typeset -F5 num
+	num=3.25+4.5 f1
+)
+[[ $got == "$exp" ]] || err_exit 'assignment preceding ksh function call is not correctly exported or propagated' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+exp='typeset -F 5 num=7.75000'
+exp=$exp$'\n'$exp$'\n'$exp
+got=$(
+	f1() { typeset -p num; f2; }
+	f2() { typeset -p num; }
+	typeset -F5 num
+	num=3.25+4.5 f1
+	typeset -p num
+)
+[[ $got == "$exp" ]] || echo 'assignment preceding POSIX function call is not correctly exported or propagated' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 # Over-shifting in a POSIX function should terminate the script
@@ -1340,6 +1366,140 @@ EOF
 got=$( { "$SHELL" "$tmp/crash_rhbz1117404.ksh"; } 2>&1)
 ((!(e = $?))) || err_exit 'crash while handling function-local trap' \
 	"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
+
+# ======
+# 'typeset -g' should cause the active function scope to be ignored.
+# https://github.com/ksh93/ksh/issues/479#issuecomment-1140523291
+if	! command typeset -g x 2>/dev/null
+then
+	warning "shell does not have 'typeset -g'; skipping those tests"
+else
+	unset x arr a b c
+	# must specify the length for -X as the default is -X 24 on 32-bit systems and -X 32 on 64-bit systems
+	typeset -A exp=(
+		['x=123; function f { typeset -g x=456; }; function g { typeset x=789; f; }; g; typeset -p x']='x=456'
+		['x=123; function f { typeset -g -i x; }; f; typeset -p x']='typeset -i x=123'
+		['x=123; function f { typeset -g -F x; }; f; typeset -p x']='typeset -F x=123.0000000000'
+		['x=123; function f { typeset -g -E x; }; f; typeset -p x']='typeset -E x=123'
+		['x=123; function f { typeset -g -X24 x; }; f; typeset -p x']='typeset -X 24 x=0x1.ec0000000000000000000000p+6'
+		['x=aBc; function f { typeset -g -u x; }; f; typeset -p x']='typeset -u x=ABC'
+		['x=aBc; function f { typeset -g -l x; }; f; typeset -p x']='typeset -l x=abc'
+		['x=aBc; function f { typeset -g -L x; }; f; typeset -p x']='typeset -L 3 x=aBc'
+		['x=aBc; function f { typeset -g -R x; }; f; typeset -p x']='typeset -R 3 x=aBc'
+		['x=aBc; function f { typeset -g -Z x; }; f; typeset -p x']='typeset -Z 3 -R 3 x=aBc'
+		['x=aBc; function f { typeset -g -L2 x; }; f; typeset -p x']='typeset -L 2 x=aB'
+		['x=aBc; function f { typeset -g -R2 x; }; f; typeset -p x']='typeset -R 2 x=Bc'
+		['x=aBc; function f { typeset -g -Z2 x; }; f; typeset -p x']='typeset -Z 2 -R 2 x=Bc'
+		['x=8; function f { typeset -g -i2 x; }; f; typeset -p x']='typeset -i 2 x=2#1000'
+		['x=8; function f { typeset -g -i8 x; }; f; typeset -p x']='typeset -i 8 x=8#10'
+		['arr=(a b c); function f { typeset -g -i arr[1]=(1 2 3); }; f; typeset -p arr']='typeset -a -i arr=(0 (1 2 3) 0)'
+		['arr=(a b c); function f { typeset -g -F arr[1]=(1 2 3); }; f; typeset -p arr']='typeset -a -F arr=(0.0000000000 (1.0000000000 2.0000000000 3.0000000000) 0.0000000000)'
+		['arr=(a b c); function f { typeset -g -E arr[1]=(1 2 3); }; f; typeset -p arr']='typeset -a -E arr=(0 (1 2 3) 0)'
+		['arr=(a b c); function f { typeset -g -X24 arr[1]=(1 2 3); }; f; typeset -p arr']='typeset -a -X 24 arr=(0x0.000000000000000000000000p+0 (0x1.000000000000000000000000p+0 0x1.000000000000000000000000p+1 0x1.800000000000000000000000p+1) 0x0.000000000000000000000000p+0)'
+	)
+	for cmd in "${!exp[@]}"
+	do
+		got=$(set +x; eval "$cmd" 2>&1)
+		[[ $got == "${exp[$cmd]}" ]] || err_exit "typeset -g in $(printf %q "$cmd") failed to activate global" \
+			"scope from ksh function (expected $(printf %q "${exp[$cmd]}"), got $(printf %q "$got"))"
+	done
+	unset exp
+fi
+
+# ======
+# funcname.ksh crashed
+# https://github.com/ksh93/ksh/issues/212
+cat >$tmp/funcname.ksh <<-'EOF'
+# tweaked version of funname.ksh by Daniel Douglas
+# https://gist.github.com/ormaaj/12874b68acd06ee98b59
+# Used by permission: "Consider all my gists MIT / do whatever."
+# https://github.com/ksh93/ksh/issues/212#issuecomment-807915937
+
+# run in subshell for additional regression testing
+(
+	IFS='-'  # element separator for "$*" etc., incl. "${FUNCNAME[*]}"
+	typeset -a FUNCNAME
+
+	function FUNCNAME.get {
+	    nameref self=${.sh.name}
+	    if (( .sh.subscript < .sh.level )); then
+		trap "(( .sh.level -= .sh.subscript + 1 )); eval '(( .sh.level = ${.sh.level} ))' \; _=\${.sh.fun}" DEBUG
+		trap - DEBUG;
+	    fi
+
+	    (( .sh.subscript < .sh.level - 2 )) && self[.sh.subscript + 1]=
+	}
+
+	function f {
+	    if (($1 < 10)); then
+		print -r -- "${FUNCNAME[*]}"
+		g $(($1 + 1))
+	    fi
+	    print -r -- "${FUNCNAME[*]}"
+	}
+
+	function g {
+	    if (($1 < 10)); then
+		print -r -- "${FUNCNAME[*]}"
+		f $(($1 + 1))
+	    fi
+	    print -r -- "${FUNCNAME[*]}"
+	}
+
+	#typeset -ft FUNCNAME.get f g
+	f 0
+)
+: do not optimize out the subshell
+EOF
+exp='f
+g-f
+f-g-f
+g-f-g-f
+f-g-f-g-f
+g-f-g-f-g-f
+f-g-f-g-f-g-f
+g-f-g-f-g-f-g-f
+f-g-f-g-f-g-f-g-f
+g-f-g-f-g-f-g-f-g-f
+f-g-f-g-f-g-f-g-f-g-f
+g-f-g-f-g-f-g-f-g-f-
+f-g-f-g-f-g-f-g-f--
+g-f-g-f-g-f-g-f---
+f-g-f-g-f-g-f----
+g-f-g-f-g-f-----
+f-g-f-g-f------
+g-f-g-f-------
+f-g-f--------
+g-f---------
+f----------'
+got=$(set +x; { "$SHELL" funcname.ksh ;} 2>&1)
+[[ $got == "$exp" ]] || err_exit 'funcname.ksh crash (direct run)' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+# dotting it slightly changes the output
+exp='f-
+g-f-
+f-g-f-
+g-f-g-f-
+f-g-f-g-f-
+g-f-g-f-g-f-
+f-g-f-g-f-g-f-
+g-f-g-f-g-f-g-f-
+f-g-f-g-f-g-f-g-f-
+g-f-g-f-g-f-g-f-g-f-
+f-g-f-g-f-g-f-g-f-g-f-
+g-f-g-f-g-f-g-f-g-f--
+f-g-f-g-f-g-f-g-f---
+g-f-g-f-g-f-g-f----
+f-g-f-g-f-g-f-----
+g-f-g-f-g-f------
+f-g-f-g-f-------
+g-f-g-f--------
+f-g-f---------
+g-f----------
+f-----------'
+got=$(set +x; { "$SHELL" -c '. ./funcname.ksh' ;} 2>&1)
+[[ $got == "$exp" ]] || err_exit 'funcname.ksh crash (dot)' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

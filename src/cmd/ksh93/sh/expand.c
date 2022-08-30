@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -26,6 +22,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	"variables.h"
 #include	"test.h"
@@ -97,7 +94,7 @@ int path_expand(const char *pattern, struct argnod **arghead)
 		gp->gl_suffix = sufstr;
 	gp->gl_intr = &sh.trapnote;
 	suflen = 0;
-	if(memcmp(pattern,"~(N",3)==0)
+	if(strncmp(pattern,"~(N",3)==0)
 		flags &= ~GLOB_NOCHECK;
 	glob(pattern, flags, 0, gp);
 	sh_sigcheck();
@@ -144,7 +141,6 @@ static int scantree(Dt_t *tree, const char *pattern, struct argnod **arghead)
  * generate the list of files found by adding an suffix to end of name
  * The number of matches is returned
  */
-
 int path_complete(const char *name,register const char *suffix, struct argnod **arghead)
 {
 	sufstr = suffix;

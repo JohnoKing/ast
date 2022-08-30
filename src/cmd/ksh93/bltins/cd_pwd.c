@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -29,6 +25,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<stak.h>
 #include	<error.h>
@@ -103,8 +100,8 @@ int	b_cd(int argc, char *argv[],Shbltin_t *context)
 	if(sh.subshell)
 	{
 		/* clone $OLDPWD and $PWD into the subshell's scope */
-		opwdnod = sh_assignok(opwdnod,1);
-		pwdnod = sh_assignok(pwdnod,1);
+		sh_assignok(opwdnod,1);
+		sh_assignok(pwdnod,1);
 	}
 	if(argc==2)
 		dir = sh_substitute(oldpwd,dir,argv[1]);
@@ -166,14 +163,13 @@ int	b_cd(int argc, char *argv[],Shbltin_t *context)
 		dp = cdpath?cdpath->name:"";
 		cdpath = path_nextcomp(cdpath,dir,0);
 #if _WINIX
-                if(*stakptr(PATH_OFFSET+1)==':' && isalpha(*stakptr(PATH_OFFSET)))
+		if(*stakptr(PATH_OFFSET+1)==':' && isalpha(*stakptr(PATH_OFFSET)))
 		{
 			*stakptr(PATH_OFFSET+1) = *stakptr(PATH_OFFSET);
 			*stakptr(PATH_OFFSET)='/';
 		}
 #endif /* _WINIX */
-                if(*stakptr(PATH_OFFSET)!='/')
-
+		if(*stakptr(PATH_OFFSET)!='/')
 		{
 			char *last=(char*)stakfreeze(1);
 			stakseek(PATH_OFFSET);

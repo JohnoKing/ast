@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #ifndef PATH_OFFSET
@@ -31,7 +27,7 @@
 #include	"defs.h"
 
 #if !defined(SHOPT_SPAWN)
-#   if _UWIN || _use_spawnveg
+#   if _use_spawnveg
 #	define  SHOPT_SPAWN  1
 #   endif
 #endif /* !SHOPT_SPAWN */
@@ -83,12 +79,8 @@ extern char 		*path_fullname(const char*);
 extern int 		path_expand(const char*, struct argnod**);
 extern noreturn void 	path_exec(const char*,char*[],struct argnod*);
 extern pid_t		path_spawn(const char*,char*[],char*[],Pathcomp_t*,int);
-#if defined(__EXPORT__) && defined(_BLD_DLL)
-#   define extern __EXPORT__
-#endif
 extern int		path_open(const char*,Pathcomp_t*);
 extern Pathcomp_t 	*path_get(const char*);
-#undef extern
 extern char 		*path_pwd(void);
 extern Pathcomp_t	*path_nextcomp(Pathcomp_t*,const char*,Pathcomp_t*);
 extern int		path_search(const char*,Pathcomp_t**,int);
@@ -107,7 +99,6 @@ extern Shbltin_f	sh_getlib(char*,Pathcomp_t*);
 /* constant strings needed for whence */
 extern const char e_timeformat[];
 extern const char e_badtformat[];
-extern const char e_dot[];
 extern const char e_funload[];
 extern const char e_pwd[];
 extern const char e_logout[];

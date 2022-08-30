@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -26,6 +23,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<fcin.h>
 #include	"variables.h"
@@ -55,11 +53,10 @@
 #   include <sys/resource.h>
 #endif
 
-#if _lib_posix_spawn > 1 && _lib_posix_spawn_file_actions_addtcsetpgrp_np
+#undef _use_ntfork_tcpgrp
+#if defined(JOBS) && SHOPT_SPAWN && _lib_posix_spawn > 1 && _lib_posix_spawn_file_actions_addtcsetpgrp_np
 #define _use_ntfork_tcpgrp 1
 #endif
-
-#define SH_NTFORK	SH_TIMING
 
 #if _lib_nice
     extern int	nice(int);
@@ -167,43 +164,6 @@ static inline double timeval_to_double(struct timeval tv)
 #endif
 
 /*
- * The following two functions allow command substitution for non-builtins
- * to use a pipe and to wait for the pipe to close before restoring to a
- * temp file.
- */
-static int      subpipe[3],subdup,tsetio,usepipe;
-
-static int iousepipe(void)
-{
-	if(usepipe)
-	{
-		usepipe++;
-		sh_iounpipe();
-	}
-	if(sh_rpipe(subpipe) < 0)
-		return(0);
-	usepipe++;
-	subpipe[2] = sh_fcntl(subpipe[1],F_DUPFD,10);
-	sh_close(subpipe[1]);
-	return(1);
-}
-
-void sh_iounpipe(void)
-{
-	char buff[SF_BUFSIZE];
-	if(!usepipe)
-		return;
-	--usepipe;
-	sh_close(subpipe[2]);
-	while(read(subpipe[0],buff,sizeof(buff))>0)
-		;
-	sh_close(subpipe[0]);
-	subpipe[0] = -1;
-	tsetio = 0;
-	usepipe = 0;
-}
-
-/*
  * print time <t> in h:m:s format with precision <p>
  */
 #ifdef timeofday
@@ -238,9 +198,9 @@ static void l_time(Sfio_t *outfile,register clock_t t,int precision)
 	if(hr)
 		sfprintf(outfile,"%dh",hr);
 	if(precision)
-		sfprintf(outfile,"%dm%02d%c%0*ds",min,sec,GETDECIMAL(0),precision,frac);
+		sfprintf(outfile, sh_isoption(SH_POSIX) ? "%dm%d%c%0*ds" : "%dm%02d%c%0*ds", min, sec, sh.radixpoint, precision, frac);
 	else
-		sfprintf(outfile,"%dm%02ds",min,sec);
+		sfprintf(outfile, sh_isoption(SH_POSIX) ? "%dm%ds" : "%dm%02ds", min, sec);
 }
 
 #define TM_REAL_IDX 0
@@ -343,7 +303,7 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 			for(n = (6 - precision); n > 0; --n)
 				frac /= 10;
 			if(precision)
-				sfprintf(stkp, "%d%c%0*d", tvp->tv_sec, GETDECIMAL(0), precision, frac);
+				sfprintf(stkp, "%d%c%0*d", tvp->tv_sec, sh.radixpoint, precision, frac);
 			else
 				sfprintf(stkp, "%d", tvp->tv_sec);
 		}
@@ -408,7 +368,7 @@ static int p_comarg(register struct comnod *com)
 		bp->ptr = nv_context(np);
 		bp->data = com->comstate;
 		bp->flags = SH_END_OPTIM;
-		((Shbltin_f)funptr(np))(0,(char**)0, bp);
+		(funptr(np))(0, NIL(char**), bp);
 		bp->ptr = save_ptr;
 		bp->data = save_data;
 	}
@@ -555,63 +515,36 @@ static void out_string(Sfio_t *iop, register const char *cp, int c, int quoted)
 	sfputr(iop,cp,c);
 }
 
-struct Level
-{
-	Namfun_t	hdr;
-	short		maxlevel;
-};
-
 /*
- * this is for a debugger but it hasn't been tested yet
- * if a debug script sets .sh.level it should set up the scope
- * as if you were executing in that level
- */ 
+ * If a script changes .sh.level inside a DEBUG trap, it will switch the
+ * scope as if it were executing the trap at that function call depth.
+ */
 static void put_level(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 {
 	Shscope_t	*sp;
-	struct Level *lp = (struct Level*)fp;
-	int16_t level, oldlevel = (int16_t)nv_getnum(np);
-	nv_putv(np,val,flags,fp);
-	if(!val)
-	{
-		fp = nv_stack(np, NIL(Namfun_t*));
-		if(fp && !fp->nofree)
-			free((void*)fp);
+	int16_t level, oldlevel = np->nvalue.s;
+	if(val)
+		nv_putv(np,val,flags,fp);
+	else
 		return;
-	}
-	level = nv_getnum(np);
-	if(level<0 || level > lp->maxlevel)
+	level = np->nvalue.s;
+	if(level < 0 || level > sh.fn_depth + sh.dot_depth)
 	{
-		nv_putv(np, (char*)&oldlevel, NV_INT16, fp);
-		/* perhaps this should be an error */
-		return;
+		np->nvalue.s = oldlevel;
+		errormsg(SH_DICT,ERROR_exit(1),"%d: level out of range",level);
+		UNREACHABLE();
 	}
 	if(level==oldlevel)
 		return;
 	if(sp = sh_getscope(level,SEEK_SET))
-	{
 		sh_setscope(sp);
-		error_info.id = sp->cmdname;
-		
-	}
 }
 
-static const Namdisc_t level_disc = {  sizeof(struct Level), put_level };
-
-static struct Level *init_level(int level)
-{
-	struct Level *lp = sh_newof(NiL,struct Level,1,0);
-	lp->maxlevel = level;
-	_nv_unset(SH_LEVELNOD,0);
-	nv_onattr(SH_LEVELNOD,NV_INT16|NV_NOFREE);
-	sh.last_root = nv_dict(DOTSHNOD);
-	nv_putval(SH_LEVELNOD,(char*)&lp->maxlevel,NV_INT16);
-	lp->hdr.disc = &level_disc;
-	nv_disc(SH_LEVELNOD,&lp->hdr,NV_FIRST);
-	return(lp);
-}
+static const Namdisc_t level_disc = { sizeof(Namfun_t), put_level };
+static Namfun_t level_disc_fun = { &level_disc, 1 };
 
 /*
+ * Execute the DEBUG trap:
  * write the current command on the stack and make it available as .sh.command
  */
 int sh_debug(const char *trap, const char *name, const char *subscript, char *const argv[], int flags)
@@ -623,7 +556,6 @@ int sh_debug(const char *trap, const char *name, const char *subscript, char *co
 	char			*sav = stkfreeze(stkp,0);
 	const char		*cp = "+=( ";
 	Sfio_t			*iop = stkstd;
-	short			level;
 	if(sh.indebug)
 		return(0);
 	sh.indebug = 1;
@@ -656,23 +588,22 @@ int sh_debug(const char *trap, const char *name, const char *subscript, char *co
 	else if(iop==stkstd)
 		*stkptr(stkp,stktell(stkp)-1) = 0;
 	np->nvalue.cp = stkfreeze(stkp,1);
-	/* now setup .sh.level variable */
 	sh.st.lineno = error_info.line;
-	level  = sh.fn_depth+sh.dot_depth;
-	sh.last_root = nv_dict(DOTSHNOD);
-	if(!SH_LEVELNOD->nvfun || !SH_LEVELNOD->nvfun->disc || nv_isattr(SH_LEVELNOD,NV_INT16|NV_NOFREE)!=(NV_INT16|NV_NOFREE))
-		init_level(level);
-	else
-		nv_putval(SH_LEVELNOD,(char*)&level,NV_INT16);
 	savst = sh.st;
 	sh.st.trap[SH_DEBUGTRAP] = 0;
+	/* set up .sh.level variable */
+	if(!SH_LEVELNOD->nvfun || !SH_LEVELNOD->nvfun->disc)
+		nv_disc(SH_LEVELNOD,&level_disc_fun,NV_FIRST);
+	nv_offattr(SH_LEVELNOD,NV_RDONLY);
+	/* run the trap */
 	n = sh_trap(trap,0);
+	nv_onattr(SH_LEVELNOD,NV_RDONLY);
 	np->nvalue.cp = 0;
 	sh.indebug = 0;
 	nv_onattr(SH_PATHNAMENOD,NV_NOFREE);
 	nv_onattr(SH_FUNNAMENOD,NV_NOFREE);
-	if(sh.st.cmdname)
-		error_info.id = sh.st.cmdname;
+	/* restore scope */
+	update_sh_level();
 	sh.st = savst;
 	if(sav != stkptr(stkp,0))
 		stkset(stkp,sav,offset);
@@ -698,12 +629,6 @@ int sh_eval(register Sfio_t *iop, int mode)
 	io_save = iop; /* preserve correct value across longjmp */
 	sh.binscript = 0;
 	sh.comsub = 0;
-#define SH_TOPFUN	0x8000	/* this is a temporary tksh hack */
-	if (mode & SH_TOPFUN)
-	{
-		mode ^= SH_TOPFUN;
-		sh.fn_reset = 1;
-	}
 	sh_pushcontext(buffp,SH_JMPEVAL);
 	buffp->olist = pp->olist;
 	jmpval = sigsetjmp(buffp->buff,0);
@@ -750,7 +675,6 @@ int sh_eval(register Sfio_t *iop, int mode)
 
 	sh_freeup();
 	sh.st.staklist = saveslp;
-	sh.fn_reset = 0;
 	if(jmpval>SH_JMPEVAL)
 		siglongjmp(*sh.jmplist,jmpval);
 	return(sh.exitval);
@@ -810,7 +734,7 @@ static int set_instance(Namval_t *nq, Namval_t *node, struct Namref *nr)
 	if((ap=nv_arrayptr(nq)) && (sp = nv_getsub(nq)))
 		sp = sh_strdup(sp);
 	sh.instance = 0;
-	if(sh.var_tree!=sh.var_base && !nv_search((char*)nq,nr->root,HASH_BUCKET|HASH_NOSCOPE))
+	if(sh.var_tree!=sh.var_base && !nv_search((char*)nq,nr->root,NV_REF|NV_NOSCOPE))
 	{
 #if SHOPT_NAMESPACE
 		nr->root = sh.namespace?nv_dict(sh.namespace):sh.var_base;
@@ -887,8 +811,8 @@ static Namval_t *enter_namespace(Namval_t *nsp)
 		oroot = nv_dict(onsp);
 		if(!nsp)
 		{
-			path = nv_search(PATHNOD->nvname,oroot,HASH_NOSCOPE);
-			fpath = nv_search(FPATHNOD->nvname,oroot,HASH_NOSCOPE);
+			path = nv_search(PATHNOD->nvname,oroot,NV_NOSCOPE);
+			fpath = nv_search(FPATHNOD->nvname,oroot,NV_NOSCOPE);
 		}
 		if(sh.var_tree==oroot)
 		{
@@ -907,9 +831,9 @@ static Namval_t *enter_namespace(Namval_t *nsp)
 		}
 	}
 	sh.namespace = nsp;
-	if(path && (path = nv_search(PATHNOD->nvname,sh.var_tree,HASH_NOSCOPE)) && (val=nv_getval(path)))
+	if(path && (path = nv_search(PATHNOD->nvname,sh.var_tree,NV_NOSCOPE)) && (val=nv_getval(path)))
 		nv_putval(path,val,NV_RDONLY);
-	if(fpath && (fpath = nv_search(FPATHNOD->nvname,sh.var_tree,HASH_NOSCOPE)) && (val=nv_getval(fpath)))
+	if(fpath && (fpath = nv_search(FPATHNOD->nvname,sh.var_tree,NV_NOSCOPE)) && (val=nv_getval(fpath)))
 		nv_putval(fpath,val,NV_RDONLY);
 	return(onsp);
 }
@@ -918,10 +842,18 @@ static Namval_t *enter_namespace(Namval_t *nsp)
 /*
  * Check whether to execve(2) the final command or make its redirections permanent.
  */
-static int check_exec_optimization(struct ionod *iop)
+static int check_exec_optimization(int type, int execflg, int execflg2, struct ionod *iop)
 {
-	if(sh.subshell || sh.exittrap || sh.errtrap)
+	if(type&(FAMP|FPOU)
+	|| !(execflg && sh.fn_depth==0 || execflg2)
+	|| sh.st.trapdontexec
+	|| sh.subshell
+	|| ((struct checkpt*)sh.jmplist)->mode==SH_JMPEVAL
+	|| sh_isstate(SH_XARG)
+	|| (pipejob && (sh_isstate(SH_MONITOR) || sh_isoption(SH_PIPEFAIL) || sh_isstate(SH_TIMING))))
+	{
 		return(0);
+	}
 	/* '<>;' (IOREWRITE) redirections are incompatible with exec */
 	while(iop && !(iop->iofile & IOREWRITE))
 		iop = iop->ionxt;
@@ -930,24 +862,21 @@ static int check_exec_optimization(struct ionod *iop)
 	return(1);
 }
 
+/*
+ * Main execution function: execute any type of command.
+ */
 int sh_exec(register const Shnode_t *t, int flags)
 {
-	Stk_t			*stkp = sh.stk;
-	int			unpipe=0;
 	sh_sigcheck();
-	if(t && !sh.st.execbrk && !sh_isoption(SH_NOEXEC))
+	if(t && sh.st.breakcnt==0 && !sh_isoption(SH_NOEXEC))
 	{
-		register int 	type = flags;
+		Stk_t		*stkp = sh.stk;
+		register int 	type = t->tre.tretyp;
 		register char	*com0 = 0;
-		int 		errorflg = (type&sh_state(SH_ERREXIT))|OPTIMIZE;
-		int 		execflg = (type&sh_state(SH_NOFORK));
-		int 		execflg2 = (type&sh_state(SH_FORKED));
-		int 		mainloop = (type&sh_state(SH_INTERACTIVE));
-#if SHOPT_SPAWN
-		int		ntflag = (type&sh_state(SH_NTFORK));
-#else
-		int		ntflag = 0;
-#endif
+		int 		errorflg = (flags&sh_state(SH_ERREXIT))|OPTIMIZE;
+		int 		execflg = (flags&sh_state(SH_NOFORK));
+		int 		execflg2 = (flags&sh_state(SH_FORKED));
+		int 		mainloop = (flags&sh_state(SH_INTERACTIVE));
 		int		topfd = sh.topfd;
 		char 		*sav=stkfreeze(stkp,0);
 		char		*cp=0, **com=0, *comn;
@@ -970,12 +899,14 @@ int sh_exec(register const Shnode_t *t, int flags)
 		sh_offstate(SH_DEFPATH);
 		if(!(flags & sh_state(SH_ERREXIT)))
 			sh_offstate(SH_ERREXIT);
-		type = t->tre.tretyp;
 		sh.exitval=0;
 		sh.lastsig = 0;
-		sh.lastpath = 0;
+		sh.chldexitsig = 0;
 		switch(type&COMMSK)
 		{
+		    /*
+		     * Simple command
+		     */
 		    case TCOM:
 		    {
 			register struct argnod	*argp;
@@ -1067,11 +998,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 						else if(checkopt(com,'a'))
 							flgs |= NV_IARRAY;
 					}
-					if(np)
-						flgs |= NV_UNJUST;
-					if(np && np->nvalue.bfp==SYSTYPESET->nvalue.bfp)
+					if(np && funptr(np)==b_typeset)
 					{
 						/* command calls b_typeset(); treat as a typeset variant */
+						flgs |= NV_UNATTR;  /* unset previous attributes before assigning */
 						if(np < SYSTYPESET || np > SYSTYPESET_END)
 						{
 							sh.typeinit = np;
@@ -1083,6 +1013,8 @@ int sh_exec(register const Shnode_t *t, int flags)
 							flgs |= NV_STATIC;
 						if(checkopt(com,'m'))
 							flgs |= NV_MOVE;
+						if(checkopt(com,'g'))
+							flgs |= NV_GLOBAL;
 						if(np==SYSNAMEREF || checkopt(com,'n'))
 							flgs |= NV_NOREF;
 						else if(argn>=3 && checkopt(com,'T'))
@@ -1102,7 +1034,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 #endif /* SHOPT_NAMESPACE */
 							sh.prefix = NV_CLASS;
 							flgs |= NV_TYPE;
-			
 						}
 						if(sh.fn_depth && !sh.prefix)
 							flgs |= NV_NOSCOPE;
@@ -1114,9 +1045,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 					else
 						flgs |= NV_VARNAME;
 					/* execute the list of assignments */
-					if((!np || nv_isattr(np,BLT_SPC)) && !command)
+					if((!np || nv_isattr(np,BLT_SPC)) && !command || sh.mktype)
 					{
-						/* bare assignment(s) or special builtin, and no 'command' prefix: exit on error */
+						/* (bare assignment(s) or special builtin) and no 'command' prefix,
+						 * or we're inside a type definition: exit on error */
 						nv_setlist(argp,flgs,tp);
 					}
 					else
@@ -1146,7 +1078,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 				int tflags = 1;
 				if(np && nv_isattr(np,BLT_DCL))
 					tflags |= 2;
-				if(execflg && !check_exec_optimization(io))
+				if(execflg && !check_exec_optimization(type,execflg,execflg2,io))
 					execflg = 0;
 				if(argn==0)
 				{
@@ -1191,7 +1123,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 				}
 				if(io)
 					sfsync(sh.outpool);
-				sh.lastpath = 0;
 				if(!np)
 				{
 					if(*com0 == '/' && !sh_isoption(SH_RESTRICTED))
@@ -1239,40 +1170,15 @@ int sh_exec(register const Shnode_t *t, int flags)
 				/* check for builtins */
 				if(np && is_abuiltin(np) && !sh_isstate(SH_XARG))
 				{
-					volatile int scope=0, share=0;
+					volatile char scope=0, share=0, was_mktype=(sh.mktype!=NIL(void*));
 					volatile void *save_ptr;
 					volatile void *save_data;
 					int save_prompt;
 					int was_nofork = execflg?sh_isstate(SH_NOFORK):0;
 					struct checkpt *buffp = (struct checkpt*)stkalloc(sh.stk,sizeof(struct checkpt));
-#if SHOPT_VSH
-					volatile unsigned long was_vi=0;
-#endif
-#if SHOPT_ESH
-					volatile unsigned long was_emacs=0, was_gmacs=0;
-#endif
-					struct stat statb;
 					bp = &sh.bltindata;
 					save_ptr = bp->ptr;
 					save_data = bp->data;
-					memset(&statb, 0, sizeof(struct stat));
-					if(strchr(nv_name(np),'/'))
-					{
-						/*
-						 * disable editors for built-in
-						 * versions of commands on PATH
-						 */
-#if SHOPT_VSH
-						was_vi = sh_isoption(SH_VI);
-						sh_offoption(SH_VI);
-#endif
-#if SHOPT_ESH
-						was_emacs = sh_isoption(SH_EMACS);
-						was_gmacs = sh_isoption(SH_GMACS);
-						sh_offoption(SH_EMACS);
-						sh_offoption(SH_GMACS);
-#endif
-					}
 					if(execflg)
 						sh_onstate(SH_NOFORK);
 					sh_pushcontext(buffp,SH_JMPCMD);
@@ -1324,10 +1230,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 						}
 						if(!(nv_isattr(np,BLT_ENV)))
 						{
-							if(!sh.pwd)
-								path_pwd();
-							if(sh.pwd)
-								stat(e_dot,&statb);
 							sfsync(NULL);
 							share = sfset(sfstdin,SF_SHARE,0);
 							sh_onstate(SH_STOPOK);
@@ -1346,7 +1248,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 						error_info.id = *com;
 						if(argn)
 							sh.exitval = 0;
-						sh.bltinfun = (Shbltin_f)funptr(np);
+						sh.bltinfun = funptr(np);
 						bp->bnode = np;
 						bp->vnode = nq;
 						bp->ptr = nv_context(np);
@@ -1356,15 +1258,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 						bp->flags = (OPTIMIZE!=0);
 						if(sh.subshell && nv_isattr(np,BLT_NOSFIO))
 							sh_subtmpfile();
-						if(execflg && !sh.subshell &&
-							!sh.st.trapcom[0] && !sh.st.trap[SH_ERRTRAP] && sh.fn_depth==0 && !nv_isattr(np,BLT_ENV))
-						{
-							/* do close-on-exec */
-							int fd;
-							for(fd=0; fd < sh.lim.open_max; fd++)
-								if((sh.fdstatus[fd]&IOCLEX)&&fd!=sh.infd)
-									sh_close(fd);
-						}
 						if(argn)
 							sh.exitval = (*sh.bltinfun)(argn,com,(void*)bp);
 						if(error_info.flags&ERROR_INTERACTIVE)
@@ -1393,7 +1286,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 						if(sh.bltinfun && (error_info.flags&ERROR_NOTIFY))
 							(*sh.bltinfun)(-2,com,(void*)bp);
 						/* failure on special built-ins fatal */
-						if(jmpval<=SH_JMPCMD  && (!nv_isattr(np,BLT_SPC) || command))
+						if(jmpval<=SH_JMPCMD && (!nv_isattr(np,BLT_SPC) || command) && !was_mktype)
 							jmpval=0;
 #if !SHOPT_DEVFD
 						fifo_cleanup();
@@ -1409,14 +1302,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 						sh_offstate(SH_NOFORK);
 					if(!(nv_isattr(np,BLT_ENV)))
 					{
-						if(sh.pwd)
-						{
-							struct stat stata;
-							stat(e_dot,&stata);
-							/* restore directory changed */
-							if(statb.st_ino!=stata.st_ino || statb.st_dev!=stata.st_dev)
-								chdir(sh.pwd);
-						}
 						sh_offstate(SH_STOPOK);
 						if(share&SF_SHARE)
 							sfset(sfstdin,SF_PUBLIC|SF_SHARE,1);
@@ -1431,17 +1316,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 					sh.bltinfun = 0;
 					if(buffp->olist)
 						free_list(buffp->olist);
-#if SHOPT_VSH
-					if(was_vi)
-						sh_onoption(SH_VI);
-					else
-#endif
-#if SHOPT_ESH
-					     if(was_emacs)
-						sh_onoption(SH_EMACS);
-					else if(was_gmacs)
-						sh_onoption(SH_GMACS);
-#endif
 					if(scope)
 						sh_unscope();
 					bp->ptr = (void*)save_ptr;
@@ -1451,6 +1325,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 						siglongjmp(*sh.jmplist,jmpval);
 					if(sh.exitval >=0)
 						goto setexit;
+					/*
+					 * If a built-in sets sh.exitval < 0 (must be allowed by BLT_EXIT attribute),
+					 * then fall through to TFORK which runs the external command by that name
+					 */
 					np = 0;
 					type=0;
 				}
@@ -1477,9 +1355,8 @@ int sh_exec(register const Shnode_t *t, int flags)
 								np = sh_fsearch(com0,0);
 							else
 #endif /* SHOPT_NAMESPACE */
-							np = nv_search(com0,sh.fun_tree,HASH_NOSCOPE);
+							np = nv_search(com0,sh.fun_tree,NV_NOSCOPE);
 						}
-						
 						if(!np->nvalue.ip)
 						{
 							if(indx==1)
@@ -1498,7 +1375,8 @@ int sh_exec(register const Shnode_t *t, int flags)
 					/* increase refcnt for unset */
 					slp = (struct slnod*)np->nvenv;
 					sh_funstaks(slp->slchild,1);
-					staklink(slp->slptr);
+					if(slp->slptr)
+						staklink(slp->slptr);
 					if(nq)
 					{
 						Namval_t *mp=0;
@@ -1514,7 +1392,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 						jmpval = sigsetjmp(buffp->buff,0);
 					}
 					if(jmpval == 0)
-
 					{
 						if(io)
 							indx = sh_redirect(io,execflg);
@@ -1525,7 +1402,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 							if(cp)
 							{
 								*cp = 0;
-								namespace = nv_search(np->nvname,sh.var_base,HASH_NOSCOPE);
+								namespace = nv_search(np->nvname,sh.var_base,NV_NOSCOPE);
 								*cp = '.';
 							}
 						}
@@ -1546,11 +1423,17 @@ int sh_exec(register const Shnode_t *t, int flags)
 					if(nq)
 						unset_instance(nq,&node,&nr,mode);
 					sh_funstaks(slp->slchild,-1);
-					stakdelete(slp->slptr);
+					if(slp->slptr)
+					{
+						Stak_t *sp = slp->slptr;
+						slp->slptr = NIL(Stak_t*);
+						stakdelete(sp);
+					}
 					if(jmpval > SH_JMPFUN || (io && jmpval > SH_JMPIO))
 						siglongjmp(*sh.jmplist,jmpval);
 					goto setexit;
 				}
+				/* not a built-in or function: external command, fall through to TFORK */
 			}
 			else if(!io)
 			{
@@ -1565,31 +1448,18 @@ int sh_exec(register const Shnode_t *t, int flags)
 			}
 		    }
 		    /* FALLTHROUGH */
+
+		    /*
+		     * Any command that needs the shell to fork (e.g. background or external)
+		     */
 		    case TFORK:
 		    {
 			register pid_t parent;
 			int no_fork,jobid;
 			int pipes[3];
 			if(sh.subshell)
-			{
 				sh_subtmpfile();
-				if((type&(FAMP|TFORK))==(FAMP|TFORK))
-				{
-					if(sh.comsub && !(sh.fdstatus[1]&IONOSEEK))
-						unpipe = iousepipe();
-					if(!sh.subshare)
-						sh_subfork();
-				}
-			}
-			no_fork = !ntflag
-			&& !(type&(FAMP|FPOU))
-			&& !sh.subshell
-			&& !(sh.st.trapcom[SIGINT] && *sh.st.trapcom[SIGINT])
-			&& !sh.st.trapcom[0]
-			&& !sh.st.trap[SH_ERRTRAP]
-			&& ((struct checkpt*)sh.jmplist)->mode!=SH_JMPEVAL
-			&& (execflg2 || (execflg && sh.fn_depth==0 && !(pipejob && sh_isoption(SH_PIPEFAIL))));
-			if(no_fork)
+			if(no_fork = check_exec_optimization(type,execflg,execflg2,t->fork.forkio))
 				job.parent=parent=0;
 			else
 			{
@@ -1605,7 +1475,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 					}
 				}
 #endif /* SHOPT_BGX */
-				nv_getval(RANDNOD);
 				if(type&FCOOP)
 				{
 					pipes[2] = 0;
@@ -1622,13 +1491,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 				if(com && !job.jobcontrol)
 #endif /* _use_ntfork_tcpgrp */
 				{
-					parent = sh_ntfork(t,com,&jobid,ntflag);
+					parent = sh_ntfork(t,com,&jobid,topfd);
 					if(parent<0)
-					{
-						if(sh.topfd > topfd)
-							sh_iorestore(topfd,0);  /* prevent FD leak from 'not found' */
 						break;
-					}
 				}
 				else
 #endif /* SHOPT_SPAWN */
@@ -1669,8 +1534,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 					}
 					if(sh.topfd > topfd)
 						sh_iorestore(topfd,0);
-					if(usepipe && tsetio && subdup && unpipe)
-						sh_iounpipe();
 					if(!sh_isstate(SH_MONITOR))
 						sigrelease(SIGINT);
 				}
@@ -1706,6 +1569,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 					sh.fifo_tree = NIL(Dt_t*);
 				}
 #endif
+				sh_invalidate_rand_seed();
 				if(no_fork)
 					sh_sigreset(2);
 				sh_pushcontext(buffp,SH_JMPEXIT);
@@ -1737,7 +1601,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 					fd = (type&FPIN) ? 0 : 1;
 					fn = sh_open(sh.fifo,fd?O_WRONLY:O_RDONLY);
 					save_errno = errno;
-					timerdel(fifo_timer);
+					sh_timerdel(fifo_timer);
 					sh.fifo = 0;
 					if(fn<0)
 					{
@@ -1791,7 +1655,6 @@ int sh_exec(register const Shnode_t *t, int flags)
 						job_wait(parent);
 						sh_iorestore(topfd,SH_JMPCMD);
 						sh_done((sh.exitval&SH_EXITSIG)?(sh.exitval&SH_EXITMASK):0);
-
 					}
 					job_unlock();
 				}
@@ -1826,12 +1689,13 @@ int sh_exec(register const Shnode_t *t, int flags)
 			}
 		    }
 
-		    case TSETIO:
-		    {
 		    /*
+		     * Redirection:
 		     * don't create a new process, just
 		     * save and restore io-streams
 		     */
+		    case TSETIO:
+		    {
 			pid_t	pid = 0;
 			int 	jmpval, waitall = 0;
 			int 	simple = (t->fork.forktre->tre.tretyp&COMMSK)==TCOM;
@@ -1875,7 +1739,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 			jmpval = sigsetjmp(buffp->buff,0);
 			if(jmpval==0)
 			{
-				if(execflg && !check_exec_optimization(t->fork.forkio))
+				if(execflg && !check_exec_optimization(type,execflg,execflg2,t->fork.forkio))
 				{
 					execflg = 0;
 					flags &= ~sh_state(SH_NOFORK);
@@ -1915,10 +1779,13 @@ int sh_exec(register const Shnode_t *t, int flags)
 			break;
 		    }
 
+		    /*
+		     * Parentheses subshell block
+		     */
 		    case TPAR:
 			echeck = 1;
 			flags &= ~OPTIMIZE_FLAG;
-			if(!sh.subshell && !sh.st.trapcom[0] && !sh.st.trap[SH_ERRTRAP] && (flags&sh_state(SH_NOFORK)))
+			if(!sh.subshell && !sh.st.trapdontexec && (flags&sh_state(SH_NOFORK)))
 			{
 				/* This is the last command, so avoid creating a subshell */
 				char *savsig;
@@ -1933,7 +1800,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 					sh.st.otrapcom = (char**)savsig;
 				}
 				/* Still act like a subshell: reseed $RANDOM and increment ${.sh.subshell} */
-				sh_reseed_rand((struct rand*)RANDNOD->nvfun);
+				sh_invalidate_rand_seed();
 				sh.realsubshell++;
 				sh_sigreset(0);
 				sh_pushcontext(buffp,SH_JMPEXIT);
@@ -1943,39 +1810,19 @@ int sh_exec(register const Shnode_t *t, int flags)
 				sh_popcontext(buffp);
 				if(jmpval > SH_JMPEXIT)
 					siglongjmp(*sh.jmplist,jmpval);
-				if(sh.exitval > 256)
-					sh.exitval -= 128;
 				sh_done(0);
-			}
-			else if(((type=t->par.partre->tre.tretyp)&FAMP) && ((type&COMMSK)==TFORK)
-			&& !job.jobcontrol && !sh.subshell)
-			{
-				/* Optimize '( simple_command & )' */
-				pid_t	pid;
-				sfsync(NIL(Sfio_t*));
-				while((pid=fork())< 0)
-					_sh_fork(pid,0,0);
-				if(pid==0)
-				{
-					sh.current_pid = getpid();
-					sh_reseed_rand((struct rand*)RANDNOD->nvfun);
-					sh.realsubshell++;
-					sh_exec(t->par.partre,flags);
-					sh.st.trapcom[0]=0;
-					sh_done(0);
-				}
 			}
 			else
 				sh_subshell(t->par.partre,flags,0);
 			break;
 
+		    /*
+		     * Pipe: command | command
+		     * All elements of the pipe are started by the parent.
+		     * The last element is executed in the current environment.
+		     */
 		    case TFIL:
 		    {
-		    /*
-		     * This code sets up a pipe.
-		     * All elements of the pipe are started by the parent.
-		     * The last element executes in current environment
-		     */
 			int	pvo[3];	/* old pipe for multi-stage */
 			int	pvn[3];	/* current set up pipe */
 			int	savepipe = pipejob;
@@ -1993,6 +1840,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 			sh.inpipe = pvo;
 			sh.outpipe = pvn;
 			pvo[1] = -1;
+			/*
+			 * If the pipefail or monitor options are on or if the time keyword is in use, then wait
+			 * for all commands in the pipeline to complete; otherwise, wait for the last one only
+			 */
 			if(sh_isoption(SH_PIPEFAIL))
 			{
 				const Shnode_t* tn=t;
@@ -2004,7 +1855,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 				memset(exitval,0,job.waitall*sizeof(int));
 			}
 			else
-				job.waitall |= (!pipejob && sh_isstate(SH_MONITOR));
+				job.waitall = !pipejob && (sh_isstate(SH_MONITOR) || sh_isstate(SH_TIMING));
 			job_lock();
 			nlock++;
 			do
@@ -2080,9 +1931,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 			break;
 		    }
 
+		    /*
+		     * List of semicolon-separated commands
+		     */
 		    case TLST:
 		    {
-			/* a list of commands is executed here */
 			do
 			{
 				sh_exec(t->lst.lstlef,errorflg|OPTIMIZE);
@@ -2093,6 +1946,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 			break;
 		    }
 
+		    /*
+		     * Logical and: command && command
+		     */
 		    case TAND:
 			if(type&TTEST)
 				skipexitset++;
@@ -2100,6 +1956,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 				sh_exec(t->lst.lstrit,flags);
 			break;
 
+		    /*
+		     * Logical or: command || command
+		     */
 		    case TORF:
 			if(type&TTEST)
 				skipexitset++;
@@ -2107,7 +1966,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 				sh_exec(t->lst.lstrit,flags);
 			break;
 
-		    case TFOR: /* for and select */
+		    /*
+		     * Loop: 'for' or 'select'
+		     */
+		    case TFOR:
 		    {
 			register char **args;
 			register int nargs;
@@ -2141,11 +2003,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 				args=sh_argbuild(&argn,tp,0);
 				nargs = argn;
 			}
-			np = nv_open(t->for_.fornam, sh.var_tree,NV_NOASSIGN|NV_NOARRAY|NV_VARNAME|NV_NOREF);
+			np = nv_open(t->for_.fornam, sh.var_tree,NV_NOARRAY|NV_VARNAME|NV_NOREF);
 			nameref = nv_isref(np)!=0;
 			sh.st.loopcnt++;
 			cp = *args;
-			while(cp && sh.st.execbrk==0)
+			while(cp && sh.st.breakcnt==0)
 			{
 				if(t->tre.tretyp&COMSCAN)
 				{
@@ -2215,8 +2077,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 				else
 					cp = *++args;
 			check:
+				/* decrease 'continue' level */
 				if(sh.st.breakcnt<0)
-					sh.st.execbrk = (++sh.st.breakcnt !=0);
+					sh.st.breakcnt++;
 			}
 #if SHOPT_OPTIMIZE
 		endfor:
@@ -2226,14 +2089,18 @@ int sh_exec(register const Shnode_t *t, int flags)
 			if(jmpval)
 				siglongjmp(*sh.jmplist,jmpval);
 #endif /* SHOPT_OPTIMIZE */
+			/* decrease 'break' level */
 			if(sh.st.breakcnt>0)
-				sh.st.execbrk = (--sh.st.breakcnt !=0);
+				sh.st.breakcnt--;
 			sh.st.loopcnt--;
 			sh_argfree(argsav,0);
 			break;
 		    }
 
-		    case TWH: /* while and until */
+		    /*
+		     * Loop: 'while' or 'until'
+		     */
+		    case TWH:
 		    {
 			volatile int 	r=0;
 			int first = OPTIMIZE_FLAG;
@@ -2265,13 +2132,13 @@ int sh_exec(register const Shnode_t *t, int flags)
 			&& tt->com.comio				/* ...and one I/O redirection... */
 			&& !tt->com.comio->ionxt			/* ...but not more than one... */
 			&& !(tt->com.comio->iofile & (IOPUT|IOAPP))	/* ...and not > or >> */
-			&& !sh_isoption(SH_POSIX))			/* not in POSIX compilance mode */
+			&& !sh_isoption(SH_POSIX))			/* not in POSIX compliance mode */
 			{
 				iop = openstream(tt->com.comio,&savein);
 			}
 #endif /* SHOPT_FILESCAN */
 			sh.st.loopcnt++;
-			while(sh.st.execbrk==0)
+			while(sh.st.breakcnt==0)
 			{
 #if SHOPT_FILESCAN
 				if(iop)
@@ -2284,10 +2151,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 				if((sh_exec(tt,first)==0)!=(type==TWH))
 					break;
 				r = sh_exec(t->wh.dotre,first|errorflg);
+				/* decrease 'continue' level */
 				if(sh.st.breakcnt<0)
-					sh.st.execbrk = (++sh.st.breakcnt !=0);
+					sh.st.breakcnt++;
 				/* This is for the arithmetic for */
-				if(sh.st.execbrk==0 && t->wh.whinc)
+				if(sh.st.breakcnt==0 && t->wh.whinc)
 					sh_exec((Shnode_t*)t->wh.whinc,first);
 				first = 0;
 				errorflg &= ~OPTIMIZE_FLAG;
@@ -2305,8 +2173,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 			if(jmpval)
 				siglongjmp(*sh.jmplist,jmpval);
 #endif /* SHOPT_OPTIMIZE */
+			/* decrease 'break' level */
 			if(sh.st.breakcnt>0)
-				sh.st.execbrk = (--sh.st.breakcnt !=0);
+				sh.st.breakcnt--;
 			sh.st.loopcnt--;
 			sh.exitval= r;
 #if SHOPT_FILESCAN
@@ -2322,7 +2191,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 #endif /* SHOPT_FILESCAN */
 			break;
 		    }
-		    case TARITH: /* (( expression )) */
+
+		    /*
+		     * Arithmetic command: ((expression))
+		     */
+		    case TARITH:
 		    {
 			register char *trap;
 			char *arg[4];
@@ -2348,6 +2221,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 			break;
 		    }
 
+		    /*
+		     * Conditional block: if ... fi
+		     */
 		    case TIF:
 			if(sh_exec(t->if_.iftre,OPTIMIZE)==0)
 				sh_exec(t->if_.thtre,flags);
@@ -2357,6 +2233,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 				sh.exitval=0; /* force zero exit for if-then-fi */
 			break;
 
+		    /*
+		     * Switch block: case ... esac
+		     */
 		    case TSW:
 		    {
 			Shnode_t *tt = (Shnode_t*)t;
@@ -2405,9 +2284,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 			break;
 		    }
 
+		    /*
+		     * The 'time' keyword: time a pipeline
+		     */
 		    case TTIME:
 		    {
-			/* time the command */
 			const char *format = e_timeformat;
 			struct timeval ta, tb;
 #ifdef timeofday
@@ -2424,7 +2305,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 			}
 			if(t->par.partre)
 			{
-				long timer_on = sh_isstate(SH_TIMING);
+				int timer_on = sh_isstate(SH_TIMING);
 #ifdef timeofday
 				/* must be run after forking a subshell */
 				timeofday(&tb);
@@ -2437,12 +2318,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 					UNREACHABLE();
 				}
 #endif
-				job.waitall = 1;
 				sh_onstate(SH_TIMING);
 				sh_exec(t->par.partre,sh_isstate(SH_ERREXIT)|OPTIMIZE);
 				if(!timer_on)
 					sh_offstate(SH_TIMING);
-				job.waitall = 0;
 			}
 			else
 			{
@@ -2473,11 +2352,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 
 			if(t->par.partre)
 			{
-				Namval_t *np = nv_open("TIMEFORMAT",sh.var_tree,NV_NOADD);
-				if(np)
+				Namval_t *np;
+				if(np = nv_open("TIMEFORMAT",sh.var_tree,NV_NOADD))
 					format = nv_getval(np);
-				if(!format)
-					format = e_timeformat;
 			}
 			else
 				format = strchr(format+1,'\n')+1;
@@ -2491,6 +2368,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 				p_time(sfstderr,sh_translate(format),tm);
 			break;
 		    }
+
+		    /*
+		     * Function definition
+		     */
 		    case TFUN:
 		    {
 			register Namval_t *np=0;
@@ -2499,12 +2380,15 @@ int sh_exec(register const Shnode_t *t, int flags)
 			register char *cp = strrchr(fname,'.');
 			register Namval_t *npv=0,*mp;
 #if SHOPT_NAMESPACE
+			/* Namespace definition: a modified function definition */
 			if(t->tre.tretyp==TNSPACE)
 			{
 				Dt_t *root;
 				Namval_t *oldnspace = sh.namespace;
 				int offset = stktell(stkp);
-				int	flags=NV_NOASSIGN|NV_NOARRAY|NV_VARNAME;
+				int	flags=NV_NOARRAY|NV_VARNAME;
+				struct checkpt *chkp = (struct checkpt*)stakalloc(sizeof(struct checkpt));
+				int jmpval;
 				if(cp)
 				{
 					errormsg(SH_DICT,ERROR_exit(1),e_ident,fname);
@@ -2524,8 +2408,15 @@ int sh_exec(register const Shnode_t *t, int flags)
 					dtview(root,sh.var_base);
 				}
 				oldnspace = enter_namespace(np);
-				sh_exec(t->for_.fortre,flags|sh_state(SH_ERREXIT));
+				/* make sure to restore oldnspace if a special builtin throws an error */
+				sh_pushcontext(chkp,SH_JMPCMD);
+				jmpval = sigsetjmp(chkp->buff,1);
+				if(!jmpval)
+					sh_exec(t->for_.fortre,flags|sh_state(SH_ERREXIT));
+				sh_popcontext(chkp);
 				enter_namespace(oldnspace);
+				if(jmpval)	/* error occurred */
+					siglongjmp(*sh.jmplist,jmpval);
 				break;
 			}
 #endif /* SHOPT_NAMESPACE */
@@ -2539,7 +2430,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 				{
 					cp = sh.prefix;
 					sh.prefix = 0;
-					npv = nv_open(cp,sh.var_tree,NV_NOASSIGN|NV_NOARRAY|NV_VARNAME);
+					npv = nv_open(cp,sh.var_tree,NV_NOARRAY|NV_VARNAME);
 					sh.prefix = cp;
 					cp = fname;
 				}
@@ -2547,7 +2438,7 @@ int sh_exec(register const Shnode_t *t, int flags)
 				{
 					sfwrite(stkp,fname,cp++-fname);
 					sfputc(stkp,0);
-					npv = nv_open(stkptr(stkp,offset),sh.var_tree,NV_NOASSIGN|NV_NOARRAY|NV_VARNAME);
+					npv = nv_open(stkptr(stkp,offset),sh.var_tree,NV_NOARRAY|NV_VARNAME);
 				}
 				offset = stktell(stkp);
 				sfprintf(stkp,"%s.%s%c",nv_name(npv),cp,0);
@@ -2560,10 +2451,10 @@ int sh_exec(register const Shnode_t *t, int flags)
 			}
 #if SHOPT_NAMESPACE
 			if(sh.namespace && !sh.prefix && *fname!='.')
-				np = sh_fsearch(fname,NV_ADD|HASH_NOSCOPE);
+				np = sh_fsearch(fname,NV_ADD|NV_NOSCOPE);
 			if(!np)
 #endif /* SHOPT_NAMESPACE */
-			np = nv_open(fname,sh_subfuntree(1),NV_NOASSIGN|NV_NOARRAY|NV_VARNAME|NV_NOSCOPE);
+			np = nv_open(fname,sh_subfuntree(1),NV_NOARRAY|NV_VARNAME|NV_NOSCOPE);
 			if(npv)
 			{
 				if(!sh.mktype)
@@ -2579,7 +2470,12 @@ int sh_exec(register const Shnode_t *t, int flags)
 				struct Ufunction *rp = np->nvalue.rp;
 				slp = (struct slnod*)np->nvenv;
 				sh_funstaks(slp->slchild,-1);
-				stakdelete(slp->slptr);
+				if(slp->slptr)
+				{
+					Stak_t *sp = slp->slptr;
+					slp->slptr = NIL(Stak_t*);
+					stakdelete(sp);
+				}
 				if(rp->sdict)
 				{
 					Namval_t *mp, *nq;
@@ -2615,7 +2511,8 @@ int sh_exec(register const Shnode_t *t, int flags)
 				struct comnod *ac = t->funct.functargs;
 				slp = t->funct.functstak;
 				sh_funstaks(slp->slchild,1);
-				staklink(slp->slptr);
+				if(slp->slptr)
+					staklink(slp->slptr);
 				np->nvenv = (char*)slp;
 				nv_funtree(np) = (int*)(t->funct.functtre);
 				np->nvalue.rp->hoffset = t->funct.functloc;
@@ -2653,7 +2550,9 @@ int sh_exec(register const Shnode_t *t, int flags)
 			break;
 		    }
 
-		    /* new test compound command */
+		    /*
+		     * The [[ keyword: new test compound command
+		     */
 		    case TTST:
 		    {
 			register int n;
@@ -2784,6 +2683,11 @@ int sh_exec(register const Shnode_t *t, int flags)
 	return(sh.exitval);
 }
 
+/*
+ * Public API function: run the command given by by the argument list argv,
+ * containing argn elements. If argv[0] does not contain a /, check for a
+ * built-in or function before performing a path search.
+ */
 int sh_run(int argn, char *argv[])
 {
 	register struct dolnod	*dp;
@@ -2815,7 +2719,6 @@ int sh_run(int argn, char *argv[])
 /*
  * print out the command line if set -x is on
  */
-
 int sh_trace(register char *argv[], register int nl)
 {
 	if(sh_isoption(SH_XTRACE))
@@ -2868,19 +2771,6 @@ int sh_trace(register char *argv[], register int nl)
 	return(0);
 }
 
-/*
- * This routine creates a subshell by calling fork() or vfork()
- * If ((flags&COMMSK)==TCOM), then vfork() is permitted
- * If fork fails, the shell sleeps for exponentially longer periods
- *   and tries again until a limit is reached.
- * SH_FORKLIM is the max period between forks - power of 2 usually.
- * Currently shell tries after 2,4,8,16, and 32 seconds and then quits
- * Failures cause the routine to error exit.
- * Parent links to here-documents are removed by the child
- * Traps are reset by the child
- * The process-id of the child is returned to the parent, 0 to the child.
- */
-
 static void timed_out(void *handle)
 {
 	NOT_USED(handle);
@@ -2913,7 +2803,7 @@ pid_t _sh_fork(register pid_t parent,int flags,int *jobid)
 				pause();
 			else if(forkcnt>1000L)
 				forkcnt /= 2;
-			timerdel(timeout);
+			sh_timerdel(timeout);
 			timeout = 0;
 		}
 		return(-1);
@@ -2948,15 +2838,7 @@ pid_t _sh_fork(register pid_t parent,int flags,int *jobid)
 			sh.cpid = parent;
 		if(!postid && job.curjobid && (flags&FPOU))
 			postid = job.curpgid;
-#if SHOPT_BGX
-		if(!postid && (flags&(FAMP|FINT)) == (FAMP|FINT))
-			postid = 1;
-		myjob = job_post(parent,postid);
-		if(postid==1)
-			postid = 0;
-#else
-		myjob = job_post(parent,postid);
-#endif /* SHOPT_BGX */
+		myjob = job_post(parent, (!postid && (flags&(FAMP|FINT))==(FAMP|FINT)) ? 1 : postid);
 		if(job.waitall && (flags&FPOU))
 		{
 			if(!job.curjobid)
@@ -2974,11 +2856,12 @@ pid_t _sh_fork(register pid_t parent,int flags,int *jobid)
 	vmtrace(-1);
 #endif
 	/* This is the child process */
+	sh.current_ppid = sh.current_pid;
 	sh.current_pid = getpid();  /* ${.sh.pid} */
 	sh.outpipepid = ((flags&FPOU)?sh.current_pid:0);
 	if(sh.trapnote&SH_SIGTERM)
 		sh_exit(SH_EXITSIG|SIGTERM);
-	timerdel(NIL(void*));
+	sh_timerdel(NIL(void*));
 #ifdef JOBS
 	if(sh_isstate(SH_MONITOR))
 	{
@@ -3003,11 +2886,8 @@ pid_t _sh_fork(register pid_t parent,int flags,int *jobid)
 	job.jobcontrol = 0;
 #endif /* JOBS */
 	job.toclear = 1;
-	sh.login_sh = 0;
 	sh_offoption(SH_LOGIN_SHELL);
 	sh_onstate(SH_FORKED);
-	if (sh.fn_reset)
-		sh.fn_depth = sh.fn_reset = 0;
 #if SHOPT_ACCT
 	sh_accsusp();
 #endif	/* SHOPT_ACCT */
@@ -3026,10 +2906,20 @@ pid_t _sh_fork(register pid_t parent,int flags,int *jobid)
 	if(sig>0)
 		kill(sh.current_pid,sig);
 	sh_sigcheck();
-	usepipe=0;
 	return(0);
 }
 
+/*
+ * This routine creates a subshell by calling fork(2).
+ * If fork fails, the shell sleeps for exponentially longer periods
+ *   and tries again until a limit is reached.
+ * SH_FORKLIM is the max period between forks - power of 2 usually.
+ * Currently, the shell tries after 2, 4, 8, 16 and 32 seconds, and then quits.
+ * Failures cause the routine to error exit.
+ * Parent links to here-documents are removed by the child.
+ * Traps are reset by the child.
+ * The process-id of the child is returned to the parent, 0 to the child.
+ */
 pid_t sh_fork(int flags, int *jobid)
 {
 	register pid_t parent;
@@ -3056,15 +2946,9 @@ pid_t sh_fork(int flags, int *jobid)
 static void  local_exports(register Namval_t *np, void *data)
 {
 	register Namval_t	*mp;
-	register char		*cp;
 	NOT_USED(data);
-	if(nv_isarray(np))
-		nv_putsub(np,NIL(char*),0);
-	if((cp = nv_getval(np)) && (mp = nv_search(nv_name(np), sh.var_tree, NV_ADD|HASH_NOSCOPE)) && nv_isnull(mp))
-	{
-		nv_putval(mp, cp, 0);
-		mp->nvflag = np->nvflag;
-	}
+	if(!nv_isnull(np) && (mp = nv_search(nv_name(np), sh.var_tree, NV_ADD|NV_NOSCOPE)) && nv_isnull(mp))
+		nv_clone(np,mp,0);
 }
 
 /*
@@ -3120,7 +3004,7 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 	int			isig,jmpval;
 	volatile int		r = 0;
 	int			n;
-	char 			**savsig;
+	char 			**savsig, *save_debugtrap = 0;
 	struct funenv		*fp = 0;
 	struct checkpt	*buffp = (struct checkpt*)stkalloc(sh.stk,sizeof(struct checkpt));
 	Namval_t		*nspace = sh.namespace;
@@ -3157,7 +3041,7 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 	sh.st.save_tree = sh.var_tree;
 	if(!fun)
 	{
-		if(nv_isattr(fp->node,NV_TAGGED))
+		if(sh_isoption(SH_FUNCTRACE) && is_option(&options,SH_XTRACE) || nv_isattr(fp->node,NV_TAGGED))
 			sh_onoption(SH_XTRACE);
 		else
 			sh_offoption(SH_XTRACE);
@@ -3182,12 +3066,15 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 				savsig[isig] = NULL;
 		}
 	}
-	sh_sigreset(0);
+	if(!fun && sh_isoption(SH_FUNCTRACE) && sh.st.trap[SH_DEBUGTRAP] && *sh.st.trap[SH_DEBUGTRAP])
+		save_debugtrap = sh_strdup(sh.st.trap[SH_DEBUGTRAP]);
+	sh_sigreset(-1);
+	if(save_debugtrap)
+		sh.st.trap[SH_DEBUGTRAP] = save_debugtrap;
 	argsav = sh_argnew(argv,&saveargfor);
 	sh_pushcontext(buffp,SH_JMPFUN);
 	errorpush(&buffp->err,0);
 	error_info.id = argv[0];
-	sh.st.var_local = sh.var_tree;
 	if(!fun)
 	{
 		if(fp->node->nvalue.rp)
@@ -3197,17 +3084,17 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 		nv_putval(SH_PATHNAMENOD,sh.st.filename,NV_NOFREE);
 		nv_putval(SH_FUNNAMENOD,sh.st.funname,NV_NOFREE);
 	}
-	if((execflg & sh_state(SH_NOFORK)))
-		sh.end_fn = 1;
 	jmpval = sigsetjmp(buffp->buff,0);
 	if(jmpval == 0)
 	{
-		if(sh.fn_depth++ > MAXDEPTH)
+		if(sh.fn_depth >= MAXDEPTH)
 		{
 			sh.toomany = 1;
 			siglongjmp(*sh.jmplist,SH_JMPERRFN);
 		}
-		else if(fun)
+		sh.fn_depth++;
+		update_sh_level();
+		if(fun)
 			r= (*fun)(arg);
 		else
 		{
@@ -3218,7 +3105,7 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 				sh.last_root = 0;
 				for(r=0; arg[r]; r++)
 				{
-					np = nv_search(arg[r],sh.var_tree,HASH_NOSCOPE|NV_ADD);
+					np = nv_search(arg[r],sh.var_tree,NV_NOSCOPE|NV_ADD);
 					if(np && (nq=*nref++))
 					{
 						np->nvalue.nrp = sh_newof(0,struct Namref,1,0);
@@ -3231,9 +3118,9 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 			r = sh.exitval;
 		}
 	}
-	if(sh.topscope != (Shscope_t*)sh.st.self)
-		sh_setscope(sh.topscope);
-	if(--sh.fn_depth==1 && jmpval==SH_JMPERRFN)
+	sh.fn_depth--;
+	update_sh_level();
+	if(sh.fn_depth==1 && jmpval==SH_JMPERRFN)
 	{
 		errormsg(SH_DICT,ERROR_exit(1),e_toodeep,argv[0]);
 		UNREACHABLE();
@@ -3249,7 +3136,6 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 	sh.st = *prevscope;
 	sh.topscope = (Shscope_t*)prevscope;
 	nv_getval(sh_scoped(IFSNOD));
-	sh.end_fn = 0;
 	if(nsig)
 	{
 		for (isig = 0; isig < nsig; ++isig)
@@ -3284,20 +3170,15 @@ static void sh_funct(Namval_t *np,int argn, char *argv[],struct argnod *envlist,
 {
 	struct funenv fun;
 	char *fname = nv_getval(SH_FUNNAMENOD);
-	struct Level	*lp =(struct Level*)(SH_LEVELNOD->nvfun);
-	int		level, pipepid=sh.pipepid;
+	pid_t		pipepid = sh.pipepid;
 #if !SHOPT_DEVFD
 	Dt_t		*save_fifo_tree = sh.fifo_tree;
 	sh.fifo_tree = NIL(Dt_t*);
 #endif
 	sh.pipepid = 0;
 	sh_stats(STAT_FUNCT);
-	if(!lp->hdr.disc)
-		lp = init_level(0);
 	if((struct sh_scoped*)sh.topscope != sh.st.self)
 		sh_setscope(sh.topscope);
-	level = lp->maxlevel = sh.dot_depth + sh.fn_depth+1;
-	SH_LEVELNOD->nvalue.s = lp->maxlevel;
 	sh.st.lineno = error_info.line;
 	np->nvalue.rp->running  += 2;
 	if(nv_isattr(np,NV_FPOSIX))
@@ -3324,13 +3205,6 @@ static void sh_funct(Namval_t *np,int argn, char *argv[],struct argnod *envlist,
 		fun.nref = 0;
 		sh_funscope(argn,argv,0,&fun,execflg);
 	}
-	if(level-- != nv_getnum(SH_LEVELNOD))
-	{
-		Shscope_t *sp = sh_getscope(0,SEEK_END);
-		sh_setscope(sp);
-	}
-	lp->maxlevel = level;
-	SH_LEVELNOD->nvalue.s = lp->maxlevel;
 	sh.last_root = nv_dict(DOTSHNOD);
 	nv_putval(SH_FUNNAMENOD,fname,NV_NOFREE);
 	nv_putval(SH_PATHNAMENOD,sh.st.filename,NV_NOFREE);
@@ -3396,7 +3270,7 @@ int sh_fun(Namval_t *np, Namval_t *nq, char *argv[])
 			opt_info.index = opt_info.offset = 0;
 			opt_info.disc = 0;
 			sh.exitval = 0;
-			sh.exitval = ((Shbltin_f)funptr(np))(n,argv,bp);
+			sh.exitval = (funptr(np))(n,argv,bp);
 		}
 		sh_popcontext(buffp);
 		if(jmpval>SH_JMPCMD)
@@ -3444,7 +3318,6 @@ static void coproc_init(int pipes[])
 		if(fcntl(*sh.cpipe,F_SETFD,FD_CLOEXEC)>=0)
 			sh.fdstatus[sh.cpipe[0]] |= IOCLEX;
 		sh.fdptrs[sh.cpipe[0]] = sh.cpipe;
-			
 		if(fcntl(sh.cpipe[1],F_SETFD,FD_CLOEXEC) >=0)
 			sh.fdstatus[sh.cpipe[1]] |= IOCLEX;
 	}
@@ -3461,8 +3334,8 @@ static void coproc_init(int pipes[])
 static void sigreset(int mode)
 {
 	register char   *trap;
-	register int sig=sh.st.trapmax;
-	while(sig-- > 0)
+	register int	sig;
+	for (sig = 1; sig < sh.st.trapmax; sig++)
 	{
 		if(sig==SIGCHLD)
 			continue;
@@ -3476,12 +3349,11 @@ static void sigreset(int mode)
  * Incompatible with job control on interactive shells (job.jobcontrol) if
  * the system does not support posix_spawn_file_actions_addtcsetpgrp_np().
  */
-static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
+static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int topfd)
 {
 	static pid_t	spawnpid;
-	static int	savetype;
 	struct checkpt	*buffp = (struct checkpt*)stkalloc(sh.stk,sizeof(struct checkpt));
-	int		otype=0, jmpval,jobfork=0;
+	int		jmpval,jobfork=0;
 	volatile int	scope=0, sigwasset=0;
 	char		**arge, *path;
 	volatile pid_t	grp = 0;
@@ -3489,22 +3361,12 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 #if _use_ntfork_tcpgrp
 	volatile int	jobwasset=0;
 #endif /* _use_ntfork_tcpgrp */
-	if(flag)
-	{
-		otype = savetype;
-		savetype=0;
-	}
 	sh_pushcontext(buffp,SH_JMPCMD);
 	errorpush(&buffp->err,ERROR_SILENT);
 	job_lock();		/* errormsg will unlock */
 	jmpval = sigsetjmp(buffp->buff,0);
 	if(jmpval == 0)
 	{
-		if((otype&FINT) && !sh_isstate(SH_MONITOR))
-		{
-			signal(SIGQUIT,SIG_IGN);
-			signal(SIGINT,SIG_IGN);
-		}
 		spawnpid = -1;
 		if(t->com.comio)
 			sh_redirect(t->com.comio,0);
@@ -3561,20 +3423,14 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 			signal(SIGTSTP,SIG_DFL);
 			jobwasset++;
 		}
-#endif /* _use_ntfork_tcpgrp */
-#ifdef JOBS
-#if _use_ntfork_tcpgrp
-		if(sh_isstate(SH_MONITOR) && (job.jobcontrol || (otype&FAMP)))
-#else
-		if(sh_isstate(SH_MONITOR) && (otype&FAMP))
-#endif /* _use_ntfork_tcpgrp */
+		if(sh_isstate(SH_MONITOR) && job.jobcontrol)
 		{
-			if((otype&FAMP) || job.curpgid==0)
+			if(job.curpgid==0)
 				grp = 1;
 			else
 				grp = job.curpgid;
 		}
-#endif /* JOBS */
+#endif /* _use_ntfork_tcpgrp */
 
 		sfsync(NIL(Sfio_t*));
 		sigreset(0);	/* set signals to ignore */
@@ -3607,19 +3463,35 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 	fail:
 		if(jobfork && spawnpid<0) 
 			job_fork(-2);
-		if(spawnpid == -1) switch(errno=sh.path_err)
+		if(spawnpid == -1)
 		{
-		    case ENOENT:
-			errormsg(SH_DICT,ERROR_exit(ERROR_NOENT),e_found+4);
-			UNREACHABLE();
+#if _use_ntfork_tcpgrp
+			if(jobwasset)
+			{
+				signal(SIGTTIN,SIG_IGN);
+				signal(SIGTTOU,SIG_IGN);
+				if(sh_isstate(SH_INTERACTIVE))
+					signal(SIGTSTP,SIG_IGN);
+				else
+					signal(SIGTSTP,SIG_DFL);
+			}
+			if(job.jobcontrol)
+				tcsetpgrp(job.fd,sh.pid);
+#endif /* _use_ntfork_tcpgrp */
+			switch(errno=sh.path_err)
+			{
+			    case ENOENT:
+				errormsg(SH_DICT,ERROR_exit(ERROR_NOENT),e_found+4);
+				UNREACHABLE();
 #ifdef ENAMETOOLONG
-		    case ENAMETOOLONG:
-			errormsg(SH_DICT,ERROR_exit(ERROR_NOENT),e_toolong+4);
-			UNREACHABLE();
+			    case ENAMETOOLONG:
+				errormsg(SH_DICT,ERROR_exit(ERROR_NOENT),e_toolong+4);
+				UNREACHABLE();
 #endif
-		    default:
-			errormsg(SH_DICT,ERROR_system(ERROR_NOEXEC),e_exec+4);
-			UNREACHABLE();
+			    default:
+				errormsg(SH_DICT,ERROR_system(ERROR_NOEXEC),e_exec+4);
+				UNREACHABLE();
+			}
 		}
 		job_unlock();
 	}
@@ -3647,20 +3519,18 @@ static pid_t sh_ntfork(const Shnode_t *t,char *argv[],int *jobid,int flag)
 		if(jmpval==SH_JMPSCRIPT)
 			nv_setlist(t->com.comset,NV_EXPORT|NV_IDENT|NV_ASSIGN,0);
 	}
-	if(t->com.comio && (jmpval || spawnpid<=0))
-		sh_iorestore(buffp->topfd,jmpval);
+	if(t->com.comio && (jmpval || spawnpid<=0) && sh.topfd > topfd)
+		sh_iorestore(topfd,jmpval);
 	if(jmpval>SH_JMPCMD)
 		siglongjmp(*sh.jmplist,jmpval);
 	if(spawnpid>0)
 	{
-		_sh_fork(spawnpid,otype,jobid);
+		_sh_fork(spawnpid,0,jobid);
 		job_fork(spawnpid);
 #ifdef JOBS
 		if(grp==1)
 			job.curpgid = spawnpid;
 #endif /* JOBS */
-		if(otype)
-			return(0);
 	}
 	return(spawnpid);
 }

@@ -242,19 +242,26 @@ ERROR_OPTIONS="system"
 provides debugging message macros when
 .L DEBUG
 or
-.L _TRACE_
+.L _BLD_DEBUG
 are defined
-.RL ( _TRACE_
+.RL ( _BLD_DEBUG
 is defined by
-.I makerules
-when
-.L CCFLAGS
-contains
-.LR \-g ).
+the
+.IR Mamfile s
+when the
+.L \-G
+a.k.a.
+.L \-\-debug\-symbols
+option is passed to
+.BR mamake (1),
+which the
+.BR package (1)
+command does automatically when given the argument
+.LR debug=1 ).
 All of the macros expand to nothing when both
 .L DEBUG
 and
-.L _TRACE_
+.L _BLD_DEBUG
 are not defined.
 Otherwise
 .L debug

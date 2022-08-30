@@ -38,7 +38,7 @@
 ..
 .TH PROC 3
 .SH NAME
-proc \- process control routines
+proc \- process control routines (deprecated)
 .SH SYNOPSIS
 .EX
 #include <proc.h>
@@ -50,14 +50,15 @@ int procrun(const char* \fIcommand\fP, char** \fIargv\fP);
 .EE
 .SH DESCRIPTION
 These routines provide a portable interface to process creation and execution.
-They work on systems with
-.IR fork (2)
-and
-.IR exec (2)
-as well as on systems with only
+They used to work on systems with only
 .IR spawnve (2)
 or
 .IR spawnveg (3).
+Now that libast has joined the 21st century and requires
+.IR fork (2)
+and
+.IR execve (2),
+this interface is deprecated and only kept for backward compatibility.
 .PP
 .L procopen
 runs

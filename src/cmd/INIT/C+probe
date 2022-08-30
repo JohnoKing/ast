@@ -66,7 +66,7 @@ then	tmpdir=$TMPDIR
 else	tmpdir=/tmp
 fi
 tmpdir=$tmpdir/probe$$
-undef="define defined elif else endif error if ifdef ifndef include line pragma undef __STDC__ __STDPP__ __ARGC__ __BASE__ __BASE_FILE__ __DATE__ __FILE__ __FUNCTION__ __INCLUDE_LEVEL__ __LINE__ __PATH__ __TIME__ __TIMESTAMP__ __VERSION__"
+undef="define defined elif else endif error if ifdef ifndef include line pragma undef __STDC__ __ARGC__ __BASE__ __BASE_FILE__ __DATE__ __FILE__ __FUNCTION__ __INCLUDE_LEVEL__ __LINE__ __PATH__ __TIME__ __TIMESTAMP__ __VERSION__"
 version_flags=
 version_stamp=
 version_string=

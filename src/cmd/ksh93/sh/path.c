@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -24,6 +21,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<fcin.h>
 #include	<ls.h>
@@ -91,6 +89,17 @@ static pid_t _spawnveg(const char *path, char* const argv[], char* const envp[],
 }
 
 /*
+ * POSIX: "The number of bytes available for the new process' combined argument and environment lists is {ARG_MAX}. It
+ * is implementation-defined whether null terminators, pointers, and/or any alignment bytes are included in this total."
+ * https://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html
+ * So, operating systems are free to consume ARG_MAX space in whatever bizarre way they want, and may even come up with
+ * more innovative ways to waste buffer space in future. In command_xargs() below, we assume that null terminators are
+ * included in the total, because why wouldn't they be? Then we allow for the possibility of adding a certain number of
+ * extra bytes per argument to account for pointers and whatnot. We start off from the value that was determined by the
+ * _arg_extrabytes test in features/externs, but path_spawn() will increase arg_extra and retry if E2BIG still occurs.
+ */
+static unsigned arg_extra = _arg_extrabytes;
+/*
  * used with command -x to run the command in multiple passes
  * spawn is non-zero when invoked via spawn
  * the exitval is set to the maximum for each execution
@@ -100,19 +109,31 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 	register char *cp, **av, **xv;
 	char **avlast= &argv[sh.xargmax], **saveargs=0;
 	char *const *ev;
-	long size, left;
+	ssize_t size, left;
 	int nlast=1,n,exitval=0;
 	pid_t pid;
 	if(sh.xargmin < 0)
-		return((pid_t)-1);
-	size = sh.lim.arg_max - (ARG_EXTRA_BYTES > 2 ? 1024*ARG_EXTRA_BYTES : 2048);
+		abort();
+	/* get env/args buffer size (may change dynamically on Linux) */
+	if((size = astconf_long(CONF_ARG_MAX)) < 0)
+		size = 131072;
+	/* leave fairly generous space for the environment */
 	for(ev=envp; cp= *ev; ev++)
-		size -= strlen(cp) + 1 + ARG_EXTRA_BYTES;
+	{
+		n = strlen(cp);
+		size -= n + n / 2 + arg_extra;
+	}
+	/* subtract lengths of leading and trailing static arguments */
 	for(av=argv; (cp= *av) && av< &argv[sh.xargmin]; av++)
-		size -= strlen(cp) + 1 + ARG_EXTRA_BYTES;
+		size -= strlen(cp) + 1 + arg_extra;
 	for(av=avlast; cp= *av; av++,nlast++)  
-		size -= strlen(cp) + 1 + ARG_EXTRA_BYTES;
-	size -= 2 + 2 * ARG_EXTRA_BYTES;  /* final null env and arg elements */
+		size -= strlen(cp) + 1 + arg_extra;
+	size -= 2 + 2 * arg_extra;  /* final null env and arg elements */
+	if(size < 2048)
+	{
+		errno = E2BIG;
+		return(-2);
+	}
 	av =  &argv[sh.xargmin];
 	if(!spawn)
 		job_clear();
@@ -121,7 +142,7 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 	{
 		/* for each argument, account for terminating zero and possible extra bytes */
 		for(xv=av,left=size; left>0 && av<avlast;)
-			left -= strlen(*av++) + 1 + ARG_EXTRA_BYTES;
+			left -= strlen(*av++) + 1 + arg_extra;
 		/* leave at least two for last */
 		if(left<0 && (avlast-av)<2)
 			av--;
@@ -129,8 +150,8 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 		{
 			n = nlast*sizeof(char*);
 			saveargs = (char**)sh_malloc(n);
-			memcpy((void*)saveargs, (void*)av, n);
-			memcpy((void*)av,(void*)avlast,n);
+			memcpy(saveargs,av,n);
+			memcpy(av,avlast,n);
 		}
 		else
 		{
@@ -143,35 +164,36 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 		if(saveargs || av<avlast || (exitval && !spawn))
 		{
 			if((pid=_spawnveg(path,argv,envp,0)) < 0)
+			{
+				if(saveargs)
+				{
+					memcpy(av,saveargs,n);
+					free(saveargs);
+				}
 				return(-1);
+			}
 			job_post(pid,0);
 			job_wait(pid);
 			if(sh.exitval>exitval)
 				exitval = sh.exitval;
 			if(saveargs)
 			{
-				memcpy((void*)av,saveargs,n);
-				free((void*)saveargs);
+				memcpy(av,saveargs,n);
+				free(saveargs);
 				saveargs = 0;
 			}
 		}
 		else if(spawn)
 		{
 			sh.xargexit = exitval;
-			if(saveargs)
-				free((void*)saveargs);
 			return(_spawnveg(path,argv,envp,spawn>>1));
 		}
 		else
-		{
-			if(saveargs)
-				free((void*)saveargs);
 			return(execve(path,argv,envp));
-		}
 	}
 	if(!spawn)
 		exit(exitval);
-	return((pid_t)-1);
+	return(-1);
 }
 
 /*
@@ -183,6 +205,7 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 char *path_pwd(void)
 {
 	register char *cp;
+	char tofree = 0;
 	Namval_t *pwdnod;
 	/* Don't bother if PWD already set */
 	if(sh.pwd)
@@ -198,7 +221,6 @@ char *path_pwd(void)
 	{
 		/* Check if $HOME is a path to the PWD; this ensures $PWD == $HOME
 		   at login, even if $HOME is a path that contains symlinks */
-		char tofree = 0;
 		cp = nv_getval(sh_scoped(HOME));
 		if(!(cp && *cp=='/' && test_inode(cp,e_dot)))
 		{
@@ -211,11 +233,9 @@ char *path_pwd(void)
 		if(cp)
 		{
 			if(sh.subshell)
-				pwdnod = sh_assignok(pwdnod,1);
+				sh_assignok(pwdnod,1);
 			nv_putval(pwdnod,cp,NV_RDONLY);
 		}
-		if(tofree)
-			free((void*)cp);
 	}
 	nv_onattr(pwdnod,NV_EXPORT);
 	/* Neither obtained the pwd nor can fall back to sane-ish $PWD: fall back to "." */
@@ -224,7 +244,9 @@ char *path_pwd(void)
 	if(!cp || *cp!='/')
 		nv_putval(pwdnod,cp=(char*)e_dot,NV_RDONLY);
 	/* Set shell PWD */
-	sh.pwd = sh_strdup(cp);
+	if(!tofree)
+		cp = sh_strdup(cp);
+	sh.pwd = cp;
 	return((char*)sh.pwd);
 }
 
@@ -482,7 +504,6 @@ int	path_open(const char *name, register Pathcomp_t *pp)
 /*
  * given a pathname return the base name
  */
-
 char	*path_basename(register const char *name)
 {
 	register const char *start = name;
@@ -612,7 +633,6 @@ static void funload(int fno, const char *name)
  *   if the matching $PATH entry is '.' or empty, the simple name is written without prefixing the PWD
  * - nothing executable was found
  */
-
 int	path_search(register const char *name,Pathcomp_t **oldpp, int flag)
 {
 	register Namval_t *np;
@@ -684,7 +704,7 @@ int	path_search(register const char *name,Pathcomp_t **oldpp, int flag)
 	}
 	else if(pp && !sh_isstate(SH_DEFPATH) && *name!='/' && flag<3)
 	{
-		if(np=nv_search(name,sh_subtracktree(1),NV_ADD|HASH_NOSCOPE))
+		if(np=nv_search(name,sh_subtracktree(1),NV_ADD|NV_NOSCOPE))
 			path_alias(np,pp);
 	}
 	return(0);
@@ -734,7 +754,7 @@ Pathcomp_t *path_absolute(register const char *name, Pathcomp_t *pp, int flag)
 			int n;
 #endif
 			/* Handle default path-bound builtins */
-			if(*stakptr(PATH_OFFSET)=='/' && nv_search(stakptr(PATH_OFFSET),sh.bltin_tree,0))
+			if(!sh_isstate(SH_XARG) && *stakptr(PATH_OFFSET)=='/' && nv_search(stakptr(PATH_OFFSET),sh.bltin_tree,0))
 				return(oldpp);
 #if SHOPT_DYNAMIC
 			/* Load builtins from dynamic libraries */
@@ -798,7 +818,7 @@ Pathcomp_t *path_absolute(register const char *name, Pathcomp_t *pp, int flag)
 					sh_addlib(dll,stakptr(m),oldpp);
 				if(dll &&
 				   (addr=(Shbltin_f)dlllook(dll,stakptr(n))) &&
-				   (!(np = sh_addbuiltin(stakptr(PATH_OFFSET),NiL,NiL)) || np->nvalue.bfp!=(Nambfp_f)addr) &&
+				   (!(np = sh_addbuiltin(stakptr(PATH_OFFSET),NiL,NiL)) || funptr(np)!=addr) &&
 				   (np = sh_addbuiltin(stakptr(PATH_OFFSET),addr,NiL)))
 				{
 					np->nvenv = dll;
@@ -846,7 +866,7 @@ Pathcomp_t *path_absolute(register const char *name, Pathcomp_t *pp, int flag)
 			if(np)
 			{
 				n = np->nvflag;
-				np = sh_addbuiltin(stakptr(PATH_OFFSET),(Shbltin_f)np->nvalue.bfp,nv_context(np));
+				np = sh_addbuiltin(stakptr(PATH_OFFSET),funptr(np),nv_context(np));
 				np->nvflag = n;
 			}
 		}
@@ -927,7 +947,6 @@ err:
 /*
  * Return path relative to present working directory
  */
-
 char *path_relative(register const char* file)
 {
 	register const char *pwd;
@@ -974,7 +993,7 @@ noreturn void path_exec(register const char *arg0,register char *argv[],struct a
 		pp=path_get(arg0);
 	sh.path_err= ENOENT;
 	sfsync(NIL(Sfio_t*));
-	timerdel(NIL(void*));
+	sh_timerdel(NIL(void*));
 	/* find first path that has a library component */
 	while(pp && (pp->flags&PATH_SKIP))
 		pp = pp->next;
@@ -1032,7 +1051,7 @@ pid_t path_spawn(const char *opath,register char **argv, char **envp, Pathcomp_t
 	char		*s, *v;
 	int		r, n, pidsize;
 	pid_t		pid= -1;
-	if(nv_search(opath,sh.bltin_tree,0))
+	if(!sh_isstate(SH_XARG) && nv_search(opath,sh.bltin_tree,0))
 	{
 		/* Found a path-bound built-in. Since this was not caught earlier in sh_exec(), it must
 		   have been found on a temporarily assigned PATH, as with 'PATH=/opt/ast/bin:$PATH cat'.
@@ -1051,7 +1070,7 @@ pid_t path_spawn(const char *opath,register char **argv, char **envp, Pathcomp_t
 #if _lib_readlink
 	/* save original pathname */
 	stakseek(PATH_OFFSET);
-	pidsize = sfprintf(stkstd,"*%d*",spawn?sh.current_pid:getppid());
+	pidsize = sfprintf(stkstd, "*%lld*", (Sflong_t)(spawn ? sh.current_pid : sh.current_ppid));
 	stakputs(opath);
 	opath = stakfreeze(1)+PATH_OFFSET+pidsize;
 	/* only use tracked alias if we're not searching default path */
@@ -1249,13 +1268,17 @@ pid_t path_spawn(const char *opath,register char **argv, char **envp, Pathcomp_t
 	    case E2BIG:
 		if(sh_isstate(SH_XARG))
 		{
-			pid = command_xargs(opath, &argv[0] ,envp,spawn);
-			if(pid<0)
-			{
-				errormsg(SH_DICT,ERROR_system(ERROR_NOEXEC),"command -x: could not execute %s",path);
-				UNREACHABLE();
-			}
-			return(pid);
+			/*
+			 * command -x: built-in xargs. If the argument list doesn't fit and there is more
+			 * than one argument, then retry to allow for extra space consumed per argument.
+			 */
+			while((pid = command_xargs(opath,&argv[0],envp,spawn)) == -1
+			&& arg_extra < 8*sizeof(char*) && errno==E2BIG && argv[1])
+				arg_extra += sizeof(char*);
+			if(pid > 0)
+				return(pid);
+			/* error: reset */
+			arg_extra = _arg_extrabytes;
 		}
 		/* FALLTHROUGH */
 	    default:
@@ -1269,7 +1292,6 @@ pid_t path_spawn(const char *opath,register char **argv, char **envp, Pathcomp_t
  * File is executable but not machine code.
  * Assume file is a shell script and execute it.
  */
-
 static noreturn void exscript(register char *path,register char *argv[],char **envp)
 {
 	register Sfio_t *sp;
@@ -1278,10 +1300,13 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 	sh.bckpid = 0;
 	sh.st.ioset=0;
 	/* clean up any cooperating processes */
-	if(sh.cpipe[0]>0)
+	if(sh.cpipe[0] > -1)
 		sh_pclose(sh.cpipe);
-	if(sh.cpid && sh.outpipe)
+	if(sh.cpid && sh.outpipe && *sh.outpipe > -1)
+	{
 		sh_close(*sh.outpipe);
+		*sh.outpipe = -1;
+	}
 	sh.cpid = 0;
 	if(sp=fcfile())
 		while(sfstack(sp,SF_POPSTACK));
@@ -1308,7 +1333,7 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 		}
 		if((euserid=geteuid()) != sh.userid)
 		{
-			strncpy(name+9,fmtbase((long)sh.current_pid,10,0),sizeof(name)-10);
+			strncpy(name+9,fmtbase((intmax_t)sh.current_pid,10,0),sizeof(name)-10);
 			/* create an SUID open file with owner equal to effective UID */
 			if((n=open(name,O_CREAT|O_TRUNC|O_WRONLY,S_ISUID|S_IXUSR)) < 0)
 				goto fail;
@@ -1377,7 +1402,7 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
     static struct tms buffer;
     static clock_t	before;
     static char *SHACCT; /* set to value of SHACCT environment variable */
-    static shaccton;	/* non-zero causes accounting record to be written */
+    static int shaccton; /* non-zero causes accounting record to be written */
     static int compress(time_t);
     /*
      *	initialize accounting, i.e., see if SHACCT variable set
@@ -1387,14 +1412,11 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 	SHACCT = getenv("SHACCT");
     }
     /*
-    * suspend accounting until turned on by sh_accbegin()
-    */
+     * suspend accounting until turned on by sh_accbegin()
+     */
     void sh_accsusp(void)
     {
 	shaccton=0;
-#ifdef AEXPAND
-	sabuf.ac_flag |= AEXPND;
-#endif /* AEXPAND */
     }
 
     /*
@@ -1432,7 +1454,6 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 		close( fd);
 	}
     }
- 
     /*
      * Produce a pseudo-floating point representation
      * with 3 bits base-8 exponent, 13 bits fraction.
@@ -1459,8 +1480,6 @@ static noreturn void exscript(register char *path,register char *argv[],char **e
 	return((exp<<13) + t);
     }
 #endif	/* SHOPT_ACCT */
-
-
 
 /*
  * add a path component to the path search list and eliminate duplicates
@@ -1559,7 +1578,7 @@ static int checkdotpaths(Pathcomp_t *first, Pathcomp_t* old,Pathcomp_t *pp, int 
 			}
 			*cp = 0;
 			m = ep ? (ep-sp) : 0;
-			if(m==0 || m==6 && memcmp((void*)sp,(void*)"FPATH=",m)==0)
+			if(m==0 || m==6 && strncmp(sp,"FPATH=",m)==0)
 			{
 				if(first)
 				{
@@ -1569,7 +1588,7 @@ static int checkdotpaths(Pathcomp_t *first, Pathcomp_t* old,Pathcomp_t *pp, int 
 					path_addcomp(first,old,stakptr(offset),PATH_FPATH|PATH_BFPATH);
 				}
 			}
-			else if(m==11 && memcmp((void*)sp,(void*)"PLUGIN_LIB=",m)==0)
+			else if(m==11 && strncmp(sp,"PLUGIN_LIB=",m)==0)
 			{
 				if(pp->bbuf)
 					free(pp->bbuf);
@@ -1605,7 +1624,6 @@ Pathcomp_t *path_addpath(Pathcomp_t *first, register const char *path,int type)
 	Pathcomp_t *old=0;
 	int offset = staktell();
 	char *savptr;
-	
 	if(!path && type!=PATH_PATH)
 		return(first);
 	if(type!=PATH_FPATH)
@@ -1756,7 +1774,6 @@ Pathcomp_t *path_unsetfpath(void)
 				}
 				continue;
 			}
-			
 		}
 		old = pp;
 		pp = pp->next;

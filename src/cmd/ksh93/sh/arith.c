@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -24,6 +21,7 @@
  *   AT&T Labs
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	"lexstates.h"
 #include	"name.h"
@@ -66,7 +64,7 @@ static Namval_t *scope(register Namval_t *np,register struct lval *lvalue,int as
 	Dt_t	*sdict = (sh.st.real_fun? sh.st.real_fun->sdict:0);
 	Dt_t	*nsdict = (sh.namespace?nv_dict(sh.namespace):0);
 	Dt_t	*root = sh.var_tree;
-	assign = assign?NV_ASSIGN:NV_NOASSIGN;
+	assign = assign?NV_ASSIGN:0;
 	lvalue->nosub = 0;
 	if(nosub<0 && lvalue->ovalue)
 		return((Namval_t*)lvalue->ovalue);
@@ -100,9 +98,9 @@ static Namval_t *scope(register Namval_t *np,register struct lval *lvalue,int as
 	}
 	if((lvalue->emode & ARITH_COMP) && dtvnext(root))
 	{
-		if(mp = nv_search(cp, sdict ? sdict : root, HASH_NOSCOPE|HASH_SCOPE|HASH_BUCKET))
+		if(mp = nv_search(cp, sdict ? sdict : root, NV_NOSCOPE|NV_REF))
 			np = mp;
-		else if(nsdict && (mp = nv_search(cp, nsdict, HASH_SCOPE|HASH_BUCKET)))
+		else if(nsdict && (mp = nv_search(cp, nsdict, NV_REF)))
 			np = mp;
 	}
 	while(nv_isref(np))
@@ -364,7 +362,7 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 					np = &NaNnod;
 					nv_onattr(np,NV_NOFREE|NV_LDOUBLE|NV_RDONLY);
 				}
-				else if(!(np = nv_open(*ptr,root,NV_NOREF|NV_NOASSIGN|NV_VARNAME|dot)))
+				else if(!(np = nv_open(*ptr,root,NV_NOREF|NV_VARNAME|dot)))
 				{
 					lvalue->value = (char*)*ptr;
 					lvalue->flag =  str-lvalue->value;
@@ -403,10 +401,9 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 		else
 		{
 			char	lastbase=0, *val = xp, oerrno = errno;
-			const char radix = GETDECIMAL(0);
 			lvalue->eflag = 0;
 			errno = 0;
-			if(!sh_isoption(sh.bltindata.bnode==SYSLET ? SH_LETOCTAL : SH_POSIX))
+			if(!sh_isoption(sh.bltinfun==b_let ? SH_LETOCTAL : SH_POSIX))
 			{
 				/* Skip leading zeros to avoid parsing as octal */
 				while(*val=='0' && isdigit(val[1]))
@@ -432,12 +429,12 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 				c='e';
 			else
 				c = *str;
-			if(c=='.' && radix!='.')
+			if(c=='.' && sh.radixpoint!='.')
 			{
 				errormsg(SH_DICT,ERROR_exit(1),"%s: radix point '.' requires LC_NUMERIC=C",val);
 				UNREACHABLE();
 			}
-			if(c==radix || c=='e' || c == 'E' || lastbase == 16 && (c == 'p' || c == 'P'))
+			if(c==sh.radixpoint || c=='e' || c == 'E' || lastbase == 16 && (c == 'p' || c == 'P'))
 			{
 				lvalue->isfloat=1;
 				r = strtold(val,&str);
@@ -511,12 +508,10 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 		}
 		return(r);
 	    }
-
 	    case MESSAGE:
 		sfsync(NIL(Sfio_t*));
 		if(lvalue->emode&ARITH_COMP)
 			return(-1);
-			
 		errormsg(SH_DICT,ERROR_exit((lvalue->emode&3)!=0),lvalue->value,*ptr);
 	}
 	*ptr = str;
@@ -528,11 +523,10 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
  * ptr is set to the last character processed
  * if mode>0, an error will be fatal with value <mode>
  */
-
 Sfdouble_t sh_strnum(register const char *str, char** ptr, int mode)
 {
 	register Sfdouble_t d;
-	char base = (sh_isoption(sh.bltindata.bnode==SYSLET ? SH_LETOCTAL : SH_POSIX) ? 0 : 10), *last;
+	char base = (sh_isoption(sh.bltinfun==b_let ? SH_LETOCTAL : SH_POSIX) ? 0 : 10), *last;
 	if(*str==0)
 	{
 		d = 0.0;
@@ -544,9 +538,12 @@ Sfdouble_t sh_strnum(register const char *str, char** ptr, int mode)
 		d = strtonll(str,&last,&base,-1);
 		if(*last && sh_isstate(SH_INIT))
 		{
-			/* This call is to handle "base#value" literals if we're importing untrusted env vars. */
+			/* Handle floating point or "base#value" literals if we're importing untrusted env vars. */
 			errno = 0;
-			d = strtonll(str, &last, NIL(char*), -1);
+			if(*last==sh.radixpoint)
+				d = strtold(str,&last);
+			else
+				d = strtonll(str,&last,NIL(char*),-1);
 		}
 		if(*last || errno)
 		{
@@ -554,12 +551,12 @@ Sfdouble_t sh_strnum(register const char *str, char** ptr, int mode)
 				/*
 				 * Initializing means importing untrusted env vars. The string does not appear to be
 				 * a recognized numeric literal, so give up. We can't safely call arith_strval(), because
-				 * that allows arbitrary expressions, causing security vulnerability CVE-2019-14868.
+				 * that allows arbitrary expressions, which could be a security vulnerability.
 				 */
 				d = 0.0;
 			else
 			{
-				if(!last || *last!='.' || last[1]!='.')
+				if(!last || *last!=sh.radixpoint || last[1]!=sh.radixpoint)
 					d = arith_strval(str,&last,arith,mode);
 				if(!ptr && *last && mode>0)
 				{

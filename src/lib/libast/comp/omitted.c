@@ -3,14 +3,11 @@
  * workarounds to bring the native interface close to POSIX and X/Open
  */
 
-#if defined(__STDPP__directive) && defined(__STDPP__hide)
-__STDPP__directive pragma pp:hide utime utimes
-#else
 #define utime		______utime
 #define utimes		______utimes
-#endif
 
 #include <ast.h>
+#include <ast_stdio.h>
 #include <error.h>
 #include <tm.h>
 
@@ -28,17 +25,14 @@ __STDPP__directive pragma pp:hide utime utimes
 
 #if __CYGWIN__
 #include <ast_windows.h>
+#include <sys/cygwin.h>
 #if _win32_botch_execve || _lib_spawn_mode
 #define CONVERT		1
 #endif
 #endif
 
-#if defined(__STDPP__directive) && defined(__STDPP__hide)
-__STDPP__directive pragma pp:nohide utime utimes
-#else
 #undef	utime
 #undef	utimes
-#endif
 
 #ifndef MAX_PATH
 #define MAX_PATH	PATH_MAX
@@ -81,10 +75,6 @@ extern int		_unlink(const char*);
 extern int		_utime(const char*, const struct utimbuf*);
 extern int		_utimes(const char*, const struct timeval*);
 extern ssize_t		_write(int, const void*, size_t);
-
-#if defined(__EXPORT__)
-#define extern	__EXPORT__
-#endif
 
 #if _win32_botch_access
 #define sysaccess		_access
@@ -1123,23 +1113,6 @@ getpagesize()
 {
 	return _AST_PAGESIZE;
 }
-
-#endif
-
-#if __CYGWIN__ && defined(__IMPORT__) && defined(__EXPORT__)
-
-#ifndef OMITTED
-#define OMITTED	1
-#endif
-
-/*
- * a few _imp__FUNCTION symbols are needed to avoid
- * static link multiple definitions
- */
-
-#ifndef strtod
-__EXPORT__ double (*_imp__strtod)(const char*, char**) = strtod;
-#endif
 
 #endif
 

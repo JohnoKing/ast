@@ -1,21 +1,18 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1982-2012 AT&T Intellectual Property          *
+*          Copyright (c) 1982-2014 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -26,6 +23,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<fcin.h>
 #include	"io.h"
@@ -66,22 +64,14 @@ void	sh_fault(register int sig)
 	register char		*trap;
 	register struct checkpt	*pp = (struct checkpt*)sh.jmplist;
 	int	action=0;
+	int	save_errno = errno;
 	/* reset handler */
 	if(!(sig&SH_TRAP))
 		signal(sig, sh_fault);
 	sig &= ~SH_TRAP;
 #ifdef SIGWINCH
 	if(sig==SIGWINCH)
-	{
-		int rows=0, cols=0;
-		int32_t v;
-		astwinsize(2,&rows,&cols);
-		if(v = cols)
-			nv_putval(COLUMNS, (char*)&v, NV_INT32|NV_RDONLY);
-		if(v = rows)
-			nv_putval(LINES, (char*)&v, NV_INT32|NV_RDONLY);
-		sh.winch++;
-	}
+		sh_winsize(NIL(int*),NIL(int*));
 #endif  /* SIGWINCH */
 	trap = sh.st.trapcom[sig];
 	if(sh.savesig)
@@ -89,7 +79,7 @@ void	sh_fault(register int sig)
 		/* critical region, save and process later */
 		if(!(sh.sigflag[sig]&SH_SIGIGNORE))
 			sh.savesig = sig;
-		return;
+		goto done;
 	}
 	if(sig==SIGALRM && sh.bltinfun==b_sleep)
 	{
@@ -98,18 +88,22 @@ void	sh_fault(register int sig)
 			sh.trapnote |= SH_SIGTRAP;
 			sh.sigflag[sig] |= SH_SIGTRAP;
 		}
-		return;
+		goto done;
 	}
-	if(sh.subshell && trap && sig!=SIGINT && sig!=SIGQUIT && sig!=SIGWINCH && sig!=SIGCONT)
+	if(sh.subshell && trap && sig!=SIGINT && sig!=SIGQUIT
+#ifdef SIGWINCH
+	&& sig!=SIGWINCH
+#endif
+	&& sig!=SIGCONT)
 	{
 		sh.exitval = SH_EXITSIG|sig;
 		sh_subfork();
 		sh.exitval = 0;
-		return;
+		goto done;
 	}
 	/* handle ignored signals */
 	if(trap && *trap==0)
-		return;
+		goto done;
 	flag = sh.sigflag[sig]&~SH_SIGOFF;
 	if(!trap)
 	{
@@ -118,17 +112,17 @@ void	sh_fault(register int sig)
 			if(sh.subshell)
 				sh.ignsig = sig;
 			sigrelease(sig);
-			return;
+			goto done;
 		}
 		if(flag&SH_SIGDONE)
 		{
 			void *ptr=0;
-			if((flag&SH_SIGINTERACTIVE) && sh_isstate(SH_INTERACTIVE) && !sh_isstate(SH_FORKED) && ! sh.subshell)
+			if((flag&SH_SIGINTERACTIVE) && sh_isstate(SH_INTERACTIVE) && !sh_isstate(SH_FORKED))
 			{
 				/* check for TERM signal between fork/exec */
 				if(sig==SIGTERM && job.in_critical)
 					sh.trapnote |= SH_SIGTERM;
-				return;
+				goto done;
 			}
 			sh.lastsig = sig;
 			sigrelease(sig);
@@ -161,7 +155,7 @@ void	sh_fault(register int sig)
 					dp->exceptf = malloc_done;
 			}
 #endif
-			return;
+			goto done;
 		}
 	}
 	errno = 0;
@@ -189,7 +183,7 @@ void	sh_fault(register int sig)
 				sigrelease(sig);
 				sh_exit(SH_EXITSIG);
 			}
-			return;
+			goto done;
 		}
 #endif /* SIGTSTP */
 	}
@@ -197,12 +191,12 @@ void	sh_fault(register int sig)
 	if((error_info.flags&ERROR_NOTIFY) && sh.bltinfun)
 		action = (*sh.bltinfun)(-sig,(char**)0,(void*)0);
 	if(action>0)
-		return;
+		goto done;
 #endif
 	if(sh.bltinfun && sh.bltindata.notify)
 	{
 		sh.bltindata.sigset = 1;
-		return;
+		goto done;
 	}
 	sh.trapnote |= flag;
 	if(sig <= sh.sigmax)
@@ -210,9 +204,51 @@ void	sh_fault(register int sig)
 	if(pp->mode==SH_JMPCMD && sh_isstate(SH_STOPOK))
 	{
 		if(action<0)
-			return;
+			goto done;
 		sigrelease(sig);
 		sh_exit(SH_EXITSIG);
+	}
+done:
+	/*
+	 * Always restore errno, because this code is run during signal handling which may interrupt loops like:
+	 *	while((fd = open(path, flags, mode)) < 0)
+	 *		if(errno!=EINTR)
+	 *			<throw error>;
+	 * otherwise that may fail if a signal is caught between the open() call and the errno!=EINTR check.
+	 */
+	errno = save_errno;
+	return;
+}
+
+/*
+ * Get window size and update LINES and COLUMNS.
+ * Returns the sizes in the pointed-to ints if non-null.
+ * If the number of columns changed, flags a window size change in sh.winch.
+ */
+void	sh_winsize(int *linesp, int *columnsp)
+{
+	static int	oldlines, oldcolumns;
+	int		lines = oldlines, columns = oldcolumns;
+	int32_t		i;
+	astwinsize(2,&lines,&columns);
+	if(linesp)
+		*linesp = lines;
+	if(columnsp)
+		*columnsp = columns;
+	/*
+	 * Update LINES and COLUMNS only when the values changed; this makes
+	 * LINES.set and COLUMNS.set shell discipline functions more useful.
+	 */
+	if((lines != oldlines || nv_isnull(LINES)) && (i = (int32_t)lines))
+	{
+		nv_putval(LINES, (char*)&i, NV_INT32|NV_RDONLY);
+		oldlines = lines;
+	}
+	if((columns != oldcolumns || nv_isnull(COLUMNS)) && (i = (int32_t)columns))
+	{
+		nv_putval(COLUMNS, (char*)&i, NV_INT32|NV_RDONLY);
+		oldcolumns = columns;
+		sh.winch = 1;
 	}
 }
 
@@ -314,11 +350,17 @@ void	sh_sigdone(void)
  * Restore to default signals
  * Free the trap strings if mode is non-zero
  * If mode>1 then ignored traps cause signal to be ignored 
+ * If mode==-1 we're entering a new function scope in sh_funscope()
  */
 void	sh_sigreset(register int mode)
 {
 	register char	*trap;
 	register int 	flag, sig=sh.st.trapmax;
+	/* do not reset sh.st.trapdontexec in a new ksh function scope as parent traps will still be active */
+	if(mode < 0)
+		mode = 0;
+	else
+		sh.st.trapdontexec = 0;
 	while(sig-- > 0)
 	{
 		if(trap=sh.st.trapcom[sig])
@@ -348,7 +390,6 @@ void	sh_sigreset(register int mode)
 				free(trap);
 			sh.st.trap[sig] = 0;
 		}
-		
 	}
 	if(sh.st.trapcom[0] && sh.st.trapcom[0] != Empty)
 		free(sh.st.trapcom[0]);
@@ -381,7 +422,6 @@ void	sh_sigclear(register int sig)
 /*
  * check for traps
  */
-
 void	sh_chktrap(void)
 {
 	register int 	sig=sh.st.trapmax;
@@ -456,6 +496,7 @@ int sh_trap(const char *trap, int mode)
 	int	jmpval, savxit = sh.exitval, savxit_return;
 	int	was_history = sh_isstate(SH_HISTORY);
 	int	was_verbose = sh_isstate(SH_VERBOSE);
+	char	save_chldexitsig = sh.chldexitsig;
 	int	staktop = staktell();
 	char	*savptr = stakfreeze(0);
 	struct	checkpt buff;
@@ -503,6 +544,7 @@ int sh_trap(const char *trap, int mode)
 		sh_onstate(SH_HISTORY);
 	if(was_verbose)
 		sh_onstate(SH_VERBOSE);
+	sh.chldexitsig = save_chldexitsig;
 	exitset();
 	if(jmpval>SH_JMPTRAP && (((struct checkpt*)sh.jmpbuffer)->prev || ((struct checkpt*)sh.jmpbuffer)->mode==SH_JMPSCRIPT))
 		siglongjmp(*sh.jmplist,jmpval);
@@ -518,7 +560,7 @@ void sh_exit(register int xno)
 	register int		sig=0;
 	register Sfio_t*	pool;
 	/* POSIX requires exit status >= 2 for error in 'test'/'[' */
-	if(xno == 1 && (sh.bltindata.bnode==SYSTEST || sh.bltindata.bnode==SYSBRACKET))
+	if(xno==1 && sh.bltinfun==b_test)
 		sh.exitval = 2;
 	else
 		sh.exitval = xno;
@@ -607,7 +649,6 @@ static void array_notify(Namval_t *np, void *data)
 /*
  * This is the exit routine for the shell
  */
-
 noreturn void sh_done(register int sig)
 {
 	register char *t;
@@ -635,20 +676,10 @@ noreturn void sh_done(register int sig)
 #if SHOPT_ACCT
 	sh_accend();
 #endif	/* SHOPT_ACCT */
-#if SHOPT_VSH || SHOPT_ESH
-	if(mbwide()
-#if SHOPT_ESH
-	|| sh_isoption(SH_EMACS)
-	|| sh_isoption(SH_GMACS)
-#endif
-#if SHOPT_VSH
-	|| sh_isoption(SH_VI)
-#endif
-	)
+	if(mbwide() && sh_editor_active())
 		tty_cooked(-1);
-#endif /* SHOPT_VSH || SHOPT_ESH */
 #ifdef JOBS
-	if((sh_isoption(SH_INTERACTIVE) && sh.login_sh) || (!sh_isoption(SH_INTERACTIVE) && (sig==SIGHUP)))
+	if((sh_isoption(SH_INTERACTIVE) && sh_isoption(SH_LOGIN_SHELL)) || (!sh_isoption(SH_INTERACTIVE) && (sig==SIGHUP)))
 		job_walk(sfstderr, job_hup, SIGHUP, NIL(char**));
 #endif	/* JOBS */
 	job_close();
@@ -657,7 +688,7 @@ noreturn void sh_done(register int sig)
 	sfsync((Sfio_t*)sfstdin);
 	sfsync((Sfio_t*)sh.outpool);
 	sfsync((Sfio_t*)sfstdout);
-	if(savxit&SH_EXITSIG && (savxit&SH_EXITMASK) == sh.lastsig)
+	if((sh.chldexitsig && sh.realsubshell) || (savxit&SH_EXITSIG && (savxit&SH_EXITMASK) == sh.lastsig))
 		sig = savxit&SH_EXITMASK;
 	if(sig)
 	{
@@ -682,10 +713,8 @@ noreturn void sh_done(register int sig)
 	if(sh_isoption(SH_NOEXEC))
 		kiaclose((Lex_t*)sh.lex_context);
 #endif /* SHOPT_KIA */
-
 	/* Exit with portable 8-bit status (128 + signum) if last child process exits due to signal */
-	if (savxit & SH_EXITSIG)
+	if(sh.chldexitsig)
 		savxit = savxit & ~SH_EXITSIG | 0200;
-
 	exit(savxit&SH_EXITMASK);
 }

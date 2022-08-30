@@ -1,0 +1,170 @@
+########################################################################
+#                                                                      #
+#              This file is part of the ksh 93u+m package              #
+#          Copyright (c) 2021-2022 Contributors to ksh 93u+m           #
+#                    <https://github.com/ksh93/ksh>                    #
+#                      and is licensed under the                       #
+#                 Eclipse Public License, Version 2.0                  #
+#                                                                      #
+#                A copy of the License is available at                 #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
+#                                                                      #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
+#                                                                      #
+########################################################################
+
+# This function integrates AST commands' --man self-documentation into the
+# general 'man' command, making it a great deal easier to use. Your pager from
+# $PAGER is automatically used if set, otherwise it tries 'less -R'. This works
+# for both ksh built-in commands and external commands with --man.
+#
+# For commands that do not have AST --man self-documentation, it passes control
+# to your regular 'man' command so you won't notice a difference. Result: you
+# can just use 'man somecommand' for everything.
+#
+# This function only handles 'man' commands with a single argument. If more
+# or less than one argument is given, it passes control to the system's 'man'.
+#
+# For path-bound built-ins (the ones starting with /opt/ast/bin in the output
+# of the 'builtin' command without arguments), each built-in --man page only
+# overrides the regular one if the built-in command would actually be executed
+# according to the value of $PATH. For external commands, the regular man page
+# is searched before looking for AST --man self-documentation. For path-bound
+# built-in commands and external commands with AST --man, you can also give it
+# the full pathname, e.g., 'man /opt/ast/bin/cat' or 'man /usr/bin/shcomp'.
+#
+# Recommended usage:
+# 1. Drop this file in a directory in your $FPATH.
+# 2. Add 'autoload man' to your ~/.kshrc to override external 'man'.
+# Or to try it out, just 'dot'/source this file manually.
+#
+# The code below illustrates how defining functions in a dedicated ksh
+# namespace can be used to compartmentalise code, making it more readable and
+# easier to understand. The basic idea is fairly simple: each function and
+# variable name N within 'namespace man' is actually treated as '.man.N'. This
+# allows using simple and readable names without conflicting with other code
+# using the same names.
+
+namespace man
+{
+	# Check for a built-in with --man, i.e., if:
+	# - 'whence -t' says it is a built-in;
+	# - it is not :, true, false, or echo;
+	# - the name or path we would execute appears in output of 'builtin'.
+	# This way, path-bound built-ins' --man is only used if found in $PATH.
+
+	builtin_has_selfdoc()
+	{
+		[[ $(whence -t -- "$1") == builtin ]] \
+			&& [[ ! $1 =~ ^(:|true|false|echo)$ \
+			&& $'\n'$(builtin)$'\n' == *$'\n'"$(whence -- "$1")"$'\n'* ]]
+	}
+
+	# Check if a binary or script has --man self-documentation by grepping
+	# for an AST optget(3) usage string.
+
+	extcmd_has_selfdoc()
+	{
+		typeset p=$(whence -p -- "$1")
+		[[ $p == /* ]] \
+			&& LC_ALL=C grep -q '\[+NAME?' "$p" \
+			&& LC_ALL=C grep -q '\[+DESCRIPTION?' "$p"
+	}
+
+	# Show the self-documentation.
+	#   Exporting ERROR_OPTIONS tells ksh to emit pretty-printing escape
+	# codes even if standard error is not on a terminal. Note that, in
+	# fact, all --man output is a glorified error message! Strange but
+	# true. So to capture the output, we need to redirect standard error to
+	# standard output (2>&1). Also, 'test' and '[' need special invocations.
+	#   Also note: '--??man' is safer as some programs may override --man;
+	# see any_builtin --??help (e.g., 'whence --??help') for more info.
+
+	show_selfdoc()
+	{
+		typeset -x ERROR_OPTIONS=emphasis
+		case $1 in
+		test )	command test '--??man' -- ;;
+		[ )	command [ '--??man' -- ] ;;
+		* )	command "$1" '--??man' ;;
+		esac 2>&1
+	}
+
+	# Run the user's configured pager. Unset IFS to get default split on
+	# space/tab/newline, and disable globbing to avoid processing '*', '?'
+	# etc., then expand and run the command from $PAGER, defaulting to
+	# 'less -R' if it's unset or empty.
+
+	pager()
+	{
+		typeset IFS		# local default split...
+		set -o noglob		# ...and no pathname expansion...
+		${PAGER:-less -R}	# ...so we can safely split $PAGER
+	}
+
+	# Try if a system manual page in a section exists. Unfortunately, we
+	# cannot portably rely on the exit status of the 'man' command to check
+	# for success, so test if its standard output includes at least three
+	# newline control characters. (Thankfully, all OS man commands seem to
+	# deactivate the pager if standard output is not on a terminal.)
+
+	try_os_man()
+	{
+		[[ $2 != */* && $(command man -s "$1" "$2" 2>/dev/null) == *$'\n'*$'\n'*$'\n'* ]]
+	}
+
+	# The main function puts it all together. When given a single argument,
+	# it shows manual pages in the following order of preference:
+	#   1. --man self-documentation of built-in commands;
+	#   2. regular section 1 and section 8 manual pages (for example, we
+	#      probably prefer the full ksh.1 manual page over 'ksh --man');
+	#   3. --man self-documentation of external commands;
+	#   4. regular manual pages in other sections (programming manual).
+
+	main()
+	{
+		if (($# != 1)); then
+			command man "$@"
+		elif builtin_has_selfdoc "$1"; then
+			show_selfdoc "$1" | pager
+		elif try_os_man 1 "$1"; then
+			command man -s 1 "$1"
+		elif try_os_man 8 "$1"; then
+			command man -s 8 "$1"
+		elif extcmd_has_selfdoc "$1"; then
+			show_selfdoc "$1" | pager
+		else
+			command man "$1"
+		fi
+	}
+}
+
+# The main function simply invokes 'main' within the namespace. Because 'man'
+# cannot not itself be in the namespace block, it has to invoke the full
+# canonical name, '.man.main'.
+# (If we moved 'man' into the namespace block, it would actually be called
+# '.man.man' and have to be invoked as that, making it fairly useless.)
+#
+# Scoping note: The functions within the namespace all use the POSIX name()
+# syntax, which means they do not have their own local scope. However, 'man' is
+# defined with the 'function' keyword, which gives it a local scope. Invoking
+# the POSIX functions from 'man' makes them share its scope, which means any
+# local variables defined and shell options set within those POSIX functions
+# are made local to the 'man' function and shared between the POSIX functions
+# but not outside them.
+
+function man
+{
+	.man.main "$@"
+}
+
+
+# Do a check at autoload time. We depend on a non-buggy 'whence -t' option
+# (the ksh2020 version is broken; it claims path-bound builtins are files)
+
+if ((.sh.version < 20211227)); then
+	print "WARNING: this man wrapper function requires ksh 93u+m 2021-12-27 or later" >&2
+	sleep 1
+fi

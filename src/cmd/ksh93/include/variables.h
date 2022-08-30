@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 
@@ -35,6 +31,17 @@ struct rand
 };
 extern void sh_reseed_rand(struct rand *);
 extern void sh_save_rand_seed(struct rand *, int);
+
+#define RAND_SEED_INVALIDATED		-2
+#define sh_invalidate_rand_seed()	(((struct rand*)RANDNOD->nvfun)->rand_last = RAND_SEED_INVALIDATED)
+
+/* update ${.sh.level} and, if needed, restore the current scope */
+#define update_sh_level() \
+( \
+	SH_LEVELNOD->nvalue.s = sh.fn_depth + sh.dot_depth, \
+	sh.topscope != (Shscope_t*)sh.st.self ? sh_setscope(sh.topscope) : 0, \
+	1 \
+)
 
 /* The following defines must be kept synchronous with shtab_variables[] in data/variables.c */
 
@@ -91,19 +98,18 @@ extern void sh_save_rand_seed(struct rand *, int);
 #define SH_SUBSCRNOD	(sh.bltin_nodes+50)
 #define SH_VALNOD	(sh.bltin_nodes+51)
 #define SH_VERSIONNOD	(sh.bltin_nodes+52)
-#define SH_DOLLARNOD	(sh.bltin_nodes+53)
-#define SH_MATCHNOD	(sh.bltin_nodes+54)
-#define SH_COMMANDNOD	(sh.bltin_nodes+55)
-#define SH_PATHNAMENOD	(sh.bltin_nodes+56)
-#define SH_FUNNAMENOD	(sh.bltin_nodes+57)
-#define SH_SUBSHELLNOD	(sh.bltin_nodes+58)
-#define SH_LEVELNOD	(sh.bltin_nodes+59)
-#define SH_LINENO	(sh.bltin_nodes+60)
-#define SH_STATS	(sh.bltin_nodes+61)
-#define SH_MATHNOD	(sh.bltin_nodes+62)
-#define SH_JOBPOOL	(sh.bltin_nodes+63)
-#define SH_PIDNOD	(sh.bltin_nodes+64)
-#define SH_TILDENOD	(sh.bltin_nodes+65)
-#define SHLVL		(sh.bltin_nodes+66)
+#define SH_MATCHNOD	(sh.bltin_nodes+53)
+#define SH_COMMANDNOD	(sh.bltin_nodes+54)
+#define SH_PATHNAMENOD	(sh.bltin_nodes+55)
+#define SH_FUNNAMENOD	(sh.bltin_nodes+56)
+#define SH_SUBSHELLNOD	(sh.bltin_nodes+57)
+#define SH_LEVELNOD	(sh.bltin_nodes+58)
+#define SH_LINENO	(sh.bltin_nodes+59)
+#define SH_STATS	(sh.bltin_nodes+60)
+#define SH_MATHNOD	(sh.bltin_nodes+61)
+#define SH_PIDNOD	(sh.bltin_nodes+62)
+#define SH_PPIDNOD	(sh.bltin_nodes+63)
+#define SH_TILDENOD	(sh.bltin_nodes+64)
+#define SHLVL		(sh.bltin_nodes+65)
 
 #endif /* SH_VALNOD */

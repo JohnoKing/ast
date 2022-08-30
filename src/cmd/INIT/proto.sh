@@ -4,11 +4,11 @@
 #             Copyright (c) 2021 Contributors to ksh 93u+m             #
 #                    <https://github.com/ksh93/ksh>                    #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  Martijn Dekker <martijn@inlv.org>                   #
 #                                                                      #

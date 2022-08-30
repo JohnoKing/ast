@@ -2,30 +2,24 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
 #              Roland Mainz <roland.mainz@nrubsig.org>                 #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
 
-# "nounset" disabled for now
-#set -o nounset
-Command=${0##*/}
-integer Errors=0 HAVE_signbit=0
+typeset -is HAVE_signbit=0
 
 if	typeset -f .sh.math.signbit >/dev/null && (( signbit(-NaN) ))
 then	HAVE_signbit=1
@@ -652,6 +646,11 @@ test_read_type_crash
 test_read_C_into_array
 test_read_C_special_shell_keywords
 
+unset bar
+enum bool=(false true)
+bool -a bar
+bar[3]=true
+[[ $((5+bar[3])) != 6 ]] && err_exit '$((5+bar[3])) should be 6'
 
 # tests done
 exit $((Errors<125?Errors:125))

@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -32,6 +29,7 @@
  */
 
 
+#include "shopt.h"
 #include "defs.h"
 #include "edit.h"
 
@@ -44,7 +42,8 @@ NoN(hexpand)
 static char *modifiers = "htrepqxs&";
 static int mod_flags[] = { 0, 0, 0, 0, HIST_PRINT, HIST_QUOTE, HIST_QUOTE|HIST_QUOTE_BR, 0, 0 };
 
-#define	DONE()	{flag |= HIST_ERROR; cp = 0; stakseek(0); goto done;}
+#define DONE		{ stakseek(0); goto done; }
+#define ERROROUT	{ flag |= HIST_ERROR; DONE; }
 
 struct subst
 {
@@ -130,6 +129,16 @@ static char *parse_subst(const char *s, struct subst *sb)
 }
 
 /*
+ * return true if c is a word boundary character, i.e. the
+ * character following c is considered to start a new word
+ */
+
+static int is_wordboundary(char c)
+{
+	return isspace(c) || strchr("|&;()`<>",c);
+}
+
+/*
  * history expansion main routine
  */
 
@@ -202,11 +211,19 @@ int hist_expand(const char *ln, char **xp)
 			continue;
 		}
 
-		if(hc[2] && *cp == hc[2]) /* history comment designator, skip rest of line */
+		if(hc[2] && *cp == hc[2])
 		{
-			stakputc(*cp++);
-			stakputs(cp);
-			DONE();
+			if(cp == ln || is_wordboundary(cp[-1]))
+			{
+				/* word begins with history comment character; skip rest of line */
+				stakputs(cp);
+				DONE;
+			}
+			else
+			{
+				stakputc(*cp++);
+				continue;
+			}
 		}
 
 		n = -1;
@@ -324,7 +341,7 @@ getline:
 			*cp = '\0';
 			errormsg(SH_DICT, ERROR_ERROR, "%s: event not found", evp);
 			*cp = c;
-			DONE();
+			ERROROUT;
 		}
 
 		if(str) /* string search: restore orig. line */
@@ -429,7 +446,7 @@ getline:
 			*cp = '\0';
 			errormsg(SH_DICT, ERROR_ERROR, "%s: bad word specifier", evp);
 			*cp = c;
-			DONE();
+			ERROROUT;
 		}
 
 		/* no valid word designator after colon, rewind */
@@ -490,7 +507,7 @@ getsel:
 			*cp = '\0';
 			errormsg(SH_DICT, ERROR_ERROR, "%s: bad word specifier", evp);
 			*cp = c;
-			DONE();
+			ERROROUT;
 		}
 		else if(w[1] == -2)	/* skip last word */
 			sfseek(tmp, i, SEEK_SET);
@@ -550,7 +567,7 @@ getsel:
 			else
 			{
 				errormsg(SH_DICT, ERROR_ERROR, "%c: unrecognized history modifier", c);
-				DONE();
+				ERROROUT;
 			}
 
 			if(c == 'h' || c == 'r') /* head or base */
@@ -610,7 +627,7 @@ getsel:
 						(flag & HIST_QUICKSUBST) ? ":s" : "",
 						evp);
 					*cp = c;
-					DONE();
+					ERROROUT;
 				}
 
 				/* need pointer for strstr() */
@@ -638,7 +655,7 @@ getsel:
 							(flag & HIST_QUICKSUBST) ? ":s" : "",
 							evp);
 						*cp = c;
-						DONE();
+						ERROROUT;
 					}
 					/* loop if g modifier specified */
 					if(!tempcp || !(flag & HIST_GLOBALSUBST))

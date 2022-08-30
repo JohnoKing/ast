@@ -4,18 +4,14 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -36,6 +32,7 @@
  * > it is blocked and it should return and then handle the trap.
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<error.h>
 #include	<stak.h>
@@ -99,7 +96,7 @@ static 	void *time_delete(register struct tevent *item, void *list)
 			tp->next = item->next;
 	}
 	if(item->timeout)
-		timerdel((void*)item->timeout);
+		sh_timerdel((void*)item->timeout);
 	return(list);
 }
 
@@ -266,7 +263,7 @@ int	b_alarm(int argc,char *argv[],Shbltin_t *context)
 		errormsg(SH_DICT,ERROR_usage(2),optusage((char*)0));
 		UNREACHABLE();
 	}
-	np = nv_open(argv[0],sh.var_tree,NV_NOARRAY|NV_VARNAME|NV_NOASSIGN);
+	np = nv_open(argv[0],sh.var_tree,NV_NOARRAY|NV_VARNAME);
 	if(!nv_isnull(np))
 		nv_unset(np);
 	nv_setattr(np, NV_DOUBLE);

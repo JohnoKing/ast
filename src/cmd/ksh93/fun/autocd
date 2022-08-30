@@ -1,0 +1,65 @@
+########################################################################
+#                                                                      #
+#              This file is part of the ksh 93u+m package              #
+#          Copyright (c) 2021-2022 Contributors to ksh 93u+m           #
+#                    <https://github.com/ksh93/ksh>                    #
+#                      and is licensed under the                       #
+#                 Eclipse Public License, Version 2.0                  #
+#                                                                      #
+#                A copy of the License is available at                 #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
+#                                                                      #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#                                                                      #
+########################################################################
+
+# This is a ksh implementation of an autocd feature like 'shopt -s autocd'
+# in bash. Drop this file in a directory in your $FPATH, and type 'autocd'
+# to activate. After that, you only need to type the name of an existing
+# directory to change to it, without needing to type 'cd' first.
+#
+# This is implemented using the DEBUG trap. The exit status of an autocd
+# is always 2 because this is necessary to stop the directory name from
+# being executed as a command (see ksh(1) under Built-in Commands, 'trap').
+
+_do_autocd()
+{
+	# do nothing if called from another function, or shell not interactive, or the
+	# command is ((arithmetic)), or the command contains blanks but is not quoted
+	if	[[ .sh.level -ne 1 || ! -o interactive || $1 == \(* \
+			|| ($1 == *[[:blank:]]* && $1 != \'*\' && $1 != \$\'*\') ]]
+	then	return
+	fi
+	# if command name is quoted (e.g. directory name containing spaces), unquote it
+	if	[[ $1 == \'*\' || $1 == \$\'*\' ]]
+	then	eval "set -- $1"
+	fi
+	# if the result is one word and it's not a command, then autocd
+	if      (($#==1)) && ! command -v "$1" >/dev/null && [[ -d $1 ]]
+	then    printf 'cd -- %q\n' "$1" >&2
+		CDPATH= command cd -- "$1"
+		return 2  # status 2 == do not execute original command
+	fi
+}
+
+autocd()
+{
+	if	[[ ${1-} == '-d' ]]
+	then	trap - DEBUG
+		print "autocd deactivated"
+	else	trap '_do_autocd "${.sh.command}"' DEBUG
+		print "autocd activated -- type a directory path to cd, ~- to cd back"
+		print "type 'autocd -d' to deactivate"
+	fi
+}
+
+
+# Do a check at autoload time. This depends on a non-buggy DEBUG trap.
+# It is horribly broken in every latter-years AT&T version of ksh93.
+
+if ((.sh.version < 20210220)); then
+	print "WARNING: this may crash or break ksh ${.sh.version};" >&2
+	print "         autocd requires ksh 93u+m 2021-02-20 or later" >&2
+	sleep 1
+fi

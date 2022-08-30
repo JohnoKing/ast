@@ -4,18 +4,15 @@
 #          Copyright (c) 1994-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                 Glenn Fowler <gsf@research.att.com>                  #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 : regress - run regression tests in command.tst
@@ -28,7 +25,7 @@ case $(getopts '[-][123:xyz]' opt --xyz 2>/dev/null; echo 0$opt) in
 ]
 [-author?Glenn Fowler <gsf@research.att.com>]
 [-copyright?Copyright (c) 1995-2012 AT&T Intellectual Property]
-[-license?http://www.eclipse.org/org/documents/epl-v10.html]
+[-license?https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html]
 [+NAME?regress - run regression tests]
 [+DESCRIPTION?\bregress\b runs the tests in \aunit\a, or
     \aunit\a\b.tst\b if \aunit\a does not exist. If \acommand\a is omitted

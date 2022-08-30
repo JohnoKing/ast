@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -273,22 +270,37 @@ PATH=${PATH#:}
 if	[[ ${SIG[USR1]} ]]
 then	float s=$SECONDS
 	exp=SIGUSR1
+
 	got=$(LC_ALL=C $SHELL -c '
 		trap "print SIGUSR1 ; exit 0" USR1
 		(trap "" USR1 ; exec kill -USR1 $$ & sleep .5)
 		print done')
 	[[ $got == "$exp" ]] || err_exit 'subshell ignoring signal does not send signal to parent' \
-		"(expected '$exp', got '$got')"
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 	(( (SECONDS-s) < .4 )) && err_exit 'parent does not wait for child to complete before handling signal'
 	((s = SECONDS))
-	exp=SIGUSR1
+
+	: >out
+	trap 'echo SIGUSR1 >out; exit 0' USR1
+	(trap '' USR1; kill -USR1 $$)
+	got=$(<out)
+	[[ $got == "$exp" ]] || err_exit 'subshell ignoring signal does not send signal to parent [simple case]' \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
 	got=$(LC_ALL=C $SHELL -c '
 		trap "print SIGUSR1 ; exit 0" USR1
 		(trap "exit" USR1 ; exec kill -USR1 $$ & sleep .5)
 		print done')
 	[[ $got == "$exp" ]] || err_exit 'subshell catching signal does not send signal to parent' \
-		"(expected '$exp', got '$got')"
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 	(( SECONDS-s < .4 )) && err_exit 'parent completes early'
+
+	: >out
+	trap 'echo SIGUSR1 >out; exit 0' USR1
+	(trap 'echo wrong' USR1; kill -USR1 $$)
+	got=$(<out)
+	[[ $got == "$exp" ]] || err_exit 'subshell catching signal does not send signal to parent [simple case]' \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 fi
 
 yes() for ((;;)); do print y; done
@@ -567,6 +579,12 @@ got=$("$SHELL" -c 'trap + INT; "$SHELL" -c '\''kill -s INT $$'\''; echo "$?, con
 ((!(e = $?))) && [[ $got == "$exp" ]] || err_exit "child process interrupting itself interrupts parent" \
 	"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 trap - INT
+
+# Test for 'trap - INT' backported from ksh93v- 2013-07-27
+float s=SECONDS
+(trap - INT; exec sleep 2) & sleep .5; kill -sINT $!
+wait $!
+(( (SECONDS-s) < 1.8)) && err_exit "'trap - INT' causing trap to not be ignored"
 
 # ======
 exit $((Errors<125?Errors:125))

@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 #ifndef ARG_RAW
@@ -56,7 +53,7 @@ struct comnod
 #define COMSCAN		(01<<COMBITS)
 #define COMFIXED	(02<<COMBITS)
 
-struct slnod 	/* struct for link list of stacks */
+struct slnod 	/* struct for linked list of stacks */
 {
 	struct slnod	*slnext;
 	struct slnod	*slchild;
@@ -113,7 +110,6 @@ struct argnod
 /* legal argument flags */
 #define ARG_RAW		0x1	/* string needs no processing */
 #define ARG_MAKE	0x2	/* bit set during argument expansion */
-#define ARG_COMSUB	0x2	/* command sub */
 #define ARG_MAC		0x4	/* string needs macro expansion */
 #define	ARG_EXP		0x8	/* string needs file expansion */
 #define ARG_ASSIGN	0x10	/* argument is an assignment */
@@ -133,9 +129,7 @@ extern int		sh_argopts(int,char*[]);
 
 
 extern const char	e_heading[];
-extern const char	e_sptbnl[];
 extern const char	e_subst[];
-extern const char	e_option[];
 extern const char	e_exec[];
 extern const char	e_devfdNN[];
 extern const char	e_devfdstd[];

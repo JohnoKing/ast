@@ -1,3 +1,7 @@
+This file is of historical interest only. For recent changes in both ksh 93u+m
+and the accompanying libraries, see the file NEWS in the top-level directory.
+____
+
 12-02-28 pty.c: change --verbose[=level] to --debug=level
 12-01-26 pty.c: fix --man docs
 10-06-21 pty.c: add 4 sec timeout for initial handshake -- fix me!!

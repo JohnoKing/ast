@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -26,6 +23,7 @@
  *
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	<ls.h>
 #include	"io.h"
@@ -88,8 +86,6 @@ static struct subshell
 	pid_t		cpid;
 	int		coutpipe;
 	int		cpipe;
-	int		nofork;
-	int		subdup;
 	char		subshare;
 	char		comsub;
 	unsigned int	rand_seed;  /* parent shell $RANDOM seed */
@@ -186,18 +182,13 @@ void sh_subfork(void)
 	else
 	{
 		/* this is the child part of the fork */
-		sh_onstate(SH_FORKED);
 		/*
-		 * $RANDOM is only reseeded when it's used in a subshell, so if $RANDOM hasn't
-		 * been reseeded yet set rp->rand_last to -2. This allows sh_save_rand_seed()
+		 * In a virtual subshell, $RANDOM is not reseeded until it's used, so if that
+		 * hasn't happened yet, invalidate the seed. This allows sh_save_rand_seed()
 		 * to reseed $RANDOM later.
 		 */
 		if(!sp->rand_state)
-		{
-			struct rand *rp;
-			rp = (struct rand*)RANDNOD->nvfun;
-			rp->rand_last = -2;
-		}
+			sh_invalidate_rand_seed();
 		subshell_data = 0;
 		sh.subshell = 0;
 		sh.comsub = 0;
@@ -250,7 +241,7 @@ void sh_save_rand_seed(struct rand *rp, int reseed)
 		if(reseed)
 			sh_reseed_rand(rp);
 	}
-	else if(reseed && rp->rand_last == -2)
+	else if(reseed && rp->rand_last == RAND_SEED_INVALIDATED)
 		sh_reseed_rand(rp);
 }
 
@@ -261,10 +252,8 @@ void sh_save_rand_seed(struct rand *rp, int reseed)
  *
  * add == 0:    Move the node pointer from the parent shell to the current virtual subshell.
  * add == 1:    Create a copy of the node pointer in the current virtual subshell.
- * add == 2:    This will create a copy of the node pointer like 1, but it will disable the
- *              optimization for ${.sh.level}.
  */
-Namval_t *sh_assignok(register Namval_t *np,int add)
+void sh_assignok(Namval_t *np,int add)
 {
 	register Namval_t	*mp;
 	register struct Link	*lp;
@@ -275,21 +264,21 @@ Namval_t *sh_assignok(register Namval_t *np,int add)
 	unsigned int		save;
 	/*
 	 * Don't create a scope if told not to (see nv_restore()) or if this is a subshare.
-	 * Also, moving/copying ${.sh.level} (SH_LEVELNOD) may crash the shell.
+	 * Also, ${.sh.level} (SH_LEVELNOD) is handled specially and is not scoped in virtual subshells.
 	 */
-	if(subshell_noscope || sh.subshare || add<2 && np==SH_LEVELNOD)
-		return(np);
+	if(subshell_noscope || sh.subshare || np==SH_LEVELNOD)
+		return;
 	if((ap=nv_arrayptr(np)) && (mp=nv_opensub(np)))
 	{
 		sh.last_root = ap->table;
 		sh_assignok(mp,add);
 		if(!add || array_assoc(ap))
-			return(np);
+			return;
 	}
 	for(lp=sp->svar; lp;lp = lp->next)
 	{
 		if(lp->node==np)
-			return(np);
+			return;
 	}
 	/* first two pointers use linkage from np */
 	lp = (struct Link*)sh_malloc(sizeof(*np)+2*sizeof(void*));
@@ -313,7 +302,6 @@ Namval_t *sh_assignok(register Namval_t *np,int add)
 			nv_delete(mp,walk,NV_NOFREE);
 			*((Namval_t**)mp) = lp->child;
 			lp->child = mp;
-			
 		}
 	}
 	lp->dict = dp;
@@ -327,7 +315,6 @@ Namval_t *sh_assignok(register Namval_t *np,int add)
 		nv_onattr(mp,NV_IDENT);
 	nv_clone(np,mp,(add?(nv_isnull(np)?0:NV_NOFREE)|NV_ARRAY:NV_MOVE));
 	sh.subshell = save;
-	return(np);
 }
 
 /*
@@ -457,8 +444,10 @@ void sh_subjobcheck(pid_t pid)
 	{
 		if(sp->cpid==pid)
 		{
-			sh_close(sp->coutpipe);
-			sh_close(sp->cpipe);
+			if(sp->coutpipe > -1)
+				sh_close(sp->coutpipe);
+			if(sp->cpipe > -1)
+				sh_close(sp->cpipe);
 			sp->coutpipe = sp->cpipe = -1;
 			return;
 		}
@@ -472,7 +461,6 @@ void sh_subjobcheck(pid_t pid)
  * If comsub is not null, the return value will be a stream consisting of
  * output of command <t>.  Otherwise, NULL will be returned.
  */
-
 Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 {
 	struct subshell sub_data;
@@ -508,8 +496,6 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 	subshell_data = sp;
 	sp->options = sh.options;
 	sp->jobs = job_subsave();
-	sp->subdup = sh.subdup;
-	sh.subdup = 0;
 	/* make sure initialization has occurred */ 
 	if(!sh.pathlist)
 	{
@@ -534,6 +520,7 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 	if(!sh.subshare)
 	{
 		struct subshell *xp;
+		char *save_debugtrap = 0;
 #if _lib_fchdir
 		sp->pwdfd = -1;
 		for(xp=sp->prev; xp; xp=xp->prev) 
@@ -593,7 +580,11 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		sp->coutpipe = sh.coutpipe;
 		sp->cpipe = sh.cpipe[1];
 		sh.cpid = 0;
+		if(sh_isoption(SH_FUNCTRACE) && sh.st.trap[SH_DEBUGTRAP] && *sh.st.trap[SH_DEBUGTRAP])
+			save_debugtrap = sh_strdup(sh.st.trap[SH_DEBUGTRAP]);
 		sh_sigreset(0);
+		if(save_debugtrap)
+			sh.st.trap[SH_DEBUGTRAP] = save_debugtrap;
 	}
 	jmpval = sigsetjmp(checkpoint.buff,0);
 	if(jmpval==0)
@@ -622,8 +613,6 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 			sfswap(iop,sfstdout);
 			sfset(sfstdout,SF_READ,0);
 			sh.fdstatus[1] = IOWRITE;
-			if(!(sp->nofork = sh_state(SH_NOFORK)))
-				sh_onstate(SH_NOFORK);
 			flags |= sh_state(SH_NOFORK);
 		}
 		else if(sp->prev)
@@ -678,6 +667,8 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		if(jmpval==SH_JMPSCRIPT)
 			siglongjmp(*sh.jmplist,jmpval);
 		sh.exitval &= SH_EXITMASK;
+		if(sh.chldexitsig)
+			sh.exitval |= SH_EXITSIG;
 		sh_done(0);
 	}
 	if(!sh.savesig)
@@ -690,8 +681,6 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 			sigrelease(SIGTSTP);
 #endif
 		/* re-enable job control */
-		if(!sp->nofork)
-			sh_offstate(SH_NOFORK);
 		job.jobcontrol = sp->jobcontrol;
 		if(sp->monitor)
 			sh_onstate(SH_MONITOR);
@@ -873,9 +862,10 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		/* Real subshells have their exit status truncated to 8 bits by the kernel.
 		 * Since virtual subshells should be indistinguishable, do the same here. */
 		sh.exitval &= SH_EXITMASK;
+		if(sh.chldexitsig)
+			sh.exitval |= SH_EXITSIG;
 	}
 	sh.subshare = sp->subshare;
-	sh.subdup = sp->subdup;
 	sh.subshell--;			/* decrease level of virtual subshells */
 	sh.realsubshell--;		/* decrease ${.sh.subshell} */
 	subshell_data = sp->prev;
@@ -901,11 +891,7 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 	if(nsig>0)
 		kill(sh.current_pid,nsig);
 	if(sp->subpid)
-	{
 		job_wait(sp->subpid);
-		if(comsub)
-			sh_iounpipe();
-	}
 	sh.comsub = sp->comsub;
 	if(comsub && iop && sp->pipefd<0)
 		sfseek(iop,(off_t)0,SEEK_SET);

@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
@@ -72,10 +69,6 @@ struct Mime_s
 
 };
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
-
 extern Mime_t*	mimeopen(Mimedisc_t*);
 extern int	mimeload(Mime_t*, const char*, unsigned long);
 extern int	mimelist(Mime_t*, Sfio_t*, const char*);
@@ -85,7 +78,5 @@ extern char*	mimetype(Mime_t*, Sfio_t*, const char*, struct stat*);
 extern char*	mimeview(Mime_t*, const char*, const char*, const char*, const char*);
 extern int	mimehead(Mime_t*, void*, size_t, size_t, char*);
 extern int	mimecmp(const char*, const char*, char**);
-
-#undef	extern
 
 #endif

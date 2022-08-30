@@ -115,7 +115,6 @@ output{
 		printf("#ifndef TMP_MAX\n");
 		printf("#define TMP_MAX		%d\n", TMP_MAX);
 		printf("#endif\n");
-	#if !_UWIN
 		printf("\n");
 		printf("#define _doprnt		_ast_doprnt\n");
 		printf("#define _doscan		_ast_doscan\n");
@@ -191,19 +190,11 @@ output{
 		printf("#define putc_unlocked	_ast_putc_unlocked\n");
 		printf("#define putchar_unlocked _ast_putchar_unlocked\n");
 
-		printf("#define flockfile	_ast_flockfile\n");
-		printf("#define ftrylockfile	_ast_ftrylockfile\n");
-		printf("#define funlockfile	_ast_funlockfile\n");
-
 		printf("\n");
-	#endif
 		return 0;
 	}
 }end
 macro{
-	<<"#if defined(__STDPP__directive) && defined(__STDPP__initial)">>
-	<<"__STDPP__directive pragma pp:initial">>
-	<<"#endif">>
 	<<"#ifndef P_tmpdir">>
 	#ifndef P_tmpdir
 	#define P_tmpdir "/var/tmp/"
@@ -222,9 +213,6 @@ macro{
 	#endif
 	<<"#define L_tmpnam">> L_tmpnam
 	<<"#endif">>
-	<<"#if defined(__STDPP__directive) && defined(__STDPP__initial)">>
-	<<"__STDPP__directive pragma pp:noinitial">>
-	<<"#endif">>
 }end
 cat{
 	extern char*	ctermid(char*);
@@ -241,10 +229,6 @@ cat{
 	#endif
 
 	#undef	extern
-
-	#if _BLD_ast && defined(__EXPORT__)
-	#define extern		__EXPORT__
-	#endif
 
 	extern int	_doprnt(const char*, va_list, FILE*);
 	extern int	_doscan(FILE*, const char*, va_list);
@@ -359,20 +343,9 @@ cat{
 
 	#else
 
-	#if !_UWIN
-	#if _BLD_ast && defined(__EXPORT__)
-	#define extern		extern __EXPORT__
-	#endif
-	#if !_BLD_ast && defined(__IMPORT__)
-	#define extern		extern __IMPORT__
-	#endif
-	#endif
-
 	extern FILE	_Sfstdin;
 	extern FILE	_Sfstdout;
 	extern FILE	_Sfstderr;
-
-	#undef	extern
 
 	#define feof(f)		(_sf_(f)->_flags&_SF_EOF)
 	#define ferror(f)	(_sf_(f)->_flags&_SF_ERROR)
@@ -383,14 +356,8 @@ cat{
 	#define putc(c,f)	fputc(c,f)
 	#define putchar(c)	fputc(c,stdout)
 
-	#if _BLD_ast && defined(__EXPORT__)
-	#define extern		__EXPORT__
-	#endif
-
 	extern int		_sffilbuf(FILE*, int);
 	extern int		_sfflsbuf(FILE*, int);
-
-	#undef	extern
 
 	#endif
 }end

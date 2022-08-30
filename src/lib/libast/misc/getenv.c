@@ -2,34 +2,22 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 
-#if _UWIN && __STDPP__
-__STDPP__directive pragma pp:hide getenv
-#endif
-
 #include "intercepts.h"
-
-#if _UWIN && __STDPP__
-__STDPP__directive pragma pp:nohide getenv
-#endif
 
 /*
  * NOTE: the "intercepts" definition is here instead of astintercept.c because some
@@ -41,69 +29,13 @@ __STDPP__directive pragma pp:nohide getenv
 Intercepts_t	intercepts
 		= { 0 };
 
-#if _UWIN && !defined(getenv)
-
-#include <windows.h>
-
-extern char**	environ;
-
-static char*
-default_getenv(const char* name)
-{
-	register char**		av;
-	register const char*	cp;
-	register const char*	sp;
-	register char		c0;
-	register char		c1;
-
-	av = environ;
-	if (!av || !name || !(c0 = *name))
-		return 0;
-	if (!(c1 = *++name))
-		c1 = '=';
-	while (cp = *av++)
-	{
-		if (cp[0] != c0 || cp[1] != c1)
-			continue;
-		sp = name;
-		cp++;
-		while (*sp && *sp++ == *cp++);
-		if (*(sp-1) != *(cp-1))
-			continue;
-		if (*sp == 0 && *cp == '=')
-			return (char*)(cp+1);
-	}
-	return 0;
-}
-
-#endif
-
 /*
  * get name from the environment
  */
 
-#if defined(__EXPORT__) && defined(getenv)
-#define extern	__EXPORT__
-#endif
-
 extern char*
 getenv(const char* name)
 {
-#if _UWIN && !defined(getenv) /* for AST54 compatibility */
-	HANDLE		dll;
-
-	static char*	(*posix_getenv)(const char*);
-
-	if (!posix_getenv)
-	{
-		if (dll = GetModuleHandle("posix.dll"))
-			posix_getenv = (char*(*)(const char*))GetProcAddress(dll, "getenv");
-		if (!posix_getenv)
-			posix_getenv = default_getenv;
-	}
-	return intercepts.intercept_getenv ? (*intercepts.intercept_getenv)(name) : (*posix_getenv)(name);
-#else
 #undef	getenv
 	return intercepts.intercept_getenv ? (*intercepts.intercept_getenv)(name) : getenv(name);
-#endif
 }

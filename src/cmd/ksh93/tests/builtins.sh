@@ -4,20 +4,20 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
+
+# Tests for special and regular built-in commands (except those for
+# libcmd path-bound built-ins; they should go into libcmd.sh instead)
 
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
 
@@ -602,7 +602,7 @@ then	err_exit "read -t in pipe taking $total_t secs - $(( reps * delay )) minimu
 elif	(( total_t < reps * delay ))
 then	err_exit "read -t in pipe taking $total_t secs - $(( reps * delay )) minimum - too fast"
 fi
-$SHELL -c 'sleep $(printf "%a" .95)' 2> /dev/null || err_exit "sleep doesn't except %a format constants"
+$SHELL -c 'sleep $(printf "%a" .95)' 2> /dev/null || err_exit "sleep doesn't accept %a format constants"
 $SHELL -c 'test \( ! -e \)' 2> /dev/null ; [[ $? == 1 ]] || err_exit 'test \( ! -e \) not working'
 [[ $(ulimit) == "$(ulimit -fS)" ]] || err_exit 'ulimit is not the same as ulimit -fS'
 tmpfile=$tmp/file.2
@@ -746,11 +746,11 @@ then
 fi
 
 # ======
-# 'times' builtin
+# 'time' keyword and 'times' builtin
 
-expect=$'0m00.0([0-9]){5}s 0m00.0([0-9]){5}s\n0m00.000000s 0m00.000000s'
-actual=$("$SHELL" -c times)
-[[ $actual =~ $expect ]] || err_exit "times output: expected $(printf %q "$expect"), got $(printf %q "$actual")"
+exp=$'^user\t0m00.[0-9]{3}s\nsys\t0m00.[0-9]{3}s\n0m00.[0-9]{3}s 0m00.[0-9]{3}s\n0m00.000s 0m00.000s$'
+got=$("$SHELL" -c '{ time; } 2>&1; times')
+[[ $got =~ $exp ]] || err_exit "times output: expected match of $(printf %q "$exp"), got $(printf %q "$got")"
 
 expect=$'*: times: too many operands'
 actual=$(set +x; eval 'times Extra Args' 2>&1)
@@ -801,19 +801,41 @@ integer foo=1
 exp=4
 got=$(foo+=3 command eval 'echo $foo')
 [[ $exp == $got ]] || err_exit "Test 1: += assignment for environment variables doesn't work with 'command special_builtin'" \
-	"(expected $exp, got $got)"
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 foo+=3 command eval 'test $foo'
-(( foo == 1 )) || err_exit "environment isn't restored after 'command special_builtin'" \
-	"(expected 1, got $foo)"
+exp=1
+(( foo == exp )) || err_exit "environment isn't restored after 'command special_builtin'" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 got=$(foo+=3 eval 'echo $foo')
+exp=4
 [[ $exp == $got ]] || err_exit "+= assignment for environment variables doesn't work with builtins" \
-	"(expected $exp, got $got)"
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 unset foo
 exp=barbaz
 got=$(foo=bar; foo+=baz command eval 'echo $foo')
 [[ $exp == $got ]] || err_exit "Test 2: += assignment for environment variables doesn't work with 'command special_builtin'" \
-	"(expected $exp, got $got)"
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+unset y
+exp='outside f, 1, 2, 3, outside f'
+got=$(
+	f() {
+		if [ -n "${_called_f+_}" ]; then
+			for y; do
+				printf '%s, ' "$y"
+			done
+		else
+			_called_f= y= command eval '{ typeset +x y; } 2>/dev/null; f "$@"'
+		fi
+	}
+	y='outside f'
+	printf "$y, "
+	f 1 2 3
+	echo "$y"
+)
+[[ $got == "$exp" ]] || err_exit 'assignments to "command special_built-in" leaving side effects' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # Attempting to modify a readonly variable with the += operator should fail
 exp=2
@@ -845,6 +867,7 @@ PATH=$save_PATH
 
 # ======
 # These are the regression tests for the whence builtin's '-t' flag
+((.sh.version >= 20211227)) &&
 for w in 'whence -t' 'type -t' 'whence -t -v'; do
 	exp=file
 	got=$($w $SHELL)
@@ -1027,7 +1050,9 @@ unset foo
 			[[ $expect != $actual ]] && err_exit "Specifying $padding padding with format '%$i' doesn't work (expected '$expect', got '$actual')"
 		done
 	done
+	exit $Errors
 )
+Errors=$?  # Ensure error count survives subshell
 
 # ======
 # Test various AST getopts usage/manual outputs
@@ -1122,6 +1147,74 @@ EOF
 "$SHELL" -i "$sleepsig" 2> /dev/null || err_exit "'sleep -s' doesn't work with intervals of more than 30 seconds"
 
 # ======
+# floating point
+# The number of seconds to sleep. The got granularity depends on the
+# underlying system, normally around 1 millisecond.
+SECONDS=0
+sleep 0.1
+got=$SECONDS
+exp=0.1
+(( got >= exp )) ||
+	err_exit "sleep 0.1 should sleep for at least 0.1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# PnYnMnDTnHnMnS
+# An ISO 8601 duration where at least one of the duration parts must be
+# specified.
+SECONDS=0
+sleep 'P0Y0M0DT0H0M0.1S'
+got=$SECONDS
+exp=0.1
+(( got >= exp )) ||
+    err_exit "sleep 'P0Y0M0DT0H0M1S' should sleep for at least 1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# PnW   An ISO 8601 duration specifying n weeks.
+# Sleep for 0 weeks
+sleep P0W || err_exit "sleep does not recocgnize PnW"
+
+# ======
+# pnYnMnDTnHnMnS
+# A case insensitive ISO 8601 duration except that M specifies months,
+# m before s or S specifies minutes and after specifies milliseconds, u
+# or U specifies microseconds, and n specifies nanoseconds.
+SECONDS=0
+sleep 'p0Y0M0DT0H0M0.1S'
+got=$SECONDS
+exp=0.1
+(( got >= exp )) ||
+    err_exit "sleep 'p0Y0M0DT0H0M1S' should sleep for at least 1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# date/time
+#       Sleep until the date(1) compatible date/time.
+today=$(date +"%Y-%m-%d")
+# This should return immediately
+sleep "$today" || err_exit "sleep does not recognize date parameter"
+
+# ======
+# -s Sleep until a signal or a timeout is received. If duration is
+#    omitted or 0 then no timeout will be used.
+SECONDS=0
+sleep -s 0.1
+got=$SECONDS
+exp=0.1
+(( got >= exp )) ||
+    err_exit "sleep -s 1 should sleep for at least 1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Verify unexpected arguments result in an error.
+exp="sleep: one operand expected"
+got=$(sleep 0 .3 2>&1)
+[[ $got == $exp ]] || err_exit "unexpected arguments isn't an error (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Verify an invalid interval results in an error.
+exp="sleep: 1sx: bad number"
+got=$(sleep 1sx 2>&1)
+[[ $got == $exp ]] || err_exit "invalid interval isn't an error (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
 # Builtins should handle unrecognized options correctly
 function test_usage
 {
@@ -1189,19 +1282,6 @@ exp='good'
 got=$($SHELL -c 't=good; t=bad command -@; print $t' 2>/dev/null)
 [[ $exp == $got ]] || err_exit "temp var assignment with 'command'" \
 	"(expected $(printf %q "$expect"), got $(printf %q "$actual"))"
-
-# ======
-# Regression test for https://github.com/att/ast/issues/949
-if	(builtin chmod) 2>/dev/null
-then	foo_script='#!/bin/sh
-	exit 0'
-	echo "$foo_script" > "$tmp/foo1.sh"
-	echo "$foo_script" > "$tmp/foo2.sh"
-	builtin chmod
-	chmod +x "$tmp/foo1.sh" "$tmp/foo2.sh"
-	$SHELL "$tmp/foo1.sh" || err_exit "builtin 'chmod +x' doesn't work on first script"
-	$SHELL "$tmp/foo2.sh" || err_exit "builtin 'chmod +x' doesn't work on second script"
-fi
 
 # ======
 # In ksh93v- 2013-10-10 alpha cd doesn't fail on directories without execute permission.
@@ -1322,26 +1402,6 @@ then	builtin uname
 fi
 
 # ======
-# https://github.com/ksh93/ksh/issues/138
-builtin -d cat
-if	[[ $'\n'${ builtin; }$'\n' == *$'\n/opt/ast/bin/cat\n'* ]]
-then	exp='  version         cat (*) ????-??-??'
-	got=$(/opt/ast/bin/cat --version 2>&1)
-	[[ $got == $exp ]] || err_exit "path-bound builtin not executable by literal canonical path" \
-		"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
-	got=$(PATH=/opt/ast/bin:$PATH; "${ whence -p cat; }" --version 2>&1)
-	[[ $got == $exp ]] || err_exit "path-bound builtin not executable by canonical path resulting from expansion" \
-		"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
-	got=$(PATH=/opt/ast/bin:$PATH; "$SHELL" -o restricted -c 'cat --version' 2>&1)
-	[[ $got == $exp ]] || err_exit "restricted shells do not recognize path-bound builtins" \
-		"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
-	got=$(set +x; PATH=/opt/ast/bin cat --version 2>&1)
-	[[ $got == $exp ]] || err_exit "path-bound builtin not found on PATH in preceding assignment" \
-		"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
-else	warning 'skipping path-bound builtin tests: builtin /opt/ast/bin/cat not found'
-fi
-
-# ======
 # part of https://github.com/ksh93/ksh/issues/153
 mkdir "$tmp/deleted"
 cd "$tmp/deleted"
@@ -1404,6 +1464,7 @@ got="$($SHELL -i "$hist_error_leak" 2>&1)"
 
 # ======
 # printf -v works as of 2021-11-18
+((.sh.version >= 20211118)) && {
 integer ver=.sh.version
 exp=ok$'\f'0000$ver$'\n'
 printf -v got 'ok\f%012d\n' $ver 2>/dev/null
@@ -1414,114 +1475,62 @@ printf -v 'got[1][two][3]' 'ok\f%012d\n' $ver 2>/dev/null
 [[ ${got[1]["two"][3]} == "$exp" ]] || err_exit "printf -v not working with array subscripts" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 unset got ver
-
-# ======
-# The rm builtin's -d option should remove files and empty directories without
-# removing non-empty directories (unless the -r option is also passed).
-# https://www.austingroupbugs.net/view.php?id=802
-if builtin rm 2> /dev/null; then
-	echo foo > "$tmp/bar"
-	mkdir "$tmp/emptydir"
-	mkdir -p "$tmp/nonemptydir1/subfolder"
-	mkdir "$tmp/nonemptydir2"
-	echo dummyfile > "$tmp/nonemptydir2/shouldexist"
-
-	# Tests for lone -d option
-	got=$(rm -d "$tmp/emptydir" 2>&1)
-	[[ $? == 0 ]] || err_exit 'rm builtin fails to remove empty directory with -d option' \
-		"(got $(printf %q "$got"))"
-	[[ -d $tmp/emptydir ]] && err_exit 'rm builtin fails to remove empty directory with -d option'
-	got=$(rm -d $tmp/bar 2>&1)
-	[[ $? == 0 ]] || err_exit 'rm builtin fails to remove files with -d option' \
-		"(got $(printf %q "$got"))"
-	[[ -f $tmp/bar ]] && err_exit 'rm builtin fails to remove files with -d option'
-	rm -d "$tmp/nonemptydir1" 2> /dev/null
-	[[ ! -d $tmp/nonemptydir1/subfolder ]] && err_exit 'rm builtin has unwanted recursion with -d option on folder containing folder'
-	rm -d "$tmp/nonemptydir2" 2> /dev/null
-	[[ ! -f $tmp/nonemptydir2/shouldexist ]] && err_exit 'rm builtin has unwanted recursion with -d option on folder containing file'
-
-	# Recreate non-empty directories in case the above tests failed
-	mkdir -p "$tmp/nonemptydir1/subfolder"
-	mkdir -p "$tmp/nonemptydir2"
-	echo dummyfile > "$tmp/nonemptydir2/shouldexist"
-
-	# Tests combining -d with -r
-	got=$(rm -rd "$tmp/nonemptydir1" 2>&1)
-	[[ $? == 0 ]] || err_exit 'rm builtin fails to remove non-empty directory and subdirectory with -rd options' \
-		"(got $(printf %q "$got"))"
-	[[ -d $tmp/nonemptydir1/subfolder || -d $tmp/nonemptydir1 ]] && err_exit 'rm builtin fails to remove all folders with -rd options'
-	got=$(rm -rd "$tmp/nonemptydir2" 2>&1)
-	[[ $? == 0 ]] || err_exit 'rm builtin fails to remove non-empty directory and file with -rd options' \
-		"(got $(printf %q "$got"))"
-	[[ -f $tmp/nonemptydir2/shouldexist || -d $tmp/nonemptydir2 ]] && err_exit 'rm builtin fails to remove all folders and files with -rd options'
-
-	# Additional test: 'rm -f' without additional arguments should act
-	# as a no-op command. This bug was fixed in ksh93u+ 2012-02-14.
-	got=$(rm -f 2>&1)
-	if (($? != 0)) || [[ ! -z $got ]]
-	then	err_exit 'rm -f without additional arguments does not work correctly' \
-		"(got $(printf %q "$got"))"
-	fi
-fi
+}
 
 # ======
 # These are regression tests for the cd command's -e and -P flags
-mkdir -p "$tmp/failpwd"
-ln -s "$tmp/failpwd" "$tmp/failpwd1"
-cd "$tmp/failpwd1"
-rm ../failpwd1
-cd -P .
-got=$?; exp=0
-(( got == exp )) || err_exit "cd -P without -e exits with error status if \$PWD doesn't exist (expected $exp, got $got)"
-cd -eP .
-got=$?; exp=1
-(( got == exp )) || err_exit "cd -eP doesn't fail if \$PWD doesn't exist (expected $exp, got $got)"
+if ((.sh.version >= 20211205))
+then
+	mkdir -p "$tmp/failpwd"
+	cd "$tmp/failpwd"
+	"$SHELL" -c 'cd /; exec rmdir "$1"' x "$tmp/failpwd"
+	cd -eP . 2>/dev/null && err_exit "cd -eP doesn't fail if \$PWD doesn't exist"
+fi
+
 cd "$tmp"
 cd -P "$tmp/notadir" >/dev/null 2>&1
 got=$?; exp=1
 (( got == exp )) || err_exit "cd -P without -e fails with wrong exit status on nonexistent dir (expected $exp, got $got)"
-cd -eP "$tmp/notadir" >/dev/null 2>&1
-got=$?; exp=2
-(( got == exp )) || err_exit "cd -eP fails with wrong exit status on nonexistent dir (expected $exp, got $got)"
+if ((.sh.version >= 20211205))
+then
+	cd -eP "$tmp/notadir" >/dev/null 2>&1
+	got=$?; exp=2
+	(( got == exp )) || err_exit "cd -eP fails with wrong exit status on nonexistent dir (expected $exp, got $got)"
+fi
+
 OLDPWD="$tmp/baddir"
 cd -P - >/dev/null 2>&1
 got=$?; exp=1
 (( got == exp )) || err_exit "cd -P without -e fails with wrong exit status on \$OLDPWD (expected $exp, got $got)"
-cd -eP - >/dev/null 2>&1
-got=$?; exp=2
-(( got == exp )) || err_exit "cd -eP fails with wrong exit status on \$OLDPWD (expected $exp, got $got)"
+if ((.sh.version >= 20211205))
+then
+	cd -eP - >/dev/null 2>&1
+	got=$?; exp=2
+	(( got == exp )) || err_exit "cd -eP fails with wrong exit status on \$OLDPWD (expected $exp, got $got)"
+fi
 cd "$tmp" || err_exit "couldn't change directory from nonexistent dir"
+
 (set -o restricted; cd -P /) >/dev/null 2>&1
 got=$?; exp=1
 (( got == exp )) || err_exit "cd -P in restricted shell has wrong exit status (expected $exp, got $got)"
-(set -o restricted; cd -eP /) >/dev/null 2>&1
-got=$?; exp=2
-(( got == exp )) || err_exit "cd -eP in restricted shell has wrong exit status (expected $exp, got $got)"
-(set -o restricted; cd -?) >/dev/null 2>&1
+if ((.sh.version >= 20211205))
+then
+	(set -o restricted; cd -eP /) >/dev/null 2>&1
+	got=$?; exp=2
+	(( got == exp )) || err_exit "cd -eP in restricted shell has wrong exit status (expected $exp, got $got)"
+fi
+(set -o restricted; cd -\?) >/dev/null 2>&1
 got=$?; exp=1
-(( got == exp )) || err_exit "cd -? shows usage info in restricted shell and has wrong exit status (expected $exp, got $got)"
+(( got == exp )) || err_exit "cd -\\? shows usage info in restricted shell and has wrong exit status (expected $exp, got $got)"
+
 (cd -P '') >/dev/null 2>&1
 got=$?; exp=1
 (( got == exp )) || err_exit "cd -P to empty string has wrong exit status (expected $exp, got $got)"
-(cd -eP '') >/dev/null 2>&1
-got=$?; exp=2
-(( got == exp )) || err_exit "cd -eP to empty string has wrong exit status (expected $exp, got $got)"
-
-# ======
-# The head and tail builtins should work on files without newlines
-if builtin head 2> /dev/null; then
-	print -n nonewline > "$tmp/nonewline"
-	exp=nonewline
-	got=$(head -1 "$tmp/nonewline")
-	[[ $got == $exp ]] || err_exit "head builtin fails to correctly handle files without an ending newline" \
-		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
-fi
-if builtin tail 2> /dev/null; then
-	print -n 'newline\nnonewline' > "$tmp/nonewline"
-	exp=nonewline
-	got=$(tail -1 "$tmp/nonewline")
-	[[ $got == $exp ]] || err_exit "tail builtin fails to correctly handle files without an ending newline" \
-		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+if ((.sh.version >= 20211205))
+then
+	(cd -eP '') >/dev/null 2>&1
+	got=$?; exp=2
+	(( got == exp )) || err_exit "cd -eP to empty string has wrong exit status (expected $exp, got $got)"
 fi
 
 # ======
@@ -1543,6 +1552,60 @@ kill "$sleep_pid" 2>/dev/null
 # ...It failed to implement co-process compatibility for 'read -p .dot.varname' or 'read -p varname?prompt'
 (echo ok |& read -p .sh.foo"?dummy prompt: " && [[ ${.sh.foo} == ok ]]) </dev/null \
 || err_exit "'read -p' co-process usage is not fully backward compatible with ksh 93u+"
+
+# Backported ksh93v- 2014-06-25 test for eval bug when called
+# from . script in a startup file.
+print $'eval : foo\nprint ok' > "$tmp/evalbug"
+print ". $tmp/evalbug" > "$tmp/envfile"
+[[ $(ENV=$tmp/envfile "$SHELL" -i -c : 2> /dev/null) == ok ]] || err_exit 'eval inside dot script called from profile file not working'
+
+# Backported ksh93v- 2013-03-18 test for 'read -A', where
+# IFS sets the delimiter to a newline while -d specifies
+# no delimiter (-d takes priority over IFS).
+if ((SHOPT_BRACEPAT)); then
+	got=$(printf %s\\n {a..f} | IFS=$'\n' read -rd '' -A a; typeset -p a)
+	exp=$'typeset -a a=($\'a\\nb\\nc\\nd\\ne\\nf\\n\')'
+	[[ $got == "$exp" ]] || err_exit "IFS overrides the delimiter specified by the read command's -d option" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+fi
+
+# The read builtin's -a and -A flags should function identically
+read_a_test=$tmp/read_a_test.sh
+cat > "$read_a_test" << 'EOF'
+. "${SHTESTS_COMMON}"
+exp=foo
+exp1=bar
+exp2=baz
+read -a foo_a <<< 'foo bar baz'
+if [[ ${foo_a[0]} != ${exp} ]] || [[ ${foo_a[1]} != ${exp1} ]] || [[ ${foo_a[2]} != ${exp2} ]]
+then
+	err_exit "read -a fails to create array with first use" \
+		"(foo_a[0] is $(printf %q "${foo_a[0]}"), foo_a[1] is $(printf %q "${foo_a[1]}"), foo_a[2] is $(printf %q "${foo_a[2]}"))"
+fi
+unset foo_a
+read -a foo_a <<< 'foo bar baz'
+if [[ ${foo_a[0]} != ${exp} ]] || [[ ${foo_a[1]} != ${exp1} ]] || [[ ${foo_a[2]} != ${exp2} ]]
+then
+	err_exit "read -a fails to create array with second use" \
+		"(foo_a[0] is $(printf %q "${foo_a[0]}"), foo_a[1] is $(printf %q "${foo_a[1]}"), foo_a[2] is $(printf %q "${foo_a[2]}"))"
+fi
+read -A foo_A <<< 'foo bar baz'
+if [[ ${foo_A[0]} != ${exp} ]] || [[ ${foo_A[1]} != ${exp1} ]] || [[ ${foo_A[2]} != ${exp2} ]]
+then
+	err_exit "read -A fails to create array with first use" \
+		"(foo_A[0] is $(printf %q "${foo_A[0]}"), foo_A[1] is $(printf %q "${foo_A[1]}"), foo_A[2] is $(printf %q "${foo_A[2]}"))"
+fi
+unset foo_A
+read -A foo_A <<< 'foo bar baz'
+if [[ ${foo_A[0]} != ${exp} ]] || [[ ${foo_A[1]} != ${exp1} ]] || [[ ${foo_A[2]} != ${exp2} ]]
+then
+	err_exit "read -A fails to create array with second use" \
+		"(foo_A[0] is $(printf %q "${foo_A[0]}"), foo_A[1] is $(printf %q "${foo_A[1]}"), foo_A[2] is $(printf %q "${foo_A[2]}"))"
+fi
+exit $Errors
+EOF
+"$SHELL" "$read_a_test"
+let Errors+=$?
 
 # ======
 exit $((Errors<125?Errors:125))

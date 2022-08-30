@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
@@ -605,11 +602,7 @@ format(register Feature_t* fp, const char* path, const char* value, unsigned int
 {
 	register Feature_t*	sp;
 	register int		n;
-#if _UWIN && ( _X86_ || _X64_ )
-	struct stat		st;
-#else
 	static struct utsname	uts;
-#endif
 
 #if DEBUG_astconf
 	error(-6, "astconf format name=%s path=%s value=%s flags=%04x fp=%p%s", fp->name, path, value, flags, fp, state.synthesizing ? " SYNTHESIZING" : "");
@@ -622,31 +615,10 @@ format(register Feature_t* fp, const char* path, const char* value, unsigned int
 	{
 
 	case OP_architecture:
-#if _UWIN && ( _X86_ || _X64_ )
-		if (!stat("/", &st))
-		{
-			if (st.st_ino == 64)
-			{
-				fp->value = "x64";
-				break;
-			}
-			if (st.st_ino == 32)
-			{
-				fp->value = "x86";
-				break;
-			}
-		}
-#if _X64_
-		fp->value = "x64";
-#else
-		fp->value = "x86";
-#endif
-#else
 		if (!uname(&uts))
 			return fp->value = uts.machine;
 		if (!(fp->value = getenv("HOSTNAME")))
 			fp->value = "unknown";
-#endif
 		break;
 
 	case OP_conformance:
@@ -679,32 +651,7 @@ format(register Feature_t* fp, const char* path, const char* value, unsigned int
 		break;
 
 	case OP_path_attributes:
-#ifdef _PC_PATH_ATTRIBUTES
-		{
-			register char*	s;
-			register char*	e;
-			intmax_t	v;
-
-			/*
-			 * _PC_PATH_ATTRIBUTES is a bitmap for 'a' to 'z'
-			 */
-
-			if ((v = pathconf(path, _PC_PATH_ATTRIBUTES)) == -1L)
-				return 0;
-			s = fp->value;
-			e = s + sizeof(fp->value) - 1;
-			for (n = 'a'; n <= 'z'; n++)
-				if (v & (1 << (n - 'a')))
-				{
-					*s++ = n;
-					if (s >= e)
-						break;
-				}
-			*s = 0;
-		}
-#else
 		fp->value = pathicase(path) > 0 ? "c" : null;
-#endif
 		break;
 
 	case OP_path_resolve:

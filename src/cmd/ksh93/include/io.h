@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -52,6 +49,21 @@
     struct ionod;
 #endif /* !ARG_RAW */
 
+/*
+ * Check if there is an editor active while avoiding repetitive #if flaggery.
+ * The 0 definition is used to optimize out code if no editor is compiled in.
+ * (This is here and not in edit.h because io.h is far more widely included.)
+ */
+#if SHOPT_ESH && SHOPT_VSH
+#define sh_editor_active()	(sh_isoption(SH_VI) || sh_isoption(SH_EMACS) || sh_isoption(SH_GMACS))
+#elif SHOPT_ESH
+#define sh_editor_active()	(sh_isoption(SH_EMACS) || sh_isoption(SH_GMACS))
+#elif SHOPT_VSH
+#define sh_editor_active()	(sh_isoption(SH_VI)!=0)
+#else
+#define sh_editor_active()	0
+#endif
+
 extern int	sh_iocheckfd(int);
 extern void 	sh_ioinit(void);
 extern int 	sh_iomovefd(int);
@@ -59,9 +71,6 @@ extern int	sh_iorenumber(int,int);
 extern void 	sh_pclose(int[]);
 extern int	sh_rpipe(int[]);
 extern void 	sh_iorestore(int,int);
-#if defined(__EXPORT__) && defined(_BLD_DLL)
-   __EXPORT__
-#endif
 extern Sfio_t 	*sh_iostream(int);
 extern int	sh_redirect(struct ionod*,int);
 extern void 	sh_iosave(int,int,char*);
@@ -72,7 +81,6 @@ extern void 	sh_iounsave(void);
 extern void	sh_iounpipe(void);
 extern int	sh_chkopen(const char*);
 extern int	sh_ioaccess(int,int);
-extern int	sh_devtofd(const char*);
 extern int	sh_isdevfd(const char*);
 
 /* the following are readonly */

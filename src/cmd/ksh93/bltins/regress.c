@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -29,6 +26,7 @@
  *   AT&T Research
  */
 
+#include	"shopt.h"
 #include	"defs.h"
 
 #if SHOPT_REGRESS
@@ -132,7 +130,6 @@ void sh_regress_init(void)
 /*
  * regress info trace output
  */
-
 void sh_regress(unsigned int index, const char* intercept, const char* info, unsigned int line, const char* file)
 {
 	char*	name;
@@ -148,7 +145,6 @@ void sh_regress(unsigned int index, const char* intercept, const char* info, uns
 /*
  * EGID intercepts
  */
-
 static gid_t	intercept_sgid = 0;
 static gid_t	intercept_egid = -1;
 static gid_t	intercept_rgid = -1;
@@ -191,7 +187,6 @@ int setgid(gid_t gid)
 /*
  * EUID intercepts
  */
-
 static uid_t	intercept_suid = 0;
 static uid_t	intercept_euid = -1;
 static uid_t	intercept_ruid = -1;
@@ -234,7 +229,6 @@ int setuid(uid_t uid)
 /*
  * p_suid intercept
  */
-
 static uid_t	intercept_p_suid = 0x7fffffff;
 
 uid_t sh_regress_p_suid(unsigned int line, const char* file)
@@ -246,7 +240,6 @@ uid_t sh_regress_p_suid(unsigned int line, const char* file)
 /*
  * p_suid intercept
  */
-
 static char*	intercept_etc = 0;
 
 char* sh_regress_etc(const char* path, unsigned int line, const char* file)
@@ -258,7 +251,6 @@ char* sh_regress_etc(const char* path, unsigned int line, const char* file)
 /*
  * __regress__ builtin
  */
-
 int b___regress__(int argc, char** argv, Shbltin_t *context)
 {
 	int			n;

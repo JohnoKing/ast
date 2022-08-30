@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 #ifndef _SFHDR_H
@@ -180,7 +177,9 @@
 #include	<ctype.h>
 
 /* deal with multi-byte character and string conversions */
-#if _PACKAGE_ast
+#if AST_NOMULTIBYTE
+#undef	_has_multibyte
+#elif _PACKAGE_ast
 
 #include	<wchar.h>
 
@@ -973,19 +972,10 @@ extern int		_sfsetpool(Sfio_t*);
 extern char*		_sfcvt(void*,char*,size_t,int,int*,int*,int*,int);
 extern char**		_sfgetpath(char*);
 
-#if _BLD_sfio && defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
-#if !_BLD_sfio && defined(__IMPORT__)
-#define extern		extern __IMPORT__
-#endif
-
 extern Sfextern_t	_Sfextern;
 
 extern int		_sfmode(Sfio_t*, int, int);
 extern int		_sftype(const char*, int*, int*);
-
-#undef	extern
 
 #ifndef errno
 extern int		errno;

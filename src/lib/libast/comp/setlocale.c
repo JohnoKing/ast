@@ -4,20 +4,17 @@
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
@@ -82,103 +79,6 @@ header(void)
 	}
 }
 
-#if _UWIN
-
-#include <ast_windows.h>
-
-#undef	_lib_setlocale
-#define _lib_setlocale		1
-
-#define setlocale(c,l)		native_setlocale(c,l)
-
-extern char*			uwin_setlocale(int, const char*);
-
-/*
- * convert locale to native locale name in buf
- */
-
-static char*
-native_locale(const char* locale, char* buf, size_t siz)
-{
-	Lc_t*				lc;
-	const Lc_attribute_list_t*	ap;
-	int				i;
-	unsigned long			lcid;
-	unsigned long			langidx;
-	unsigned long			ctry;
-	char				lbuf[128];
-	char				cbuf[128];
-
-	if (locale && *locale)
-	{
-		if (!(lc = lcmake(locale)))
-			return 0;
-		langidx = lc->language->index;
-		ctry = 0;
-		for (ap = lc->attributes; ap; ap = ap->next)
-			if (ctry = ap->attribute->index)
-				break;
-		if (!ctry)
-		{
-			for (i = 0; i < elementsof(lc->territory->languages); i++)
-				if (lc->territory->languages[i] == lc->language)
-				{
-					ctry = lc->territory->indices[i];
-					break;
-				}
-			if (!ctry)
-			{
-				if (!langidx)
-					return 0;
-				ctry = SUBLANG_DEFAULT;
-			}
-		}
-		lcid = MAKELCID(MAKELANGID(langidx, ctry), SORT_DEFAULT);
-	}
-	else
-		lcid = GetUserDefaultLCID();
-	if (GetLocaleInfo(lcid, LOCALE_SENGLANGUAGE, lbuf, sizeof(lbuf)) <= 0 ||
-	    GetLocaleInfo(lcid, LOCALE_SENGCOUNTRY, cbuf, sizeof(cbuf)) <= 0)
-		return 0;
-	if (lc->charset->ms)
-		sfsprintf(buf, siz, "%s_%s.%s", lbuf, cbuf, lc->charset->ms);
-	else
-		sfsprintf(buf, siz, "%s_%s", lbuf, cbuf);
-	return buf;
-}
-
-/*
- * locale!=0 here
- */
-
-static char*
-native_setlocale(int category, const char* locale)
-{
-	char*		usr;
-	char*		sys;
-	char		buf[256];
-
-	if (!(usr = native_locale(locale, buf, sizeof(buf))))
-		return 0;
-
-	/*
-	 * Win32 doesn't have LC_MESSAGES
-	 */
-
-	if (category == LC_MESSAGES)
-		return (char*)locale;
-	sys = uwin_setlocale(category, usr);
-	if (ast.locale.set & AST_LC_debug)
-		sfprintf(sfstderr, "locale uwin %17s %-24s %-24s\n", lc_categories[lcindex(category, 0)].name, usr, sys);
-	return sys;
-}
-
-#else
-
-#define native_locale(a,b,c)	((char*)0)
-
-#endif
-
 /*
  * LC_COLLATE and LC_CTYPE native support
  */
@@ -231,6 +131,8 @@ native_setlocale(int category, const char* locale)
 #define DX	(DB/DC)		/* wchar_t max embedded chars	*/
 #define DZ	(DB-DX*DC+1)	/* wchar_t embedded size bits	*/
 #define DD	3		/* # mb delimiter chars <n...>	*/
+
+#if !AST_NOMULTIBYTE
 
 static unsigned char debug_order[] =
 {
@@ -490,6 +392,18 @@ debug_strcoll(const char* a, const char* b)
 	return strcmp(ab, bb);
 }
 
+#else
+
+#define debug_mbtowc	0
+#define debug_wctomb	0
+#define debug_mblen	0
+#define	debug_wcwidth	0
+#define debug_alpha	0
+#define debug_strxfrm	0
+#define debug_strcoll	0
+
+#endif	/* !AST_NOMULTIBYTE */
+
 /*
  * default locale
  */
@@ -529,7 +443,7 @@ set_collate(Lc_category_t* cp)
  * workaround the interesting SJIS that translates unshifted 7 bit ASCII!
  */
 
-#if _hdr_wchar && _typ_mbstate_t && _lib_mbrtowc
+#if _hdr_wchar && _typ_mbstate_t && _lib_mbrtowc && !AST_NOMULTIBYTE
 
 #define mb_state_zero	((mbstate_t*)&ast.pad[sizeof(ast.pad)-2*sizeof(mbstate_t)])
 #define mb_state	((mbstate_t*)&ast.pad[sizeof(ast.pad)-sizeof(mbstate_t)])
@@ -546,6 +460,8 @@ sjis_mbtowc(register wchar_t* p, register const char* s, size_t n)
 }
 
 #endif
+
+#if !AST_NOMULTIBYTE
 
 static int
 utf8_wctomb(char* u, wchar_t w) 
@@ -593,8 +509,6 @@ utf8_mbtowc(wchar_t* wp, const char* str, size_t n)
 	register int		c;
 	register wchar_t	w = 0;
 
-	if (!wp && !sp)
-		ast.mb_sync = 0;  /* assume call from mbinit() macro: reset global multibyte sync state */
 	if (!sp || !n)
 		return 0;
 	if ((m = utf8tab[*sp]) > 0)
@@ -2196,6 +2110,16 @@ utf8_alpha(wchar_t c)
 	return !!(utf8_wam[(c >> 3) & 0x1fff] & (1 << (c & 0x7)));
 }
 
+#else
+
+#define utf8_wctomb	0
+#define utf8_mbtowc	0
+#define utf8_mblen	0
+#define utf8_wcwidth	0
+#define utf8_alpha	0
+
+#endif /* !AST_NOMULTIBYTE */
+
 #if !_hdr_wchar || !_lib_wctype || !_lib_iswctype
 #undef	iswalpha
 #define iswalpha	default_iswalpha
@@ -2408,8 +2332,7 @@ default_setlocale(int category, const char* locale)
 
 #endif
 
-#if !_UWIN
-
+/* <TODO> [2022-07-21]: remove this and _vmkeep? obsolete? */
 /*
  * workaround for Solaris and FreeBSD systems
  * they call free() with addresses that look like they came from the stack
@@ -2430,8 +2353,7 @@ _sys_setlocale(int category, const char* locale)
 }
 
 #define setlocale(a,b)	_sys_setlocale(a,b)
-
-#endif
+/* </TODO> */
 
 /*
  * set a single AST_LC_* locale category
@@ -2512,7 +2434,6 @@ single(int category, Lc_t* lc, unsigned int flags)
 			ast.locale.set &= ~(1<<category);
 		else
 			ast.locale.set |= (1<<category);
-		
 	}
 	else if (lc_categories[category].flags ^ flags)
 	{
@@ -2773,7 +2694,7 @@ _ast_setlocale(int category, const char* locale)
 			u = 0;
 			if ((s = getenv("LANG")) && *s)
 			{
-				if (streq(s, local) && (u || (u = native_locale(locale, tmp, sizeof(tmp)))))
+				if (u && streq(s, local))
 					s = u;
 				lang = lcmake(s);
 			}
@@ -2781,7 +2702,7 @@ _ast_setlocale(int category, const char* locale)
 				lang = 0;
 			if ((s = getenv("LC_ALL")) && *s)
 			{
-				if (streq(s, local) && (u || (u = native_locale(locale, tmp, sizeof(tmp)))))
+				if (u && streq(s, local))
 					s = u;
 				lc_all = lcmake(s);
 			}
@@ -2792,7 +2713,7 @@ _ast_setlocale(int category, const char* locale)
 					/* explicitly set by setlocale() */;
 				else if ((s = getenv(lc_categories[i].name)) && *s)
 				{
-					if (streq(s, local) && (u || (u = native_locale(locale, tmp, sizeof(tmp)))))
+					if (u && streq(s, local))
 						s = u;
 					lc_categories[i].prev = lcmake(s);
 				}

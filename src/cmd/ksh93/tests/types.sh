@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -621,7 +618,6 @@ function main
 	for ((i=2 ; i < 8 ; i++ )) ; do
 		pawn_t c.board[1][$i]
 	done
-	
 }
 main 2> /dev/null && err_exit 'type assignment to compound array instance should generate an error'
 
@@ -723,6 +719,61 @@ got=$(./foo1)
 exp=$'start1\ntypeset -x a=one\nstart2\ntypeset -x a=one\nend2\nend1'
 [[ $got == "$exp" ]] || err_exit 'exporting variable to #!-less script' \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# Backported regression test from ksh93v- 2013-08-07 for
+# short integer arrays in types.
+got=$(set +x; "$SHELL" 2>&1 <<- \EOF
+       typeset -T X_t=(typeset -si -a arr=(7 8) )
+       X_t x
+       print -r -- $((x.arr[1]))
+EOF) || err_exit "short integer arrays in types fails (got exit status $?)"
+exp=8
+[[ $got == $exp ]] || err_exit "short integer arrays in types isn't working correctly" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Printing .sh.type should not crash or give variables a spurious -x attribute.
+# https://github.com/ksh93/ksh/issues/456
+
+got=$("$SHELL" -c 'typeset -p .sh.type
+typeset -Ttyp1 typ1=(
+	function get {
+	        .sh.value="'\''Sample'\''";
+	}
+)
+typeset -p .sh.type
+typ1
+command typ1 var11
+typ1
+print $var11
+print -v var11
+typeset -p .sh.type' 2>&1)
+
+exp='namespace sh.type
+{
+	:
+}
+namespace sh.type
+{
+	typeset -r typ1='\''Sample'\''
+}
+typ1 var11='\''Sample'\''
+'\''Sample'\''
+'\''Sample'\''
+namespace sh.type
+{
+	typeset -r typ1='\''Sample'\''
+}'
+
+[[ $got == "$exp" ]] || err_exit "'tyeset -p .sh.type' failed" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Check for correct error message when attempting to set a discipline function for a nonexistent type member
+exp=": foo.get: cannot set discipline for undeclared type member"
+got=$(set +x; redirect 2>&1; typeset -T _bad_disc_t=(typeset dummy; function foo.get { :; }); echo end_reached)
+let "(e=$?)==1" && [[ $got == *"$exp" ]] || err_exit "attempt to set disc for nonexistent type member not handled correctly" \
+	"(expected status 1, match of *$(printf %q "$exp"); got status $e, $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

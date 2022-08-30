@@ -4,18 +4,15 @@
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
 #          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -347,7 +344,7 @@ then	[[ $($SHELL -c 'cat <(print foo)' 2> /dev/null) == foo ]] || err_exit 'proc
 	[[ $({ $SHELL -c 'cat <(for i in x y z; do print $i; done)';} 2> /dev/null) == $'x\ny\nz' ]] ||
 		err_exit 'process substitution of compound commands not working'
 fi
-[[ $($SHELL -r 'command -p :' 2>&1) == *restricted* ]]  || err_exit 'command -p not restricted'
+[[ $($SHELL -cr 'command -p :' 2>&1) == *restricted* ]]  || err_exit 'command -p not restricted'
 print cat >  $tmp/scriptx
 chmod +x $tmp/scriptx
 [[ $($SHELL -c "print foo | $tmp/scriptx ;:" 2> /dev/null ) == foo ]] || err_exit 'piping into script fails'
@@ -413,13 +410,13 @@ unset foo
 unset foo
 foo=$(false) > /dev/null && err_exit 'failed command substitution with redirection not returning false'
 expected=foreback
-got=`print -n fore; (sleep 2;print back)&`
+got=`print -n fore; (sleep .01; print back)&`
 [[ $got == $expected ]] || err_exit "\`\` command substitution background process output error (expected '$expected', got '$got')"
-got=$(print -n fore; (sleep .2;print back)&)
+got=$(print -n fore; (sleep .01; print back)&)
 [[ $got == $expected ]] || err_exit "\$() command substitution background process output error (expected '$expected', got '$got')"
-got=${ print -n fore; (sleep 2;print back)& }
+got=${ print -n fore; (sleep .01; print back)& }
 [[ $got == $expected ]] || err_exit "\${} shared-state command substitution background process output error (expected '$expected', got '$got')"
-function abc { sleep 2; print back; }
+function abc { sleep .01; print back; }
 function abcd { abc & }
 got=$(print -n fore;abcd)
 [[ $got == $expected ]] || err_exit "\$() command substitution background with function process output error (expected '$expected', got '$got')"
@@ -797,8 +794,7 @@ trap - DEBUG  # bug compat
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # Make sure the DEBUG trap still exits a POSIX function on exit status 255
-# TODO: same test for ksh function with -o functrace, once we add that option
-exp=$'one\ntwo'
+exp=$'one\ntwo\nEND'
 got=$(
 	myfn()
 	{
@@ -813,10 +809,73 @@ got=$(
 	}
 	trap '[[ ${.sh.command} == *three ]] && set255' DEBUG
 	myfn
+	echo END
 )
 trap - DEBUG  # bug compat
 [[ $got == "$exp" ]] || err_exit "DEBUG trap did not trigger return from POSIX function on status 255" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# Test the new --functrace option <https://github.com/ksh93/ksh/issues/162>
+if	! [[ -o ?functrace ]]
+then
+	warning 'shell does not have --functrace; skipping those tests'
+else
+	# Make sure the DEBUG trap is inherited by ksh functions if --functrace is on
+	exp=$'Debug 0\nDebug 1\nDebugLocal 1\nDebugLocal 2\nFunction\nDebugLocal 1\nDebug 0\nNofunction'
+	got=$(
+		function entryfn
+		{
+			trap 'echo DebugLocal ${.sh.level}' DEBUG
+			myfn
+			:
+		}
+		function myfn
+		{
+			echo Function
+		}
+		set --functrace
+		trap 'echo Debug ${.sh.level}' DEBUG
+		entryfn
+		echo Nofunction
+	)
+	[[ $got == "$exp" ]] || err_exit "DEBUG trap not inherited by ksh function with --functrace on" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+	# Make sure the DEBUG trap exits a ksh function with --functrace on exit status 255
+	exp=$'one\ntwo\nEND'
+	got=$(
+		function myfn
+		{
+			echo one
+			echo two
+			echo three
+			echo four
+		}
+		function set255
+		{
+			return 255
+		}
+		set --functrace
+		trap '[[ ${.sh.command} == *three ]] && set255' DEBUG
+		myfn
+		echo END
+	)
+	[[ $got == "$exp" ]] || err_exit "DEBUG trap did not trigger return from POSIX function on status 255" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+	# Make sure --functrace causes subshells to inherit the DEBUG trap
+	exp=$'[DEBUG] 1\nfoo:5\n[DEBUG] 2\nbar:6\n[DEBUG] 3\nbar:6a\n[DEBUG] 2\nbaz:7'
+	got=$(
+		typeset -i dbg=0
+		set --functrace
+		trap 'echo "[DEBUG] $((++dbg))"' DEBUG
+		echo foo:5
+		( echo bar:6; (echo bar:6a) )
+		echo baz:7
+	)
+	[[ $got == "$exp" ]] || err_exit "DEBUG trap not inherited by subshell" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+fi
 
 # ======
 # In ksh93v- and ksh2020 EXIT traps don't work in forked subshells
@@ -843,7 +902,7 @@ done
 # ksh2020 regression: https://github.com/att/ast/issues/1284
 actual=$($SHELL --verson 2>&1)
 actual_status=$?
-expect=': verson: bad option(s)'
+expect=': verson: @(bad option(s)|unknown option)'
 expect_status=2
 [[ "$actual" == *${expect}* ]] || err_exit "failed to handle invalid flag" \
 	"(expected *$(printf %q "$expect")*, got $(printf %q "$actual"))"
@@ -864,6 +923,70 @@ AIX | SunOS)
 		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 	;;
 esac
+
+# ======
+# Test exec optimization of last command in script or subshell
+
+got=$(
+	ulimit -t unlimited 2>/dev/null  # fork subshell
+	print "${.sh.pid:-$("$SHELL" -c 'echo "$PPID"')}"  # fallback for pre-93u+m ksh without ${.sh.pid}
+	"$SHELL" -c 'print "$$"'
+)
+pid1= pid2=
+{ read pid1 && read pid2; } <<<$got && let "pid1 == pid2" \
+|| err_exit "last command in forked comsub not exec-optimized ($pid1 != $pid2)"
+
+cat >script <<\EOF
+echo $$
+sh -c 'echo $$'
+EOF
+"$SHELL" script >out
+pid1= pid2=
+{ read pid1 && read pid2; } <out && let "pid1 == pid2" \
+|| err_exit "last command in script not exec-optimized ($pid1 != $pid2)"
+
+for sig in EXIT ERR ${ kill -l; }
+do
+	case $sig in
+	KILL | STOP)
+		# cannot be trapped
+		continue ;;
+	esac
+
+	# the following is tested in a background subshell because ksh before 2022-06-18 didn't
+	# do exec optimization on the last external command in a forked non-background subshell
+	(
+		trap + "$sig"  # unadvertised (still sort of broken) feature: unignore signal
+		trap : "$sig"
+		print "${.sh.pid:-$("$SHELL" -c 'echo "$PPID"')}"  # fallback for pre-93u+m ksh without ${.sh.pid}
+		"$SHELL" -c 'print "$$"'
+	) >out &
+	wait
+	pid1= pid2=
+	{ read pid1 && read pid2; } <out && let "pid1 != pid2" \
+	|| err_exit "last command in forked subshell exec-optimized in spite of $sig trap ($pid1 == $pid2)"
+
+	got=$(
+		ulimit -t unlimited 2>/dev/null  # fork subshell
+		trap + "$sig"  # unadvertised (still sort of broken) feature: unignore signal
+		trap : "$sig"
+		print "${.sh.pid:-$("$SHELL" -c 'echo "$PPID"')}"  # fallback for pre-93u+m ksh without ${.sh.pid}
+		"$SHELL" -c 'print "$$"'
+	)
+	pid1= pid2=
+	{ read pid1 && read pid2; } <<<$got && let "pid1 != pid2" \
+	|| err_exit "last command in forked comsub exec-optimized in spite of $sig trap ($pid1 == $pid2)"
+
+	cat >script <<-EOF
+	trap ":" $sig
+	echo \$\$
+	sh -c 'echo \$\$'
+	EOF
+	"$SHELL" script >out
+	pid1= pid2=
+	{ read pid1 && read pid2; } <out && let "pid1 != pid2" \
+	|| err_exit "last command in script exec-optimized in spite of $sig trap ($pid1 == $pid2)"
+done
 
 # ======
 exit $((Errors<125?Errors:125))

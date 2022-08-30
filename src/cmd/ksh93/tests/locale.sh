@@ -2,20 +2,17 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -400,7 +397,6 @@ then	LC_ALL=en_US.UTF-8
 			== "$got" ]] \
 		|| err_exit "incorrect string from printf %q"
 	fi
-	
 fi
 
 # ======
@@ -415,6 +411,15 @@ then
 	[[ $got == "$exp" ]] || err_exit "locale is not restored properly upon leaving virtual subshell" \
 		"(expected $(printf %q "$exp"); got $(printf %q "$got"))"
 fi
+
+# ======
+unset LANG "${!LC_@}"
+(LANG=C_EU && LC_NUMERIC=C && let .5) || err_exit "radix point not updated by LC_NUMERIC"
+(LANG=C && LC_NUMERIC=C_EU && let ,5) || err_exit "radix point not updated by LC_NUMERIC"
+(LC_NUMERIC=C_EU && LC_ALL=C && let .5) || err_exit "radix point not updated by LC_ALL"
+(LC_NUMERIC=C  && LC_ALL=C_EU && let ,5) || err_exit "radix point not updated by LC_ALL"
+(LC_ALL=C_EU && unset LC_ALL && LANG=C && let .5) || err_exit "radix point not updated by LANG"
+(LC_ALL=C && unset LC_ALL && LANG=C_EU && let ,5) || err_exit "radix point not updated by LANG"
 
 # ======
 exit $((Errors<125?Errors:125))

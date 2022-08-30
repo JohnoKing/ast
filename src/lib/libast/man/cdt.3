@@ -272,7 +272,8 @@ The calls \f3dtinsert()\fP and \f3dtinstall()\fP will insert a new object
 in front of such a current object
 while the call \f3dtappend()\fP will append in back of it.
 .Ss "  Dtdeque"
-Objects are kept in a deque. This is similar to \f3Dtlist\fP
+Objects are kept in a deque (double-ended queue; pronounce "deck").
+This is similar to \f3Dtlist\fP
 except that objects are always inserted at the front and appended at the tail
 of the list.
 .Ss "  Dtstack"
@@ -467,10 +468,10 @@ See \f3Dtdisc_t.makef\fP for object construction.
 \f3dtinsert()\fP and \f3dtappend()\fP perform the same function
 for all methods except for \f3Dtlist\fP (see \f3Dtlist\fP for details).
 For \f3Dtset\fP, \f3Dtrhset\fP or \f3Dtoset\fP,
-if there is an object in \f3dt\fP matching \f3obj\fP
-\f3dtinsert()\fP and \f3dtappend()\fP will not insert a new object.
-On the other hand, \f3dtinstall()\fP remove such a matching
-object then insert the new object.
+if there is an object in \f3dt\fP matching \f3obj\fP,
+\f3dtinsert()\fP and \f3dtappend()\fP will not insert a new object,
+whereas \f3dtinstall()\fP will remove such a matching
+object before inserting the new object.
 
 On failure, \f3dtinsert()\fP and \f3dtinstall()\fP return \f3NULL\fP.
 Otherwise, the return value is either the newly inserted object

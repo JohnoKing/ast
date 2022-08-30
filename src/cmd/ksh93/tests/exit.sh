@@ -2,20 +2,17 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2021 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
-#                 Eclipse Public License, Version 1.0                  #
-#                    by AT&T Intellectual Property                     #
+#                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
 #                A copy of the License is available at                 #
-#          http://www.eclipse.org/org/documents/epl-v10.html           #
-#         (with md5 checksum b35adb5213ca9657e911e9befb180842)         #
-#                                                                      #
-#              Information and Software Systems Research               #
-#                            AT&T Research                             #
-#                           Florham Park NJ                            #
+#      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      #
+#         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         #
 #                                                                      #
 #                  David Korn <dgk@research.att.com>                   #
+#                  Martijn Dekker <martijn@inlv.org>                   #
+#            Johnothan King <johnothanking@protonmail.com>             #
 #                                                                      #
 ########################################################################
 
@@ -181,6 +178,27 @@ done
 # https://github.com/ksh93/ksh/issues/310
 (fn() { false; }; fn >/dev/null/nonexistent; true) 2>/dev/null \
 || err_exit 'Redirection error with function execution causes shell to exit'
+
+# ======
+# Backported regression test from ksh93v- 2014-09-29 for the
+# exit status of functions in command substitutions.
+foo() {
+  print -r foo | read
+  return 1
+}
+o1=$(foo "foo")
+status=$?
+exp=1
+((exp == status)) ||  err_exit 'function which fails inside of a command substitution returns wrong exit status' \
+	"(expected '$exp', got '$status')"
+
+# Backported test from ksh93v- 2014-07-21 for the exit status
+# of subshells with a failing command without pipefail enabled.
+x=$({ sleep .1; false;} | true)
+status=$?
+exp=0
+(( exp == status )) || err_exit 'without pipefail, non-zero exit in pipeline causes command substitution to fail' \
+	"(expected '$exp', got '$status')"
 
 # ======
 exit $((Errors<125?Errors:125))

@@ -4,29 +4,26 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
 *                                                                      *
 ***********************************************************************/
 
+#include <releaseflags.h>
+
 #define SH_RELEASE_FORK	"93u+m"		/* only change if you develop a new ksh93 fork */
 #define SH_RELEASE_SVER	"1.1.0-alpha"	/* semantic version number: https://semver.org */
-#define SH_RELEASE_DATE	"2022-02-17"	/* must be in this format for $((.sh.version)) */
+#define SH_RELEASE_DATE	"2022-08-30"	/* must be in this format for $((.sh.version)) */
 #define SH_RELEASE_CPYR	"(c) 2020-2022 Contributors to ksh " SH_RELEASE_FORK
 
 /* Scripts sometimes field-split ${.sh.version}, so don't change amount of whitespace. */
 /* Arithmetic $((.sh.version)) uses the last 10 chars, so the date must be at the end. */
-#if _AST_ksh_release
+#if _AST_release
 #  define SH_RELEASE	SH_RELEASE_FORK "/" SH_RELEASE_SVER " " SH_RELEASE_DATE
 #else
 #  ifdef _AST_git_commit

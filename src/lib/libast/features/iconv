@@ -89,10 +89,6 @@ tst	output{
 		printf("\n");
 		printf("#define iconv_init(d,e)		(memset(d,0,sizeof(*(d))),(d)->version=ICONV_VERSION,(d)->errorf=(Iconv_error_f)(e),(d)->fill=(-1))\n");
 		printf("\n");
-		printf("#if _BLD_ast && defined(__EXPORT__)\n");
-		printf("#define extern		__EXPORT__\n");
-		printf("#endif\n");
-		printf("\n");
 		printf("extern %siconv_t	%siconv_open(const char*, const char*);\n", lib, lib);
 		printf("extern size_t		%siconv(%siconv_t, char**, size_t*, char**, size_t*);\n", lib, lib);
 		printf("extern int		%siconv_close(%siconv_t);\n", lib, lib);
@@ -107,8 +103,6 @@ tst	output{
 		printf("extern ssize_t		%siconv_write(%siconv_t, FILE*, char**, size_t*, Iconv_disc_t*);\n", lib, lib);
 		printf("#endif\n");
 		printf("#endif\n");
-		printf("\n");
-		printf("#undef	extern\n");
 		printf("\n");
 		return 0;
 	}

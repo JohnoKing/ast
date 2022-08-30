@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
@@ -29,12 +26,12 @@
  *	 and has a separate executor
  */
 
+#include	"shopt.h"
 #include	"streval.h"
 #include	<ctype.h>
 #include	<error.h>
 #include	<stak.h>
 #include	"FEATURE/externs"
-#include	"defs.h"	/* for sh.decomma */
 
 #ifndef ERROR_dictionary
 #   define ERROR_dictionary(s)	(s)
@@ -513,7 +510,7 @@ static int gettok(register struct vars *vp)
 			vp->nextchr--;
 			break;
 		    case A_COMMA:
-			if(sh.decomma && (c=peekchr(vp))>='0' && c<='9')
+			if(sh.radixpoint==',' && (c=peekchr(vp))>='0' && c<='9')
 			{
 				op = A_DIG;
 		    		goto keep;
@@ -564,7 +561,6 @@ static int gettok(register struct vars *vp)
 /*   
  * evaluate a subexpression with precedence
  */
-
 static int expr(register struct vars *vp,register int precedence)
 {
 	register int	c, op;
@@ -870,7 +866,6 @@ again:
 				stakpush(vp,d,Sfdouble_t);
 				stakputc(lvalue.isfloat);
 			}
-	
 			/* check for function call */
 			if(lvalue.fun)
 				continue;
@@ -933,7 +928,7 @@ Arith_t *arith_compile(const char *string,char **last,Sfdouble_t(*fun)(const cha
 }
 
 /*
- * evaluate an integer arithmetic expression in s
+ * evaluate an arithmetic expression in s
  *
  * (Sfdouble_t)(*convert)(char** end, struct lval* string, int type, Sfdouble_t value)
  *     is a user supplied conversion routine that is called when unknown 
@@ -944,7 +939,6 @@ Arith_t *arith_compile(const char *string,char **last,Sfdouble_t(*fun)(const cha
  *
  * NOTE: (*convert)() may call arith_strval()
  */
-
 Sfdouble_t arith_strval(const char *s, char **end, Sfdouble_t(*convert)(const char**,struct lval*,int,Sfdouble_t), int emode)
 {
 	Arith_t *ep;
@@ -971,10 +965,6 @@ Sfdouble_t arith_strval(const char *s, char **end, Sfdouble_t(*convert)(const ch
 #if _mem_name_exception
 
 #undef	error
-
-#if defined(__EXPORT__)
-#define extern			__EXPORT__
-#endif
 
 #ifndef DOMAIN
 #define DOMAIN			_DOMAIN
@@ -1012,7 +1002,5 @@ Sfdouble_t arith_strval(const char *s, char **end, Sfdouble_t(*convert)(const ch
 	errormsg(SH_DICT,ERROR_exit(1),message,ep->name);
 	UNREACHABLE();
     }
-
-#undef	extern
 
 #endif /* _mem_name_exception */

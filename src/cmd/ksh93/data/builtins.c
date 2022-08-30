@@ -4,22 +4,20 @@
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 
 
+#include	"shopt.h"
 #include	"defs.h"
 #include	"shtable.h"
 #include	<signal.h>
@@ -29,6 +27,7 @@
 #include	"builtins.h"
 #include	"jobs.h"
 #include	"FEATURE/cmds"
+#include	"FEATURE/poll"
 #define	bltin(x)	(b_##x)
 /* The following is for builtins that do not accept -- options */
 #define	Bltin(x)	(B_##x)
@@ -73,7 +72,7 @@ const struct shtable3 shtab_builtins[] =
 	"[",		NV_BLTIN|BLT_ENV,		bltin(test),
 	"let",		NV_BLTIN|BLT_ENV,		bltin(let),
 	"export",	NV_BLTIN|BLT_ENV|BLT_SPC|BLT_DCL,bltin(readonly),
-	".",		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(dot_cmd),
+	e_dot,		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(dot_cmd),
 	"source",	NV_BLTIN|BLT_ENV,		bltin(dot_cmd),
 	"return",	NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(return),
 	"enum",		NV_BLTIN|BLT_ENV|BLT_DCL,	bltin(enum),
@@ -120,11 +119,11 @@ const struct shtable3 shtab_builtins[] =
 #endif /* SHOPT_MKSERVICE */
 	"print",	NV_BLTIN|BLT_ENV,		bltin(print),
 	"printf",	NV_BLTIN|BLT_ENV,		bltin(printf),
-	"pwd",		NV_BLTIN,			bltin(pwd),
+	"pwd",		NV_BLTIN|BLT_ENV,		bltin(pwd),
 	"read",		NV_BLTIN|BLT_ENV,		bltin(read),
 	"sleep",	NV_BLTIN,			bltin(sleep),
-	"alarm",	NV_BLTIN,			bltin(alarm),
-	"times",	NV_BLTIN|BLT_SPC,		bltin(times),
+	"alarm",	NV_BLTIN|BLT_ENV,		bltin(alarm),
+	"times",	NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(times),
 	"ulimit",	NV_BLTIN|BLT_ENV,		bltin(ulimit),
 	"umask",	NV_BLTIN|BLT_ENV,		bltin(umask),
 #ifdef _cmd_universe
@@ -137,34 +136,25 @@ const struct shtable3 shtab_builtins[] =
 #undef	mktemp		/* undo possible map-libc mktemp => _ast_mktemp */
 #include SHOPT_CMDLIB_HDR
 #else
-#ifdef SHOPT_ALL_AST_BUILTINS
-	CMDLIST(basename)
-	CMDLIST(cat)
+#if SHOPT_ALL_LIBCMD
 	CMDLIST(chgrp)
 	CMDLIST(chmod)
 	CMDLIST(chown)
 	CMDLIST(cksum)
 	CMDLIST(cmp)
 	CMDLIST(comm)
-	CMDLIST(cp)
-	CMDLIST(cut)
 	CMDLIST(date)
-	CMDLIST(dirname)
 	CMDLIST(expr)
 	CMDLIST(fds)
 	CMDLIST(fmt)
 	CMDLIST(fold)
-	CMDLIST(getconf)
 	CMDLIST(head)
 	CMDLIST(id)
 	CMDLIST(join)
-	CMDLIST(ln)
 	CMDLIST(logname)
 	CMDLIST(md5sum)
 	CMDLIST(mkdir)
 	CMDLIST(mkfifo)
-	CMDLIST(mktemp)
-	CMDLIST(mv)
 	CMDLIST(paste)
 	CMDLIST(pathchk)
 	CMDLIST(pids)
@@ -180,7 +170,7 @@ const struct shtable3 shtab_builtins[] =
 	CMDLIST(uname)
 	CMDLIST(uniq)
 	CMDLIST(wc)
-#else
+#endif
 	CMDLIST(basename)
 	CMDLIST(cat)
 	CMDLIST(cp)
@@ -239,9 +229,13 @@ const char sh_set[] =
 	"their current settings to standard output. "
 	"A \b+o\b with no \aoption\a writes a command that the shell can run "
 	"to restore the current options state. "
-	"\b-o\b \aoption\a turns on \aoption\a and \b+o\b \aoption\a turns it "
+	"\b-o\b \aoption\a or \b--\b\aoption\a turns on \aoption\a "
+	"and \b+o\b \aoption\a or \b--no\b\aoption\a turns it "
 	"off. This can be repeated to enable/disable multiple options. "
-	"The value of \aoption\a must be one of the following:]{"
+	"The value of \aoption\a is case-sensitive but insensitive to \b-\b "
+	"and \b_\b, and may be abbreviated to a non-arbitrary string. "
+	"It must resolve to one of the following:]"
+	"{"
 		"[+allexport?Equivalent to \b-a\b.]"
 		"[+backslashctrl?The backslash character \b\\\b escapes the "
 			"next control character in the \bemacs\b built-in "
@@ -251,17 +245,24 @@ const char sh_set[] =
 #if SHOPT_BRACEPAT
 		"[+braceexpand?Equivalent to \b-B\b.] "
 #endif
+		"[+clobber?Opposite of \b-C\b.]"
 #if SHOPT_ESH
 		"[+emacs?Enables/disables \bemacs\b editing mode.]"
 #endif
 		"[+errexit?Equivalent to \b-e\b.]"
+		"[+exec?Opposite of \b-n\b.]"
+		"[+functrace?Function scopes and subshells inherit the parent "
+			"environment's \bDEBUG\b trap action. Function scopes "
+			"inherit the \b-x\b option's state.]"
+		"[+glob?Opposite of \b-f\b.]"
 #if SHOPT_GLOBCASEDET
 		"[+globcasedetect?Pathname expansion and file name completion "
-		"automatically become case-insensitive on file systems where "
-		"the difference between upper- and lowercase is ignored for "
-		"file names. Each slash-separated path name component pattern "
-		"\ap\a is treated as \b~(i:\b\ap\a\b)\b if its parent directory "
-		"exists on a case-insensitive file system.]"
+			"automatically become case-insensitive on file systems "
+			"where the difference between upper- and lowercase is "
+			"ignored for file names. Each slash-separated path name "
+			"component pattern \ap\a is treated as \b~(i:\b\ap\a\b)\b "
+			"if its parent directory exists on a case-insensitive "
+			"file system.]"
 #endif
 		"[+globstar?Equivalent to \b-G\b.]"
 #if SHOPT_ESH
@@ -272,11 +273,11 @@ const char sh_set[] =
 #if SHOPT_HISTEXPAND
 		"[+histexpand?Equivalent to \b-H\b.]"
 #if SHOPT_ESH || SHOPT_VSH
-		"[+histreedit?If a history expansion (see \bhistexpand\b) "
+		"[+histreedit?If a history expansion (see \b-H\b) "
 			"fails, the command line is reloaded into the next "
 			"prompt's edit buffer, allowing corrections.]"
 		"[+histverify?The results of a history expansion (see "
-			"\bhistexpand\b) are not immediately executed. "
+			"\b-H\b) are not immediately executed. "
 			"Instead, the expanded line is loaded into the next "
 			"prompt's edit buffer, allowing further changes.]"
 #endif
@@ -293,12 +294,8 @@ const char sh_set[] =
 		"[+multiline?Use multiple lines when editing lines that are "
 			"longer than the window width.]"
 #endif
-		"[+noclobber?Equivalent to \b-C\b.]"
-		"[+noexec?Equivalent to \b-n\b.]"
-		"[+noglob?Equivalent to \b-f\b.]"
-		"[+nolog?Obsolete; has no effect.]"
+		"[+log?Obsolete; has no effect.]"
 		"[+notify?Equivalent to \b-b\b.]"
-		"[+nounset?Equivalent to \b-u\b.]"
 		"[+pipefail?A pipeline will not complete until all components "
 			"of the pipeline have completed, and the exit status "
 			"of the pipeline will be the value of the last "
@@ -309,6 +306,7 @@ const char sh_set[] =
 		"[+showme?Simple commands preceded by a \b;\b will be traced "
 			"as if \b-x\b were enabled but not executed.]"
 		"[+trackall?Equivalent to \b-h\b.]"
+		"[+unset?Opposite of \b-u\b.]"
 		"[+verbose?Equivalent to \b-v\b.]"
 #if SHOPT_VSH
 		"[+vi?Enables/disables \bvi\b editing mode.]"
@@ -316,16 +314,13 @@ const char sh_set[] =
 			"edit mode.]"
 #endif
 		"[+xtrace?Equivalent to \b-x\b.]"
-"}"
+	"}"
 /*
  * --posix is an AST optget(3) default option, so for ksh to use it, it must be listed
  * explicitly (and handled by sh_argopts() in sh/args.c) to stop optget(3) overriding it.
- * Since it must appear here, use it as an example to document how --option == -o option.
  */
-"[05:posix?For any \b-o\b option (such as \bposix\b), \b--posix\b is equivalent "
-	"to \b-o posix\b and \b--noposix\b is equivalent to \b+o posix\b. "
-	"However, option names with a \bno\b prefix "
-	"are turned on by omitting \bno\b.]"
+"[05:posix?Enable the \bposix\b option. When given at invocation time, "
+	"disables importing variable type attributes from the environment.]"
 "[p?Privileged mode.  Disabling \b-p\b sets the effective user ID to the "
 	"real user ID, and the effective group ID to the real group ID.  "
 	"Enabling \b-p\b restores the effective user and group IDs to their "
@@ -436,7 +431,7 @@ const char sh_optalias[] =
 ;
 
 const char sh_optbuiltin[] =
-"[-1c?\n@(#)$Id: builtin (AT&T Research) 2010-08-04 $\n]"
+"[-1c?\n@(#)$Id: builtin (ksh 93u+m) 2022-07-03 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?builtin - add, delete, or display shell built-ins]"
 "[+DESCRIPTION?\bbuiltin\b can be used to add, delete, or display "
@@ -457,6 +452,7 @@ const char sh_optbuiltin[] =
     "the current list of built-ins, or just the special built-ins if \b-s\b "
     "is specified, on standard output. The full pathname for built-ins that "
     "are bound to pathnames are displayed.]"
+#if SHOPT_DYNAMIC
 "[+?Libraries containing built-ins can be specified with the \b-f\b "
     "option. If the library contains a function named \blib_init\b(), this "
     "function will be invoked with argument \b0\b when the library is "
@@ -465,20 +461,25 @@ const char sh_optbuiltin[] =
     "the C level function name.]"
 "[+?The C level function will be invoked with three arguments. The first "
     "two are the same as \bmain\b() and the third one is a pointer.]"
+#endif /* SHOPT_DYNAMIC */
 "[+?\bbuiltin\b cannot be invoked from a restricted shell.]"
 "[d?Deletes each of the specified built-ins. Special built-ins cannot be "
     "deleted.]"
-"[f]:[lib?On systems with dynamic linking, \alib\a names a shared "
-    "library to load and search for built-ins. Libraries are searched for "
-    "in \b../lib/ksh\b and \b../lib\b on \b$PATH\b and in system dependent "
-    "library directories. The system "
-    "dependent shared library prefix and/or suffix may be omitted. Once a "
+#if SHOPT_DYNAMIC
+"[f]:[lib?\alib\a names a shared library to load and search for built-ins. "
+    "Libraries are searched for in \b../lib/ksh\b and \b../lib\b on \b$PATH\b "
+    "and in system-dependent library directories. The system-dependent "
+    "shared library prefix and/or suffix may be omitted. Once a "
     "library is loaded, its symbols become available for the current and "
     "subsequent invocations of \bbuiltin\b. Multiple libraries can be "
     "specified with separate invocations of \bbuiltin\b. Libraries are "
     "searched in the reverse order in which they are specified.]"
 "[l?List the library base name, plugin YYYYMMDD version stamp, and full "
     "path for \b-f\b\alib\a on one line on the standard output.]"
+#else
+"[f]:[lib?Not supported.]"
+"[l?No effect.]"
+#endif /* SHOPT_DYNAMIC */
 "[s?Display only the special built-ins.]"
 "\n"
 "\n[pathname ...]\n"
@@ -1082,7 +1083,7 @@ const char sh_opthist[]	=
 ;
 
 const char sh_optkill[]	 = 
-"[-1c?\n@(#)$Id: kill (AT&T Research) 2012-04-13 $\n]"
+"[-1c?\n@(#)$Id: kill (ksh 93u+m) 2022-08-30 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?kill - terminate or signal process]"
 "[+DESCRIPTION?With the first form in which \b-l\b is not specified, "
@@ -1102,8 +1103,8 @@ _JOB_
 "[l?List signal names or signal numbers rather than sending signals as "
 	"described above.  "
 	"The \b-n\b and \b-s\b options cannot be specified.]"
-"[L?Same as \b-l\b except that of no argument is specified the signals will "
-	"be listed in menu format as with select compound command.]"
+"[L?Same as \b-l\b except that if no argument is specified the signals will "
+	"be listed in menu format with corresponding signal numbers.]"
 "[n]#[signum?Specify a signal number to send.  Signal numbers are not "
 	"portable across platforms, except for the following:]{"
 		"[+0?No signal]"
@@ -1115,7 +1116,7 @@ _JOB_
 		"[+14?\bALRM\b]"
 		"[+15?\bTERM\b]"
 	"}"
-"[s]:[signame?Specify a signal name to send.  The signal names are derived "
+"[s:signal]:[signame?Specify a signal name to send.  The signal names are derived "
 	"from their names in \b<signal.h>\b without the \bSIG\b prefix and "
 	"are case insensitive.  \bkill -l\b will generate the list of "
 	"signals on the current platform.]"
@@ -1449,7 +1450,7 @@ const char sh_optpwd[] =
 ;
 
 const char sh_optread[] =
-"[-1c?\n@(#)$Id: read (ksh 93u+m) 2022-02-16 $\n]"
+"[-1c?\n@(#)$Id: read (ksh 93u+m) 2022-06-09 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?read - read a line from standard input]"
 "[+DESCRIPTION?\bread\b reads a line from standard input and breaks it "
@@ -1475,7 +1476,13 @@ const char sh_optread[] =
 	"the line starting at index 0.]"
 "[C?Unset \avar\a and read  \avar\a as a compound variable.]"
 "[d]:[delim?Read until delimiter \adelim\a instead of to the end of line.]"
-"[n]#[count?Read at most \acount\a characters or (for binary fields) bytes.]"
+"[n]#[count?Read at most \acount\a characters or (for binary fields) bytes."
+#if _pipe_socketpair
+	" When reading from a slow device, "
+	"will return as soon as any characters have been read, "
+	"unless the \bposix\b shell option is on."
+#endif
+	"]"
 "[N]#[count?Read exactly \acount\a characters or (for binary fields) bytes.]"
 "[p?Read from the current co-process instead of standard input. "
 	"An end-of-file causes \bread\b to disconnect the co-process "
@@ -1493,7 +1500,7 @@ const char sh_optread[] =
 "\n[var?prompt] [var ...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-	"[+0? Successful completion.]"
+	"[+0?Successful completion.]"
 	"[+>0?End of file was detected or an error occurred.]"
 "}"
 "[+SEE ALSO?\bprint\b(1), \bprintf\b(1), \bcat\b(1)]"
@@ -1592,7 +1599,7 @@ const char sh_optksh[] =
 "[-author?Contributors to https://github.com/ksh93/ksh]"
 "[-copyright?(c) 1982-2014 AT&T Intellectual Property]"
 "[-copyright?" SH_RELEASE_CPYR "]"
-"[-license?http://www.eclipse.org/org/documents/epl-v10.html]"
+"[-license?https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?\b\f?\f\b - Shell, the standard command language interpreter]"
 "[+DESCRIPTION?\b\f?\f\b is a command language interpreter that "
@@ -1670,7 +1677,7 @@ const char sh_optksh[] =
 "[+SEE ALSO?\bset\b(1), \bbuiltin\b(1)]"
 ;
 const char sh_optset[] =
-"+[-1c?\n@(#)$Id: set (AT&T Research) 1999-09-28 $\n]"
+"+[-1c?\n@(#)$Id: set (ksh 93u+m) 2022-06-04 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?set - set/unset options and positional parameters]"
 "[+DESCRIPTION?\bset\b sets or unsets options and positional parameters.  "
@@ -1821,7 +1828,7 @@ const char sh_opttrap[] =
 ;
 
 const char sh_opttypeset[] =
-"+[-1c?\n@(#)$Id: typeset (ksh 93u+m) 2021-12-17 $\n]"
+"+[-1c?\n@(#)$Id: typeset (ksh 93u+m) 2022-06-01 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?typeset - declare or display variables with attributes]"
 "[+DESCRIPTION?Without the \b-f\b option, \btypeset\b sets, unsets, "
@@ -1878,6 +1885,7 @@ const char sh_opttypeset[] =
 	"encoding of the data. This option can be used with \b-Z\b to "
 	"specify fixed-size fields.]"
 "[f?Each of the options and \aname\as refers to a function.]"
+"[g?Forces variables to be created or modified at the global scope.]"
 "[i]#?[base:=10?An integer. \abase\a represents the arithmetic base "
 	"from 2 to 64.]"
 "[l?Without \b-i\b, sets character mapping to \btolower\b. When used "
@@ -1939,9 +1947,9 @@ const char sh_opttypeset[] =
 "[Z]#?[n?Zero fill.  If \an\a is given it represents the field width.]"
 "\n"
 "\n[name[=value]...]\n"
-" -f [name...]\n"
+" -f [-tu] [name...]\n"
 " -m [name=name...]\n"
-" -n [name=name...]\n"
+" -n [-g] [name=name...]\n"
 " -T [tname[=(type definition)]...]\n"
 "\n"
 "[+EXIT STATUS?]{"
@@ -1952,6 +1960,7 @@ const char sh_opttypeset[] =
 "[+SEE ALSO?\breadonly\b(1), \bexport\b(1)]"
 ;
 
+#ifndef _no_ulimit
 const char sh_optulimit[] =
 "[-1c?@(#)$Id: ulimit (ksh 93u+m) 2021-12-28 $\n]"
 "[--catalog?" SH_DICT "]"
@@ -1987,9 +1996,10 @@ const char sh_optulimit[] =
 
 "[+SEE ALSO?\bulimit\b(2), \bgetrlimit\b(2)]"
 ;
+#endif /* !_no_ulimit */
 
 const char sh_opttimes[] =
-"[-1c?@(#)$Id: times (ksh 93u+m) 2020-07-14 $\n]"
+"[-1c?@(#)$Id: times (ksh 93u+m) 2022-06-06 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?times - display CPU usage by the shell and child processes]"
 "[+DESCRIPTION?\btimes\b displays the accumulated user and system CPU times, "

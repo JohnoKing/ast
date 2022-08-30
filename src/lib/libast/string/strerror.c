@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 
@@ -56,14 +52,6 @@ int		sys_nerr = 0;
 extern char*	strerror(int);
 #endif
 
-#if _PACKAGE_astsa
-
-#define fmtbuf(n)	((n),tmp)
-
-static char		tmp[32];
-
-#endif
-
 char*
 _ast_strerror(int err)
 {
@@ -82,7 +70,6 @@ _ast_strerror(int err)
 #endif
 	if (msg)
 	{
-#if !_PACKAGE_astsa
 		if (ERROR_translating())
 		{
 #if _lib_strerror
@@ -125,7 +112,6 @@ _ast_strerror(int err)
 #endif
 			return ERROR_translate(NiL, NiL, "errlist", msg);
 		}
-#endif
 		return msg;
 	}
 	msg = fmtbuf(z = 32);
@@ -134,10 +120,6 @@ _ast_strerror(int err)
 }
 
 #if !_lib_strerror
-
-#if defined(__EXPORT__)
-#define extern		__EXPORT__
-#endif
 
 extern char*
 strerror(int err)

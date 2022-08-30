@@ -4,18 +4,15 @@
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
 *          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                  David Korn <dgk@research.att.com>                   *
+*                  Martijn Dekker <martijn@inlv.org>                   *
+*            Johnothan King <johnothanking@protonmail.com>             *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -258,7 +255,6 @@ exec:
 /*
  * return true if shell ends in sh or ksh
  */
-
 static int endsh(register const char *shell)
 {
 	while(*shell)
@@ -276,7 +272,6 @@ static int endsh(register const char *shell)
 /*
  * return true if shell is in <dir> directory
  */
-
 static int in_dir(register const char *dir,register const char *shell)
 {
 	while(*dir)
@@ -298,7 +293,6 @@ static void error_exit(const char *message)
 /*
  * This version of access checks against effective UID and effective GID
  */
-
 int eaccess(register const char *name, register int mode)
 {	
 	struct stat statb;
@@ -374,7 +368,6 @@ static void setids(int mode,int owner,int group)
  * Finally, the clone is exec'd.  This file is unlinked by a grandchild
  * of this program, who waits around until the text is free.
  */
-
 static void setids(int mode,uid_t owner,gid_t group)
 {
 	register int n,m;
@@ -485,7 +478,6 @@ static void setids(int mode,uid_t owner,gid_t group)
 /*
  * create a unique name into the <template>
  */
-
 static void maketemp(char *template)
 {
 	register char *cp = template;
@@ -498,13 +490,11 @@ static void maketemp(char *template)
 		*--cp = (n%10) + '0';
 		n /= 10;
 	}
-	
 }
 
 /*
  *  copy THISPROG into the open file number <fdo> and close <fdo>
  */
-
 static int mycopy(int fdi, int fdo)
 {
 	char buffer[BLKSIZE];

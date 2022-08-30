@@ -2,26 +2,28 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 
 #include "stdhdr.h"
+
+#if !_has_multibyte
+
+NoN(fgetws)
+
+#else
 
 wchar_t*
 fgetws(wchar_t* s, int n, Sfio_t* f)
@@ -29,8 +31,6 @@ fgetws(wchar_t* s, int n, Sfio_t* f)
 	register wchar_t*	p = s;
 	register wchar_t*	e = s + n - 1;
 	register wint_t		c;
-
-	STDIO_PTR(f, "fgets", wchar_t*, (wchar_t*, int, Sfio_t*), (s, n, f))
 
 	FWIDE(f, 0);
 	while (p < e && (c = fgetwc(f)) != WEOF && (*p++ = c) != '\n');
@@ -50,3 +50,5 @@ getws(wchar_t* s)
 	*p = 0;
 	return s;
 }
+
+#endif /* !_has_multibyte */

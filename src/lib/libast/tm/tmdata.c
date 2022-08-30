@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -271,21 +267,7 @@ static Tm_zone_t	zone[] =
 /*
  * 2007-03-19 move tm_data from _tm_data_ to (*_tm_datap_)
  *	      to allow future Tm_data_t growth
- *            by 2009 _tm_data_ can be static
  */
 
-#if _BLD_ast && defined(__EXPORT__)
-#define extern		extern __EXPORT__
-#endif
-
-extern Tm_data_t	_tm_data_;
-
-#undef	extern
-
-Tm_data_t _tm_data_ = { format, lex, digit, days, sum, leap, zone };
-
-__EXTERN__(Tm_data_t, _tm_data_);
-
-__EXTERN__(Tm_data_t*, _tm_datap_);
-
+static Tm_data_t	_tm_data_ = { format, lex, digit, days, sum, leap, zone };
 Tm_data_t*		_tm_datap_ = &_tm_data_;

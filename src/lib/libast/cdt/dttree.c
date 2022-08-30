@@ -2,22 +2,18 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2021 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
-*                 Eclipse Public License, Version 1.0                  *
-*                    by AT&T Intellectual Property                     *
+*                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
 *                A copy of the License is available at                 *
-*          http://www.eclipse.org/org/documents/epl-v10.html           *
-*         (with md5 checksum b35adb5213ca9657e911e9befb180842)         *
-*                                                                      *
-*              Information and Software Systems Research               *
-*                            AT&T Research                             *
-*                           Florham Park NJ                            *
+*      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
+*         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
 *                 Glenn Fowler <gsf@research.att.com>                  *
 *                  David Korn <dgk@research.att.com>                   *
 *                   Phong Vo <kpv@research.att.com>                    *
+*                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
 #include	"dthdr.h"
@@ -636,27 +632,15 @@ static int treeevent(Dt_t* dt, int event, void* arg)
 	else	return 0;
 }
 
-#if _UWIN
-
-void* dtfinger(Dt_t* dt)
-{
-	return (dt && dt->meth && (dt->meth->type & DT_ORDERED)) ? (void*)((Dttree_t*)dt->data)->root : NIL(void*);
-}
-
-#endif
-
 /* make this method available */
 static Dtmethod_t	_Dtoset =  { dttree, DT_OSET, treeevent, "Dtoset" };
 static Dtmethod_t	_Dtobag =  { dttree, DT_OBAG, treeevent, "Dtobag" };
-__DEFINE__(Dtmethod_t*,Dtoset,&_Dtoset);
-__DEFINE__(Dtmethod_t*,Dtobag,&_Dtobag);
+Dtmethod_t		*Dtoset	= &_Dtoset;
+Dtmethod_t		*Dtobag = &_Dtobag;
 
 /* backwards compatibility */
 #undef	Dttree
-#if defined(__EXPORT__)
-__EXPORT__
-#endif
-__DEFINE__(Dtmethod_t*,Dttree,&_Dtoset);
+Dtmethod_t		*Dttree = &_Dtoset;
 
 #ifdef NoF
 NoF(dttree)
