@@ -174,9 +174,9 @@ static void l_time(Sfio_t *outfile, struct timeval *tv, int precision)
 	int sec = tv->tv_sec % 60;
 	int frac = tv->tv_usec;
 
-	/* scale fraction according to precision */
+	/* scale fraction from micro to milli, centi, or deci second according to precision */
 	int n;
-	for(n = (6 - precision); n > 0; --n)
+	for(n = 3 + (3 - precision); n > 0; --n)
 		frac /= 10;
 #else
 /* fallback */
@@ -266,7 +266,7 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 #else
 			if(d=tm[0])
 				d = 100.*(((double)(tm[1]+tm[2]))/d);
-			precision = 6;
+			precision = 2;
 			goto skip;
 #endif
 		}
@@ -298,9 +298,9 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 			l_time(stkp, tvp, precision);
 		else
 		{
-			/* scale fraction according to precision */
+			/* scale fraction from micro to milli, centi, or deci second according to precision */
 			int n, frac = tvp->tv_usec;
-			for(n = (6 - precision); n > 0; --n)
+			for(n = 3 + (3 - precision); n > 0; --n)
 				frac /= 10;
 			if(precision)
 				sfprintf(stkp, "%d%c%0*d", tvp->tv_sec, sh.radixpoint, precision, frac);
@@ -314,26 +314,18 @@ static void p_time(Sfio_t *out, const char *format, clock_t *tm)
 			n = 1;
 		else if(c=='S')
 			n = 2;
-		else if(c=='C')
-			n = 3;
 		else
 		{
 			stkseek(stkp,offset);
 			errormsg(SH_DICT,ERROR_exit(0),e_badtformat,c);
 			return;
 		}
-		if(n==3)
-		{
-			/* sum of U + S */
-			d = (double)((tm[1]+tm[2])/sh.lim.clk_tck);
-		}
-		else
-			d = (double)tm[n]/sh.lim.clk_tck;
+		d = (double)tm[n]/sh.lim.clk_tck;
 	skip:
 		if(l_modifier)
-			l_time(stkp, n==3 ? tm[1] + tm[2] : tm[n], precision);
+			l_time(stkp, tm[n], precision);
 		else
-			sfprintf(stkp,"%.*f", precision, d);
+			sfprintf(stkp,"%.*f",precision, d);
 #endif
 		first = format+1;
 	}

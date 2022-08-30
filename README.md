@@ -11,7 +11,7 @@ git log --no-merges extras ^dev
 
 The extra features the extras branch adds are as follows:
 
-1. Support for `${$var}` from ksh93v- has been added, where `$var` points to the name of a variable.
+1. Support for `${$var}` from ksh93v- has been added, where `$var` points to the name of a variable. (This will likely be submitted upstream in the near future.)
    For example, `$var` can be set to point to `$foo`:  
 ```sh
 $ var=foo
@@ -19,23 +19,9 @@ $ foo='Intended result'
 $ echo ${$var}
 Intended result
 ```
-2. Microsecond precision has been added to the `time` keyword and `times` builtin.
-3. The `%C` time format has been backported from ksh2020. `%C` is the total number of CPU seconds (i.e., the sum of `%U` and `%S`).
-4. The prompt printed for emacs reverse search mode is now `? ` instead of `^R` (this will probably be refactored into a `$PS5` variable).
-5. Added the following long options to the libcmd builtins (to match the equivalent GNU coreutils long options):
-  * `basename --multiple` as an alias for `basename -a`.
-  * `cat --show-tabs` as an alias for `cat -T`.
-  * `chgrp --no-dereference` as an alias for `chgrp -h`.
-  * `chown --no-dereference` as an alias for `chown -h`.
-  * `cp --no-dereference` as an alias for `cp -P`.
-  * `cp --symbolic` as an alias for `cp -s`.
-  * `join --ignore-case` as an alias for `join -i`.
-  * `ln --symbolic` as an alias for `ln -s`.
-  * `mv --symbolic` as an alias for `mv -s`. (GNU coreutils doesn't support `mv --symbolic`. It was added because `cp`, `ln` and `mv` share `optget` code.)
-  * `rm --dir` as an alias for `rm -d`.
-6. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
-7. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
-8. All of the `/opt/ast/bin` builtins (excluding `vmstate` when compiling with standard malloc) can now be enabled by compiling with `-DSHOPT_ALL_AST_BUILTINS=1`.
+2. The prompt printed for emacs reverse search mode is now `? ` instead of `^R` (this will eventually be refactored into a `$PS5` variable).
+3. The `shcomp` command now supports a `-d/--deparse` option. This flag causes `shcomp` to run the shell deparser on the given script, then output the result.
+4. A `banner` command has been added alongside `pty`. This is the AST `banner` command with features added to it from the NetBSD `banner`.
 
 # KornShell 93u+m
 
