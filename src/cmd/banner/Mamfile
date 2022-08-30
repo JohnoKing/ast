@@ -69,3 +69,5 @@ make install
 		exec - test '' = 'banner' || ${STDCMP} 2>/dev/null -s banner ${INSTALLROOT}/bin/banner || { ${STDMV} ${INSTALLROOT}/bin/banner ${INSTALLROOT}/bin/banner.old 2>/dev/null || true; ${STDCP} banner ${INSTALLROOT}/bin/banner;}
 	done ${INSTALLROOT}/bin/banner generated
 done install virtual
+make test
+done test dontcare virtual
