@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	sh.shcomp = 1;
 	argv += opt_info.index;
 	argc -= opt_info.index;
-	if(argc==0 && tty_check(0))
+	if(argc==0 && tty_check(0) && !deparse)
 	{
 		errormsg(SH_DICT,ERROR_exit(0),"refusing to read script from terminal");
 		error_info.errors++;
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 	}
 	else
 		out = sfstdout;
-	if(tty_check(sffileno(out)))
+	if(tty_check(sffileno(out)) && !deparse)
 	{
 		errormsg(SH_DICT,ERROR_exit(1),"refusing to write binary data to terminal",cp);
 		UNREACHABLE();
