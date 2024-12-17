@@ -39,14 +39,6 @@
 #   define PIPE_BUF	512
 #endif
 
-#ifndef O_SEARCH
-#   ifdef O_PATH
-#	define O_SEARCH	O_PATH
-#   else
-#	define O_SEARCH	O_RDONLY
-#   endif
-#endif
-
 /*
  * Note that the following structure must be the same
  * size as the Dtlink_t structure
@@ -92,10 +84,7 @@ static struct subshell
 	int		rand_last;          /* last random number from $RANDOM in parent shell */
 	int		rand_state;         /* 0 means sp->rand_seed hasn't been set, 1 is the opposite */
 	uint32_t	srand_upper_bound;  /* parent shell's upper bound for $SRANDOM */
-#if _lib_fchdir
-	int		pwdfd;	/* file descriptor for PWD */
-	char		pwdclose;
-#endif /* _lib_fchdir */
+	int		pwdfd;              /* file descriptor for PWD */
 } *subshell_data;
 
 static unsigned int subenv;
@@ -458,6 +447,18 @@ void sh_subjobcheck(pid_t pid)
 }
 
 /*
+ * Set the file descriptor for the current shell's PWD without wiping
+ * out the stored file descriptor for the parent shell's PWD.
+ */
+void sh_pwdupdate(int fd)
+{
+	struct subshell *sp = subshell_data;
+	if(!(sh.subshell && !sh.subshare && sh.pwdfd == sp->pwdfd) && sh.pwdfd > 0)
+		sh_close(sh.pwdfd);
+	sh.pwdfd = fd;
+}
+
+/*
  * Run command tree <t> in a virtual subshell
  * If comsub is not null, then output will be placed in temp file (or buffer)
  * If comsub is not null, the return value will be a stream consisting of
@@ -523,36 +524,8 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 	{
 		struct subshell *xp;
 		char *save_debugtrap = 0;
-#if _lib_fchdir
-		sp->pwdfd = -1;
-		for(xp=sp->prev; xp; xp=xp->prev)
-		{
-			if(xp->pwdfd>0 && xp->pwd && strcmp(xp->pwd,sh.pwd)==0)
-			{
-				sp->pwdfd = xp->pwdfd;
-				break;
-			}
-		}
-		if(sp->pwdfd<0)
-		{
-			int n = open(e_dot,O_SEARCH);
-			if(n>=0)
-			{
-				sp->pwdfd = n;
-				if(n<10)
-				{
-					sp->pwdfd = sh_fcntl(n,F_DUPFD,10);
-					close(n);
-				}
-				if(sp->pwdfd>0)
-				{
-					fcntl(sp->pwdfd,F_SETFD,FD_CLOEXEC);
-					sp->pwdclose = 1;
-				}
-			}
-		}
-#endif /* _lib_fchdir */
 		sp->pwd = (sh.pwd?sh_strdup(sh.pwd):0);
+		sp->pwdfd = sh.pwdfd;
 		sp->mask = sh.mask;
 		sh_stats(STAT_SUBSHELL);
 		/* save trap table */
@@ -626,21 +599,8 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		if(sh.savesig < 0)
 		{
 			sh.savesig = 0;
-#if _lib_fchdir
-			if(sp->pwdfd < 0 && !sh.subshare)	/* if we couldn't get a file descriptor to our PWD ... */
+			if(sp->pwdfd < 0 && !sh.subshare)	/* if we don't have a file descriptor to our PWD ... */
 				sh_subfork();			/* ...we have to fork, as we cannot fchdir back to it. */
-#else
-			if(!sh.subshare)
-			{
-				if(sp->pwd && access(sp->pwd,X_OK)<0)
-				{
-					free(sp->pwd);
-					sp->pwd = NULL;
-				}
-				if(!sp->pwd)
-					sh_subfork();
-			}
-#endif /* _lib_fchdir */
 			/* Virtual subshells are not safe to suspend (^Z, SIGTSTP) in the interactive main shell. */
 			if(sh_isstate(SH_INTERACTIVE))
 			{
@@ -825,24 +785,18 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		}
 		sh.options = sp->options;
 		/* restore the present working directory */
-#if _lib_fchdir
 		if(sp->pwdfd > 0 && fchdir(sp->pwdfd) < 0)
-#else
-		if(sp->pwd && strcmp(sp->pwd,sh.pwd) && chdir(sp->pwd) < 0)
-#endif /* _lib_fchdir */
 		{
 			saveerrno = errno;
 			fatalerror = 2;
 		}
+		if(fatalerror != 2)
+			sh_pwdupdate(sp->pwdfd);
 		else if(sp->pwd && strcmp(sp->pwd,sh.pwd))
 			path_newdir(sh.pathlist);
 		if(sh.pwd)
 			free((void*)sh.pwd);
 		sh.pwd = sp->pwd;
-#if _lib_fchdir
-		if(sp->pwdclose)
-			close(sp->pwdfd);
-#endif /* _lib_fchdir */
 		if(sp->mask!=sh.mask)
 			umask(sh.mask=sp->mask);
 		if(sh.coutpipe!=sp->coutpipe)
@@ -922,6 +876,7 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 					free((void*)sh.pwd);
 				sh.pwd = NULL;
 				path_pwd();
+				sh_pwdupdate(sh_diropenat(AT_FDCWD, e_dot));
 				errno = saveerrno;
 				errormsg(SH_DICT,ERROR_SYSTEM|ERROR_PANIC,"Failed to restore PWD upon exiting subshell");
 				UNREACHABLE();

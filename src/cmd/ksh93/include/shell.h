@@ -372,6 +372,7 @@ struct Shell_s
 	Sfio_t		**sftable;
 	unsigned char	*fdstatus;
 	const char	*pwd;
+	int		pwdfd;		/* file descriptor for pwd */
 	void		*jmpbuffer;
 	void		*mktype;
 	Sfio_t		*strbuf;
