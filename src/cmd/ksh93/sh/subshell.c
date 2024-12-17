@@ -785,15 +785,16 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		}
 		sh.options = sp->options;
 		/* restore the present working directory */
-		if(sp->pwdfd > 0 && fchdir(sp->pwdfd) < 0)
+		if(sh.pwdfd != sp->pwdfd && sp->pwdfd > 0 && fchdir(sp->pwdfd) < 0)
 		{
+			sh_close(sp->pwdfd);
 			saveerrno = errno;
 			fatalerror = 2;
 		}
-		if(fatalerror != 2)
-			sh_pwdupdate(sp->pwdfd);
 		else if(sp->pwd && strcmp(sp->pwd,sh.pwd))
 			path_newdir(sh.pathlist);
+		if(fatalerror != 2)
+			sh_pwdupdate(sp->pwdfd);
 		if(sh.pwd)
 			free((void*)sh.pwd);
 		sh.pwd = sp->pwd;
