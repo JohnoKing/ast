@@ -302,7 +302,7 @@ main(void)
 #endif
 #ifndef O_DIRECTORY
 #ifdef O_OPENDIR
-	printf("#define O_OPENDIR		0\n");
+	printf("#define O_DIRECTORY		O_OPENDIR\n");
 #else
 	printf("#define O_DIRECTORY		0\n");
 #endif
