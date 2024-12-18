@@ -84,7 +84,7 @@ static struct subshell
 	int		rand_last;          /* last random number from $RANDOM in parent shell */
 	char		rand_state;         /* 0 means sp->rand_seed hasn't been set, 1 is the opposite */
 	uint32_t	srand_upper_bound;  /* parent shell's upper bound for $SRANDOM */
-	int		pwdfd;              /* file descriptor for PWD */
+	int		pwdfd;              /* parent shell's file descriptor for PWD */
 } *subshell_data;
 
 static unsigned int subenv;
@@ -530,7 +530,6 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		sh.comsub = comsub;
 	if(!sh.subshare)
 	{
-		struct subshell *xp;
 		char *save_debugtrap = 0;
 		sp->pwd = sh_strdup(sh.pwd);
 		sp->pwdfd = sh.pwdfd;
