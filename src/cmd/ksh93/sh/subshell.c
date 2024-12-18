@@ -459,6 +459,16 @@ void sh_pwdupdate(int fd)
 }
 
 /*
+ * Check if the parent shell has a valid PWD fd to return to.
+ * Only for use by cd inside of virtual subshells.
+ */
+int sh_validate_subpwdfd(void)
+{
+	struct subshell *sp = subshell_data;
+	return sp->pwdfd > 0;
+}
+
+/*
  * Run command tree <t> in a virtual subshell
  * If comsub is not null, then output will be placed in temp file (or buffer)
  * If comsub is not null, the return value will be a stream consisting of
@@ -597,8 +607,6 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		if(sh.savesig < 0)
 		{
 			sh.savesig = 0;
-			if(sp->pwdfd < 0 && !sh.subshare)	/* if we don't have a file descriptor to our PWD ... */
-				sh_subfork();			/* ...we have to fork, as we cannot fchdir back to it. */
 			/* Virtual subshells are not safe to suspend (^Z, SIGTSTP) in the interactive main shell. */
 			if(sh_isstate(SH_INTERACTIVE))
 			{

@@ -136,7 +136,7 @@ int	b_cd(int argc, char *argv[],Shbltin_t *context)
 	 * If sh_subshell() in subshell.c cannot use fchdir(2) to restore the PWD using a saved file descriptor,
 	 * we must fork any virtual subshell now to avoid the possibility of ending up in the wrong PWD on exit.
 	 */
-	if(sh.subshell && !sh.subshare && !test_inode(sh.pwd,e_dot))
+	if(sh.subshell && !sh.subshare && (!sh_validate_subpwdfd() || !test_inode(sh.pwd,e_dot)))
 		sh_subfork();
 	/*
 	 * Do $CDPATH processing, except if the path is absolute or the first component is '.' or '..'

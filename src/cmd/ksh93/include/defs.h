@@ -143,6 +143,7 @@ extern void		sh_subjobcheck(pid_t);
 extern int		sh_subsavefd(int);
 extern void		sh_subtmpfile(void);
 extern void		sh_pwdupdate(int);
+extern int		sh_validate_subpwdfd(void);
 extern char 		*sh_substitute(const char*,const char*,char*);
 extern void		sh_timetraps(void);
 extern const char	*_sh_translate(const char*);
