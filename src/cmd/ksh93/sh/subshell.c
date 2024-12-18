@@ -789,11 +789,18 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 			free(savsig);
 		}
 		sh.options = sp->options;
-		/* restore the present working directory */
 		if(sh.pwdfd != sp->pwdfd)
 		{
-			if(sp->pwdfd > 0 && fchdir(sp->pwdfd) < 0)
+			/*
+			 * Restore the parent shell's present working directory.
+			 * Note: cd will always fork if sp->pwdfd is -1 (by calling sh_validate_subpwdfd()),
+			 * which only occurs when a subshell is started with sh.pwdfd == -1. As such, in this
+			 * if block sp->pwdfd is always > 0 (whilst sh.pwdfd is guaranteed to differ, and
+			 * might not be valid).
+			 */
+			if(fchdir(sp->pwdfd) < 0)
 			{
+				/* Couldn't fchdir back; close the fd and cope with the error */
 				sh_close(sp->pwdfd);
 				saveerrno = errno;
 				fatalerror = 2;
