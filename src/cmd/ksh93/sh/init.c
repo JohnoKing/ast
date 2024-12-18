@@ -1236,7 +1236,6 @@ Shell_t *sh_init(int argc,char *argv[], Shinit_f userinit)
 		}
 	}
 	sh_ioinit();
-	sh_pwdupdate(sh_diropenat(AT_FDCWD, e_dot));
 	/* initialize signal handling */
 	sh_siginit();
 	/* set up memory for name-value pairs */

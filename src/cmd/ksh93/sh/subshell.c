@@ -82,7 +82,7 @@ static struct subshell
 	char		comsub;
 	unsigned int	rand_seed;          /* parent shell $RANDOM seed */
 	int		rand_last;          /* last random number from $RANDOM in parent shell */
-	int		rand_state;         /* 0 means sp->rand_seed hasn't been set, 1 is the opposite */
+	char		rand_state;         /* 0 means sp->rand_seed hasn't been set, 1 is the opposite */
 	uint32_t	srand_upper_bound;  /* parent shell's upper bound for $SRANDOM */
 	int		pwdfd;              /* file descriptor for PWD */
 } *subshell_data;
@@ -506,8 +506,6 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		path_get(e_dot);
 		sh.pathinit = 0;
 	}
-	if(!sh.pwd)
-		path_pwd();
 	sp->bckpid = sh.bckpid;
 	if(comsub)
 		sh_stats(STAT_COMSUB);
@@ -524,7 +522,7 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 	{
 		struct subshell *xp;
 		char *save_debugtrap = 0;
-		sp->pwd = (sh.pwd?sh_strdup(sh.pwd):0);
+		sp->pwd = sh_strdup(sh.pwd);
 		sp->pwdfd = sh.pwdfd;
 		sp->mask = sh.mask;
 		sh_stats(STAT_SUBSHELL);
@@ -785,18 +783,20 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 		}
 		sh.options = sp->options;
 		/* restore the present working directory */
-		if(sh.pwdfd != sp->pwdfd && sp->pwdfd > 0 && fchdir(sp->pwdfd) < 0)
+		if(sh.pwdfd != sp->pwdfd)
 		{
-			sh_close(sp->pwdfd);
-			saveerrno = errno;
-			fatalerror = 2;
+			if(sp->pwdfd > 0 && fchdir(sp->pwdfd) < 0)
+			{
+				sh_close(sp->pwdfd);
+				saveerrno = errno;
+				fatalerror = 2;
+			}
+			else if(sp->pwd && strcmp(sp->pwd,sh.pwd))
+				path_newdir(sh.pathlist);
+			if(fatalerror != 2)
+				sh_pwdupdate(sp->pwdfd);
 		}
-		else if(sp->pwd && strcmp(sp->pwd,sh.pwd))
-			path_newdir(sh.pathlist);
-		if(fatalerror != 2)
-			sh_pwdupdate(sp->pwdfd);
-		if(sh.pwd)
-			free((void*)sh.pwd);
+		free(sh.pwd);
 		sh.pwd = sp->pwd;
 		if(sp->mask!=sh.mask)
 			umask(sh.mask=sp->mask);
@@ -873,11 +873,9 @@ Sfio_t *sh_subshell(Shnode_t *t, volatile int flags, int comsub)
 				UNREACHABLE();
 			case 2:
 				/* reinit PWD as it will be wrong */
-				if(sh.pwd)
-					free((void*)sh.pwd);
+				free(sh.pwd);
 				sh.pwd = NULL;
 				path_pwd();
-				sh_pwdupdate(sh_diropenat(AT_FDCWD, e_dot));
 				errno = saveerrno;
 				errormsg(SH_DICT,ERROR_SYSTEM|ERROR_PANIC,"Failed to restore PWD upon exiting subshell");
 				UNREACHABLE();

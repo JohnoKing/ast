@@ -52,22 +52,11 @@ static void rehash(Namval_t *np,void *data)
 int sh_diropenat(int dir, const char *path)
 {
 	int fd,shfd;
-#if !O_DIRECTORY
-	struct stat fs;
-#endif
 	if((fd = openat(dir, path, O_DIRECTORY|O_NONBLOCK|O_cloexec)) < 0)
 #if O_SEARCH
 		if(errno != EACCES || (fd = openat(dir, path, O_SEARCH|O_DIRECTORY|O_NONBLOCK|O_cloexec)) < 0)
 #endif
 			return fd;
-#if !O_DIRECTORY
-	if(!fstat(fd, &fs) && !S_ISDIR(fs.st_mode))
-	{
-		close(fd);
-		errno = ENOTDIR;
-		return -1;
-	}
-#endif
 	/* Move fd to a number > 10 and register the fd number with the shell */
 	shfd = sh_fcntl(fd, F_dupfd_cloexec, 10);
 	close(fd);
@@ -273,7 +262,7 @@ success:
 	if(*dp && (*dp!='.'||dp[1]) && strchr(dir,'/'))
 		sfputr(sfstdout,dir,'\n');
 	nv_putval(opwdnod,oldpwd,NV_RDONLY);
-	free((void*)sh.pwd);
+	free(sh.pwd);
 	if(*dir == '/')
 	{
 		size_t len = strlen(dir);
