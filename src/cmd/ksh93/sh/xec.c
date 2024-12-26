@@ -3277,7 +3277,7 @@ static void sh_funct(Namval_t *np,int argn, char *argv[],struct argnod *envlist,
 	struct funenv	fun;
 	char		*fname = nv_getval(SH_FUNNAMENOD);
 	pid_t		pipepid = sh.pipepid;
-	int		loopcnt;
+	int		loopcnt = -1;
 #if !SHOPT_DEVFD
 	Dt_t		*save_fifo_tree = sh.fifo_tree;
 	sh.fifo_tree = NULL;
@@ -3297,7 +3297,7 @@ static void sh_funct(Namval_t *np,int argn, char *argv[],struct argnod *envlist,
 	fun.node = np;
 	fun.nref = 0;
 	sh_funscope(argn,argv,0,&fun,execflg);
-	if(nv_isattr(np,NV_FPOSIX))
+	if(loopcnt!=-1)
 		sh.st.loopcnt = loopcnt;
 	sh.last_root = nv_dict(DOTSHNOD);
 	nv_putval(SH_FUNNAMENOD,fname,NV_NOFREE);
