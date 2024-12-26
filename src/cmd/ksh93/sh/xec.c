@@ -3111,9 +3111,9 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 	{
 		if(!fun)
 		{
-			if(sh_isoption(SH_FUNCTRACE) && is_option(&save_options,SH_XTRACE) || nv_isattr(fp->node,NV_TAGGED))
+			if(nv_isattr(fp->node,NV_TAGGED))
 				sh_onoption(SH_XTRACE);
-			else
+			else if(!sh_isoption(SH_FUNCTRACE))
 				sh_offoption(SH_XTRACE);
 		}
 		sh.st.cmdname = argv[0];
@@ -3183,9 +3183,13 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 					sh.last_root = 0;
 					for(r=0; arg[r]; r++)
 					{
-						np->nvalue = sh_newof(0,struct Namref,1,0);
-						((struct Namref*)np->nvalue)->np = nq;
-						nv_onattr(np,NV_REF|NV_NOFREE);
+						np = nv_search(arg[r],sh.var_tree,NV_NOSCOPE|NV_ADD);
+						if(np && (nq=*nref++))
+						{
+							np->nvalue = sh_newof(0,struct Namref,1,0);
+							((struct Namref*)np->nvalue)->np = nq;
+							nv_onattr(np,NV_REF|NV_NOFREE);
+						}
 					}
 				}
 				sh_exec((Shnode_t*)(nv_funtree((fp->node))),execflg|SH_ERREXIT);
@@ -3194,10 +3198,10 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 		}
 	}
 	sh.invoc_local = save_invoc_local;
-	if(!posix_fun)
-		sh.fn_depth--;
-	else
+	if(posix_fun)
 		sh.dot_depth--;
+	else
+		sh.fn_depth--;
 	update_sh_level();
 	sh.infunction = save_infunction;
 	if(sh.fn_depth==1 && jmpval==SH_JMPERRFN)

@@ -276,11 +276,6 @@ int    b_dot_cmd(int n,char *argv[],Shbltin_t *context)
 				UNREACHABLE();
 			}
 		}
-		else
-		{
-			errormsg(SH_DICT,ERROR_exit(1),e_found,script);
-			UNREACHABLE();
-		}
 	}
 	else
 		np = 0;

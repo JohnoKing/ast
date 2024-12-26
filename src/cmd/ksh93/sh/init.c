@@ -1553,7 +1553,7 @@ void sh_reinit(void)
 		nv_delete(np,dp,nv_isattr(np,NV_NOFREE));
 	}
 	/* Reset state for subshells, environment, job control, function calls and file descriptors */
-	sh.subshell = sh.realsubshell = sh.comsub = sh.curenv = sh.jobenv = sh.inuse_bits = sh.fn_depth = sh.dot_depth = 0;
+	sh.subshell = sh.realsubshell = sh.comsub = sh.curenv = sh.jobenv = sh.inuse_bits = sh.fn_depth = sh.dot_depth = sh.infunction = 0;
 	sh.envlist = NULL;
 	sh.last_root = NULL;
 	/* Free up the dictionary trees themselves */
