@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -18,16 +18,23 @@
 
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
 
+# flag Android/Termux execve(3) breakage killing 'exec -a'
+typeset -i execve_ignores_argv0
+[[ $( (exec -a foo true) 2>&1 ) == *'not supported'* ]]
+if	((execve_ignores_argv0 = ! $?))
+then	warning "execve(3) broken on this system; tests involving 'exec -a' are skipped"
+fi
+
 function abspath
 {
-        base=$(basename $SHELL)
-        cd ${SHELL%/$base}
-        newdir=$(pwd)
-        cd ~-
-        print $newdir/$base
+	base=$(basename $SHELL)
+	cd ${SHELL%/$base}
+	newdir=$(pwd)
+	cd ~-
+	print $newdir/$base
 }
 # test for proper exit of shell
-if builtin getconf 2> /dev/null; then
+if ((!execve_ignores_argv0)) && builtin getconf 2>/dev/null; then
 	ABSHELL=$(abspath)
 	print exit 0 >.profile
 	${ABSHELL}  <<!
@@ -42,9 +49,9 @@ if builtin getconf 2> /dev/null; then
 			eval [[ \$$v ]] && eval print -n \" \"\$v=\"\$$v\"
 		done
 	) \
-	exec -c -a -ksh ${ABSHELL} -c "exit 1" 1>/dev/null 2>&1
+	LD_LIBRARY_PATH=\$LD_LIBRARY_PATH LIBPATH=\$LIBPATH SHLIB_PATH=\$SHLIB_PATH DYLD_LIBRARY_PATH=\$DYLD_LIBRARY_PATH exec -c -a -ksh ${ABSHELL} -c "exit 1" 1>/dev/null 2>&1
 !
-	status=$(echo $?)
+	status=$?
 	if	[[ -o noprivileged && $status != 0 ]]
 	then	err_exit 'exit in .profile is ignored'
 	elif	[[ -o privileged && $status == 0 ]]

@@ -18,6 +18,268 @@
 
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
 
+# ======
+# The following tests are run in parallel because they are slow; they are checked at the end
+
+(
+	# begin standalone SIGINT test generation
+
+	cat > tst <<-'EOF'
+	# shell trap tests
+	#
+	#    tst  control script that calls tst-1, must be run by ksh
+	#  tst-1  calls tst-2
+	#  tst-2  calls tst-3
+	#  tst-3  defaults or handles and discards/propagates SIGINT
+	#
+	# initial -v option lists script entry and SIGINT delivery
+	#
+	# three test options
+	#
+	#     d call next script directly, otherwise via $SHELL -c
+	#     t trap, echo, and kill self on SIGINT, otherwise x or SIGINT default if no x
+	#     x trap, echo on SIGINT, and tst-3 exit 0, tst-2 exit, otherwise SIGINT default
+	#     z trap, echo on SIGINT, and tst-3 exit 0, tst-2 exit 0, otherwise SIGINT default
+	#
+	# Usage: tst [-v] [-options] shell-to-test ...
+
+	# "trap + sig" is an unadvertized extension for this test
+	# if run from nmake SIGINT is set to SIG_IGN
+	# this call sets it back to SIG_DFL
+	# semantics w.r.t. function scope must be worked out before
+	# making it public
+	trap + INT
+
+	set -o monitor
+
+	function gen
+	{
+		typeset o t x d
+		for x in - x z
+		do	case $x in
+			[$1])	for t in - t
+				do	case $t in
+					[$1])	for d in - d
+						do	case $d in
+							[$1])	o="$o $x$t$d"
+							esac
+						done
+					esac
+				done
+			esac
+		done
+		echo '' $o
+	}
+
+	case $1 in
+	-v)	v=v; shift ;;
+	-*v*)	v=v ;;
+	*)	v= ;;
+	esac
+	case $1 in
+	*' '*)	o=$1; shift ;;
+	-*)	o=$(gen $1); shift ;;
+	*)	o=$(gen -txd) ;;
+	esac
+	case $# in
+	0)	set ksh bash ksh88 pdksh ash zsh ;;
+	esac
+	for f in $o
+	do	case $# in
+		1)	;;
+		*)	echo ;;
+		esac
+		for sh
+		do	if	$sh -c 'exit 0' > /dev/null 2>&1
+			then	case $# in
+				1)	printf '%3s ' "$f" ;;
+				*)	printf '%16s %3s ' "$sh" "$f" ;;
+				esac
+				$sh tst-1 $v$f $sh > tst.out &
+				wait
+				echo $(cat tst.out)
+			fi
+		done
+	done
+	case $# in
+	1)	;;
+	*)	echo ;;
+	esac
+	EOF
+
+	cat > tst-1 <<-'EOF'
+	exec 2>/dev/null
+	case $1 in
+	*v*)	echo 1-main ;;
+	esac
+	{
+		sleep .2
+		case $1 in
+		*v*)	echo "SIGINT" ;;
+		esac
+		kill -s INT 0
+	} &
+	case $1 in
+	*t*)	trap '
+			echo 1-intr
+			trap - INT
+			# omitting the self kill exposes shells that deliver
+			# the SIGINT trap but exit 0 for -xt
+			# kill -s INT $$
+		' INT
+		;;
+	esac
+	case $1 in
+	*d*)	tst-2 $1 $2; status=$? ;;
+	*)	$2 -c "tst-2 $1 $2"; status=$? ;;
+	esac
+	printf '1-%04d\n' $status
+	sleep .2
+	EOF
+
+	cat > tst-2 <<-'EOF'
+	case $1 in
+	*z*)	trap '
+			echo 2-intr
+			exit 0
+		' INT
+		;;
+	*x*)	trap '
+			echo 2-intr
+			exit
+		' INT
+		;;
+	*t*)	trap '
+			echo 2-intr
+			trap - INT
+			kill -s INT $$
+		' INT
+		;;
+	esac
+	case $1 in
+	*v*)	echo 2-main ;;
+	esac
+	case $1 in
+	*d*)	tst-3 $1 $2; status=$? ;;
+	*)	$2 -c "tst-3 $1 $2"; status=$? ;;
+	esac
+	printf '2-%04d\n' $status
+	EOF
+
+	cat > tst-3 <<-'EOF'
+	case $1 in
+	*[xz]*)	trap '
+			sleep .2
+			echo 3-intr
+			exit 0
+		' INT
+		;;
+	*)	trap '
+			sleep .2
+			echo 3-intr
+			trap - INT
+			kill -s INT $$
+		' INT
+		;;
+	esac
+	case $1 in
+	*v*)	echo 3-main ;;
+	esac
+	sleep .5
+	printf '3-%04d\n' $?
+	EOF
+	chmod +x tst tst-?
+
+	# end standalone test generation
+
+	PATH=:$PATH
+	tst "$SHELL" > SIGINT_tst.out
+
+	typeset -A exp
+	exp[---]="3-intr"
+	exp[--d]="3-intr"
+	exp[-t-]="3-intr 2-intr 1-intr 1-0258"
+	exp[-td]="3-intr 2-intr 1-intr 1-0258"
+	exp[x--]="3-intr 2-intr"
+	exp[x-d]="3-intr 2-intr"
+	exp[xt-]="3-intr 2-intr 1-intr 1-0000"
+	exp[xtd]="3-intr 2-intr 1-intr 1-0000"
+	exp[z--]="3-intr 2-intr 1-0000"
+	exp[z-d]="3-intr 2-intr 1-0000"
+	exp[zt-]="3-intr 2-intr 1-intr 1-0000"
+	exp[ztd]="3-intr 2-intr 1-intr 1-0000"
+	wait "$parallel_1"
+	while	read ops out
+	do	[[ $out == "${exp[$ops]}" ]] || print "\\err_exit $LINENO 'interrupt $ops test failed --" \
+			"expected '\''${exp[$ops]}'\'', got '\''$out'\'"
+	done < SIGINT_tst.out > parallel_1.err
+	unset exp
+) &
+parallel_1=$!
+
+# Test for 'trap - INT' backported from ksh93v- 2013-07-27
+(
+	float s=SECONDS
+	(trap - INT; exec sleep 2) & sleep .5; kill -sINT $!
+	wait $!
+	(( (SECONDS - s) >= 1.8))
+) &
+parallel_2=$!
+
+# Exit status, output and timing tests
+(
+	float s
+	redirect > parallel_3.err
+
+	s=SECONDS
+	"$SHELL" 2>/dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; (sleep .5); print finished' > $tmp/sig
+	e=$?
+	[[ $e == 3 ]] || print "\\err_exit $LINENO 'exit status failed -- expected 3, got $e'"
+	x=$(<$tmp/sig)
+	[[ $x == done ]] || print "\\err_exit $LINENO 'output failed -- expected '\\''done'\\'', got '\\''$x'\\'"
+	(( (SECONDS - s) > .35 )) && print "\\err_exit $LINENO 'took $SECONDS seconds, expected around .2'"
+
+	s=SECONDS
+	"$SHELL" 2>/dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; sleep .5; print finished' > $tmp/sig
+	e=$?
+	[[ $e == 3 ]] || print "\\err_exit $LINENO 'exit status failed -- expected 3, got $e'"
+	x=$(<$tmp/sig)
+	[[ $x == done ]] || print "\\err_exit $LINENO 'output failed -- expected '\\''done'\\'', got '\\''$x'\\'"
+	(( (SECONDS - s) > .35 )) && print "\\err_exit $LINENO 'took $SECONDS seconds, expected around .2'"
+
+	s=SECONDS
+	{ "$SHELL" 2>/dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; (sleep .5); print finished' > $tmp/sig ;} 2>/dev/null
+	e=$?
+	[[ $e == 3 ]] || print "\\err_exit $LINENO 'exit status failed -- expected 3, got $e'"
+	x=$(<$tmp/sig)
+	[[ $x == done ]] || print "\\err_exit $LINENO 'output failed -- expected '\\''done'\\'', got '\\''$x'\\'"
+	(( (SECONDS - s) > .35 )) && print "\\err_exit $LINENO 'took $SECONDS seconds, expected around .2'"
+
+	s=SECONDS
+	{ "$SHELL" 2>/dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; sleep .5; print finished' > $tmp/sig ;} 2>/dev/null
+	e=$?
+	[[ $e == 3 ]] || print "\\err_exit $LINENO 'exit status failed -- expected 3, got $e'"
+	x=$(<$tmp/sig)
+	[[ $x == done ]] || print "\\err_exit $LINENO 'output failed -- expected '\\''done'\\'', got '\\''$x'\\'"
+	(( (SECONDS - s) > .35 )) && print "\\err_exit $LINENO 'took $SECONDS seconds, expected around .2'"
+
+	s=SECONDS
+	x=$("$SHELL" 2>/dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; (sleep .5); print finished')
+	e=$?
+	[[ $e == 3 ]] || print "\\err_exit $LINENO 'exit status failed -- expected 3, got $e'"
+	[[ $x == done ]] || print "\\err_exit $LINENO 'output failed -- expected '\\''done'\\'', got '\\''$x'\\'"
+	(( (SECONDS - s) > .35 )) && print "\\err_exit $LINENO 'took $SECONDS seconds, expected around .2'"
+
+	s=SECONDS
+	x=$("$SHELL" 2>/dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; sleep .5; print finished')
+	e=$?
+	[[ $e == 3 ]] || print "\\err_exit $LINENO 'exit status failed -- expected 3, got $e'"
+	[[ $x == done ]] || print "\\err_exit $LINENO 'output failed -- expected '\\''done'\\'', got '\\''$x'\\'"
+	(( (SECONDS - s) > .35 )) && print "\\err_exit $LINENO 'took $SECONDS seconds, expected around .2'"
+) &
+parallel_3=$!
+
+# ======
 unset n s t
 typeset -A SIG
 for s in $(kill -l)
@@ -51,13 +313,13 @@ cop=$!
 { sleep .4; kill $cop; } 2>/dev/null &
 spy=$!
 if	wait $cop 2>/dev/null
-then	kill $spy 2>/dev/null
+then	: ok :
 else	# 'wait $cop' will have passed on the nonzero exit status from the background job into $?
 	e=$?
 	err_exit "pipe with --pipefail PIPE trap hangs or produced an error" \
 		"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
 fi
-wait
+kill $spy 2>/dev/null
 exp=$'PIPED\nPIPED'
 [[ $(<out2) == "$exp" ]] || err_exit 'SIGPIPE output on standard error is not correct' \
 	"(expected $(printf %q "$exp"), got $(printf %q "$(<out2)"))"
@@ -72,198 +334,6 @@ actual=$( trap 'print -n got_child' SIGCHLD
 expect=01got_child23
 [[ $actual == "$expect" ]] || err_exit 'SIGCHLD not working' \
 	"(expected $(printf %q "$expect"), got $(printf %q "$actual"))"
-
-# ======
-
-# begin standalone SIGINT test generation
-
-cat > tst <<'!'
-# shell trap tests
-#
-#    tst  control script that calls tst-1, must be run by ksh
-#  tst-1  calls tst-2
-#  tst-2  calls tst-3
-#  tst-3  defaults or handles and discards/propagates SIGINT
-#
-# initial -v option lists script entry and SIGINT delivery
-#
-# three test options
-#
-#     d call next script directly, otherwise via $SHELL -c
-#     t trap, echo, and kill self on SIGINT, otherwise x or SIGINT default if no x
-#     x trap, echo on SIGINT, and tst-3 exit 0, tst-2 exit, otherwise SIGINT default
-#     z trap, echo on SIGINT, and tst-3 exit 0, tst-2 exit 0, otherwise SIGINT default
-#
-# Usage: tst [-v] [-options] shell-to-test ...
-
-# "trap + sig" is an unadvertized extension for this test
-# if run from nmake SIGINT is set to SIG_IGN
-# this call sets it back to SIG_DFL
-# semantics w.r.t. function scope must be worked out before
-# making it public
-trap + INT
-
-set -o monitor
-
-function gen
-{
-	typeset o t x d
-	for x in - x z
-	do	case $x in
-		[$1])	for t in - t
-			do	case $t in
-				[$1])	for d in - d
-					do	case $d in
-						[$1])	o="$o $x$t$d"
-						esac
-					done
-				esac
-			done
-		esac
-	done
-	echo '' $o
-}
-
-case $1 in
--v)	v=v; shift ;;
--*v*)	v=v ;;
-*)	v= ;;
-esac
-case $1 in
-*' '*)	o=$1; shift ;;
--*)	o=$(gen $1); shift ;;
-*)	o=$(gen -txd) ;;
-esac
-case $# in
-0)	set ksh bash ksh88 pdksh ash zsh ;;
-esac
-for f in $o
-do	case $# in
-	1)	;;
-	*)	echo ;;
-	esac
-	for sh
-	do	if	$sh -c 'exit 0' > /dev/null 2>&1
-		then	case $# in
-			1)	printf '%3s ' "$f" ;;
-			*)	printf '%16s %3s ' "$sh" "$f" ;;
-			esac
-			$sh tst-1 $v$f $sh > tst.out &
-			wait
-			echo $(cat tst.out)
-		fi
-	done
-done
-case $# in
-1)	;;
-*)	echo ;;
-esac
-!
-cat > tst-1 <<'!'
-exec 2>/dev/null
-case $1 in
-*v*)	echo 1-main ;;
-esac
-{
-	sleep .2
-	case $1 in
-	*v*)	echo "SIGINT" ;;
-	esac
-	kill -s INT 0
-} &
-case $1 in
-*t*)	trap '
-		echo 1-intr
-		trap - INT
-		# omitting the self kill exposes shells that deliver
-		# the SIGINT trap but exit 0 for -xt
-		# kill -s INT $$
-	' INT
-	;;
-esac
-case $1 in
-*d*)	tst-2 $1 $2; status=$? ;;
-*)	$2 -c "tst-2 $1 $2"; status=$? ;;
-esac
-printf '1-%04d\n' $status
-sleep .2
-!
-cat > tst-2 <<'!'
-case $1 in
-*z*)	trap '
-		echo 2-intr
-		exit 0
-	' INT
-	;;
-*x*)	trap '
-		echo 2-intr
-		exit
-	' INT
-	;;
-*t*)	trap '
-		echo 2-intr
-		trap - INT
-		kill -s INT $$
-	' INT
-	;;
-esac
-case $1 in
-*v*)	echo 2-main ;;
-esac
-case $1 in
-*d*)	tst-3 $1 $2; status=$? ;;
-*)	$2 -c "tst-3 $1 $2"; status=$? ;;
-esac
-printf '2-%04d\n' $status
-!
-cat > tst-3 <<'!'
-case $1 in
-*[xz]*)	trap '
-		sleep .2
-		echo 3-intr
-		exit 0
-	' INT
-	;;
-*)	trap '
-		sleep .2
-		echo 3-intr
-		trap - INT
-		kill -s INT $$
-	' INT
-	;;
-esac
-case $1 in
-*v*)	echo 3-main ;;
-esac
-sleep .5
-printf '3-%04d\n' $?
-!
-chmod +x tst tst-?
-
-# end standalone test generation
-
-PATH=:$PATH
-typeset -A expected
-expected[---]="3-intr"
-expected[--d]="3-intr"
-expected[-t-]="3-intr 2-intr 1-intr 1-0258"
-expected[-td]="3-intr 2-intr 1-intr 1-0258"
-expected[x--]="3-intr 2-intr"
-expected[x-d]="3-intr 2-intr"
-expected[xt-]="3-intr 2-intr 1-intr 1-0000"
-expected[xtd]="3-intr 2-intr 1-intr 1-0000"
-expected[z--]="3-intr 2-intr 1-0000"
-expected[z-d]="3-intr 2-intr 1-0000"
-expected[zt-]="3-intr 2-intr 1-intr 1-0000"
-expected[ztd]="3-intr 2-intr 1-intr 1-0000"
-
-tst $SHELL > tst.got
-
-while	read ops out
-do	[[ $out == ${expected[$ops]} ]] || err_exit "interrupt $ops test failed -- expected '${expected[$ops]}', got '$out'"
-done < tst.got
-unset expected
-PATH=${PATH#:}
 
 # ======
 
@@ -325,55 +395,10 @@ yes() for ((;;)); do print y; done
 		fi
 	done
 
-SECONDS=0
-$SHELL 2> /dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; (sleep .5); print finished' > $tmp/sig
-e=$?
-[[ $e == 3 ]] || err_exit "exit status failed -- expected 3, got $e"
-x=$(<$tmp/sig)
-[[ $x == done ]] || err_exit "output failed -- expected 'done', got '$x'"
-(( SECONDS > .35 )) && err_exit "took $SECONDS seconds, expected around .2"
-
-SECONDS=0
-$SHELL 2> /dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; sleep .5; print finished' > $tmp/sig
-e=$?
-[[ $e == 3 ]] || err_exit "exit status failed -- expected 3, got $e"
-x=$(<$tmp/sig)
-[[ $x == done ]] || err_exit "output failed -- expected 'done', got '$x'"
-(( SECONDS > .35 )) && err_exit "took $SECONDS seconds, expected around .2"
-
-SECONDS=0
-{ $SHELL 2> /dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; (sleep .5); print finished' > $tmp/sig ;} 2> /dev/null
-e=$?
-[[ $e == 3 ]] || err_exit "exit status failed -- expected 3, got $e"
-x=$(<$tmp/sig)
-[[ $x == done ]] || err_exit "output failed -- expected 'done', got '$x'"
-(( SECONDS > .35 )) && err_exit "took $SECONDS seconds, expected around .2"
-
-SECONDS=0
-{ $SHELL 2> /dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; sleep .5; print finished' > $tmp/sig ;} 2> /dev/null
-e=$?
-[[ $e == 3 ]] || err_exit "exit status failed -- expected 3, got $e"
-x=$(<$tmp/sig)
-[[ $x == done ]] || err_exit "output failed -- expected 'done', got '$x'"
-(( SECONDS > .35 )) && err_exit "took $SECONDS seconds, expected around .2"
-
-SECONDS=0
-x=$($SHELL 2> /dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; (sleep .5); print finished')
-e=$?
-[[ $e == 3 ]] || err_exit "exit status failed -- expected 3, got $e"
-[[ $x == done ]] || err_exit "output failed -- expected 'done', got '$x'"
-(( SECONDS > .35 )) && err_exit "took $SECONDS seconds, expected around .2"
-
-SECONDS=0
-x=$($SHELL 2> /dev/null -c 'sleep .2 && kill $$ & trap "print done; exit 3" EXIT; sleep .5; print finished')
-e=$?
-[[ $e == 3 ]] || err_exit "exit status failed -- expected 3, got $e"
-[[ $x == done ]] || err_exit "output failed -- expected 'done', got '$x'"
-(( SECONDS > .35 )) && err_exit "took $SECONDS seconds, expected around .2"
-
 # The test for SIGBUS trap handling below is incompatible with ASan because ASan
 # implements its own SIGBUS handler independently of ksh.
-if ! [[ -v ASAN_OPTIONS || -v TSAN_OPTIONS || -v MSAN_OPTIONS || -v LSAN_OPTIONS ]]; then
+# Also, Android does not allow ignoring SIGBUS.
+if ! [[ -v ASAN_OPTIONS || -v TSAN_OPTIONS || -v MSAN_OPTIONS || -v LSAN_OPTIONS || $HOSTTYPE == android.* ]]; then
 	trap '' SIGBUS
 	got=$("$SHELL" -c 'trap date SIGBUS; trap -p SIGBUS')
 	[[ "$got" ]] && err_exit 'SIGBUS should not have a trap' \
@@ -384,7 +409,7 @@ fi
 {
     x=$(
     $SHELL   <<- \++EOF
-	timeout() 
+	timeout()
 	{
 		trap 'trap - TERM; return' TERM
 		( sleep $1; kill -TERM $$ ) >/dev/null 2>&1 &
@@ -400,14 +425,14 @@ fi
 x=$(
     $SHELL  <<- \++EOF
 	set -o pipefail
-        foobar()
-        {
+	foobar()
+	{
 		for ((i=0; i < 10000; i++))
 		do	print abcdefghijklmnopqrstuvwxyz
 		done | head > /dev/null
-        }
-        foobar
-        print ok
+	}
+	foobar
+	print ok
 	++EOF
 )
 [[ $x == ok ]] || err_exit 'SIGPIPE exit status causes PIPE signal to be propagated'
@@ -588,12 +613,6 @@ got=$("$SHELL" -c 'trap + INT; "$SHELL" -c '\''kill -s INT $$'\''; echo "$?, con
 	"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 trap - INT
 
-# Test for 'trap - INT' backported from ksh93v- 2013-07-27
-float s=SECONDS
-(trap - INT; exec sleep 2) & sleep .5; kill -sINT $!
-wait $!
-(( (SECONDS-s) < 1.8)) && err_exit "'trap - INT' causing trap to not be ignored"
-
 # ======
 # Ancient SIGCONT nonsense present as early as ksh88:
 # the 'kill' built-in sent SIGCONT along with every non-SIGCONT signal issued!
@@ -605,6 +624,19 @@ do	for cmd in kill $(whence -p kill)
 			"got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 	done
 done
+
+# ======
+# checks for tests run in parallel (see top)
+
+wait "$parallel_1"
+r=$(< parallel_1.err) || exit 125
+eval "$r"
+
+wait "$parallel_2" || err_exit "'trap - INT' causing trap to not be ignored"
+
+wait "$parallel_3"
+r=$(< parallel_3.err) || exit 125
+eval "$r"
 
 # ======
 exit $((Errors<125?Errors:125))

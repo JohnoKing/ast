@@ -28,8 +28,7 @@ The options have the following defaults and meanings:
                      See README-AUDIT.md.
 
     ALL_LIBCMD   off Enables all of the available /opt/ast/bin builtin commands
-                     in src/lib/libcmd (excludes vmstate if vmalloc is not
-                     enabled).
+                     in src/lib/libcmd.
 
     AUDIT        on  For auditing specific users.
                      Noted by "A" in the version string when enabled.
@@ -119,9 +118,7 @@ The options have the following defaults and meanings:
     NOECHOE      off Disable the '-e' option to the 'echo' command,
                      unless SHOPT_ECHOPRINT is enabled.
 
-    OLDTERMIO    off Use either termios or termio at runtime.
-
-    OPTIMIZE     on  Optimize loop invariants for with for and while loops.
+    OPTIMIZE     on  Optimize loop invariants in 'for' and 'while' loops.
 
     PRINTF_LEGACY    The printf built-in accepts a format operand that starts
                      with '-' without the standard preceding '--' options
@@ -130,9 +127,6 @@ The options have the following defaults and meanings:
 
     P_SUID       0   If set, all real UIDs greater than or equal to this value
                      will require the -p option to run the shell setuid/setgid.
-
-    REGRESS      off Enable the __regress__ built-in command and instrumented
-                     intercepts for testing.
 
     REMOTE       off Set --rc (read profile scripts) even if ksh was invoked
                      with standard input on a socket, i.e. as a remote shell.
@@ -149,9 +143,8 @@ The options have the following defaults and meanings:
 
     STATS        on  Add .sh.stats compound variable.
 
-    SYSRC            Source /etc/ksh.kshrc on initializing an interactive
-                     shell. This is on by default if /etc/ksh.kshrc or
-                     /etc/bash.bashrc exists at compile time.
+    SYSRC        on  Source /etc/ksh.kshrc on initializing an interactive
+                     shell.
 
     TEST_L           Add 'test -l' as an alias for 'test -L'. This is on by
                      default if the OS's external 'test' command supports it.

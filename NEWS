@@ -2,6 +2,359 @@ This documents significant changes in the dev branch of ksh 93u+m.
 For full details, see the git log at: https://github.com/ksh93/ksh
 Uppercase BUG_* IDs are shell bug IDs as used by the Modernish shell library.
 
+2024-12-24:
+
+- [v1.1] The fc/hist command has a new -E option. If this option is given,
+  the command line that was loaded into the editor will only be executed if
+  the temp file is saved before exiting the editor.
+
+- [v1.1] The ^X^E (emacs mode) and v (vi mode) commands will now only
+  execute the command line that was loaded into the full-screen editor if
+  the temp file is saved before exiting the editor.
+
+2024-12-22:
+
+- In the emacs/gmacs line editor, the ESC [ <letter> macro feature, which is
+  documented to input the value of the alias __<letter>, now actually works.
+  A decades-old bug in internal variable handling rendered it inoperative.
+
+2024-12-21:
+
+- Fixed a bug in the emacs/gmacs line editor where a command repeat count
+  (e.g., ESC 3) sticks and is re-used for the next command after an ESC
+  command. For example, ESC 3 ESC _ recalls the third word from the last
+  command in the history. The bug is that the next command, such as ^B to
+  move back, is then repeated three times. Bug introduced on 2020-09-17.
+
+2024-12-18:
+
+- Persuant to POSIX.1-2024, exec(1) will no longer cause the shell to exit
+  when it fails to replace an interactive shell with the given command.
+
+2024-12-08:
+
+- [v1.1] Fixed a bug in the test and [ built-in commands where superfluous
+  operands following simple unary or binary expressions were ignored instead
+  of throwing an error message.
+
+2024-12-05:
+
+- [v1.1] The appending redirection operator &>>FILE is now available
+  (inspired by bash 4.0 and later). It is a shorthand for: >>FILE 2>&1
+
+- Fixed an issue in the vi line editors where lines beginning with whitespace
+  could not be recalled from the history (e.g. with arrow up). Bug introduced
+  on 2022-10-31.
+
+- Fixed an issue that caused .unset discipline functions (if set) to be
+  incorrectly called during cleanup upon terminating a virtual subshell or
+  before running a #!-less script.
+
+2024-11-26:
+
+- The -v/--verbose option of the cp, mv and ln built-in commands (which are
+  bound to the /opt/ast/bin virtual path by default) was non-functional. The
+  option now reports each successful operation in the manner of the *BSD and
+  macOS versions of these commands.
+
+2024-11-17:
+
+- Fixed undefined behaviour when passing the floating point values Inf or
+  NaN to the 'sleep' built-in command. These now cause 'sleep' to correctly
+  sleep forever or print an error message, respectively.
+
+2024-11-15:
+
+- On Android 14 (Termux), the -a option to the 'exec' command is ineffective
+  because the OS disallows changing $0 (which is argv[0] in C). ksh now
+  detects this condition at compile time and, if detected, makes 'exec' print
+  a warning if -a is used, instead of silently failing to set argument zero.
+
+2024-11-14:
+
+- Fixed a crash in option parsing upon encountering an option value to a
+  long option that doesn't accept one (e.g., 'set --state=foo' crashed).
+  Bug introduced on 2024-08-01.
+
+2024-11-02:
+
+- Fixed: assigning to TMOUT in a virtual subshell was rendering further
+  assignments to TMOUT outside of that subshell ineffective.
+
+- Fixed: the 'read' built-in was timing out according to the value of TMOUT
+  even when it was not reading from a terminal. The 'read' command will now
+  ignore $TMOUT when it is reading from a pipe, as was always documented.
+  (Note that read's -t option is not affected by this change.)
+
+2024-10-31:
+
+- Fixed a regression that caused a standard output redirection within a block
+  construct to cause inconsistent behaviour or a hang if: (a) standard output
+  was also redirected on the block itself, and (b) the entire block was
+  executed from within a command substitution. Bug introduced on 2022-01-11.
+  Reproducer (should output "OK"): ok=$({ true >&2; } >&2; echo OK); echo $ok
+
+2024-10-27:
+
+- Fixed a bug that crashed the shell upon attempting to replace the shell
+  with another command using 'exec' after unsetting the SHLVL variable.
+  Bug introduced on 2021-05-18.
+
+2024-10-23:
+
+- Fixed a bug in multidimensional indexed array assignments where unquoted
+  values that corresponded to reserved words (such as 'if' or 'select')
+  incorrectly caused a syntax error. For example,
+    my_array=((somevalue) select) && typeset -p my_array
+  now works as expected. This bug was introduced in ksh 93r+ 2006-06-30.
+
+2024-08-28:
+
+- Fixed a crash that occurred for an arithmetic 'for' that has two instead of
+  three ';'-separated expressions. The expected syntax error is now given.
+
+2024-08-26:
+
+- Fixed an infinite loop that occurred when a syntax error was thrown
+  for an arithmetic 'for' loop on the interactive command line.
+
+- [v1.1] Backported a change to '_' in types from the unreleased ksh 93v-
+  beta. If a 'typeset -T' type declaration sets a discipline function for
+  one of its subvariables (such as var.get() or var.getn()), then, within
+  that discipline function, the automatic '_' nameref now refers to the type
+  variable and no longer to the subvariable that the discipline function was
+  set for. This means '_' now always refers to the type variable when used
+  in a type declaration.
+
+2024-08-22:
+
+- Fixed: command lines containing certain specific kinds of syntax error
+  were not entered into the shell's history for retrieval and correction.
+
+2024-08-21:
+
+- Fixed a corner-case crashing bug in shell discipline functions.
+
+2024-08-19:
+
+- Fixed a corner-case bug: for an empty set of positional parameters,
+  "$@$@" would generate one empty field instead of zero fields like "$@".
+
+2024-07-31:
+
+- Fixed a bug where printf %T, after having printed the time in UTC once
+  with the TZ variable set to "UTC", would always print the time in UTC from
+  then on, even if the TZ variable was changed to another time zone.
+  Bug introduced in ksh 93t+ 2009-10-21.
+
+2024-07-26:
+
+- Fixed a regression where a broken pipe signal (SIGPIPE), when occurring in
+  a pipe construct within a subshell, caused incorrect signal handling in the
+  parent/main shell, in some cases causing a script to abort. Bug introduced
+  on 2022-07-02.
+
+- Fixed a bug in the pipefail shell option where the status of a signalled
+  non-rightmost process in a pipeline was just the signal number, instead of
+  that number + 256. Bug introduced in ksh 93u+ 2011-04-15.
+
+2024-07-24:
+
+- Fixed a serious bug in the arithmetic subsystem that was triggered on
+  non-Intel processors (such as ARM): any division of an integer by a
+  negative integer threw a spurious "divide by zero" error. Bug introduced
+  in ksh 93q 2005-01-31.
+
+- Similarly fixed: the return value of the assignment of a negative value to
+  an unsigned integer in an arithmetic expression was always 0 on ARM
+  processors (instead of being equal to the assigned wrapped-around value).
+  Bug introduced by the discipline fix on 2024-01-21.
+
+- [v1.1] In printf formatters and C-style $'quoted' strings, \xNN is now
+  limited to two hexadecimal digits (yielding one byte). For multi-byte
+  characters, \u and \U should be used instead.
+
+2024-07-21:
+
+- Fixed a long-standing parsing bug: a '((' that was unmatched by
+  corresponding closing parentheses and enclosed within a compound command
+  failed to throw a syntax error and could cause the shell to crash.
+
+- [v1.1] In emacs mode, pressing ^U (kill) twice no longer causes further
+  ^U presses to start a new line (this was a feature for paper terminals).
+
+2024-07-18:
+
+- Fixed a regression where 'read' cannot create a previously nonexistent
+  variable when used within a namespace block. Bug introduced on 2023-06-02.
+
+2024-07-17:
+
+- Fixed: if the --posix or --letoctal option was turned on, octal numbers
+  designated by the leading-zero octal prefix enabled by these options but
+  containing the invalid digits 8 or 9 (e.g., $((09)) or let "09") failed
+  to throw an error and were instead incorrectly reinterpreted as decimal.
+
+- Fixed: invalid leading zeros in the '0x' hexadecimal prefix or in ksh
+  arithmetic base specifiers, e.g., 00x2F or 016#2F (instead of 0x2F or 16#2F),
+  failed to throw an arithmetic syntax error.
+
+2024-07-16:
+
+- The history expansion character ('!' by default) is now not processed when
+  immediately following '${'. This makes it psosible to use expansion syntax
+  like ${!varname} and ${!prefix@} on the interactive command line with the
+  histexpand option on; these no longer trigger an "event not found" error.
+
+2024-07-13:
+
+- The shell is now capable of handling more than 32767 simultaneous
+  background jobs, subject to system limitations.
+
+2024-07-02:
+
+- Support for UNC paths (//server/dir) is now enabled by default on Cygwin.
+
+2024-06-30:
+
+- Fixed: the 'hash' and 'alias -t' commands no longer autoload functions
+  from executable files on FPATH as an unintended side effect.
+
+- [v1.1] The 'hash' and 'alias -t' commands now issue an error message for
+  each command given that was not found on PATH, and return a non-zero exit
+  status if any of the commands given were not found.
+
+2024-06-27:
+
+- Fixed: a builtin activated with the 'builtin' command was not found if
+  invoked within a namespace block on the same line as the 'builtin' command.
+
+2024-06-26:
+
+- Fixed: when the --showme option was used with a command containing multiple
+  redirections, only the first redirection was shown, without a newline. This
+  bug was introduced along with --showme in ksh 93s- 2006-09-12.
+
+2024-03-05:
+
+- Fixed a corner case bug causing incorrect field splitting behaviour of a
+  repeated whitespace character in the IFS variable. The behaviour was
+  incorrect when the posix option was changed while xtrace was on, or when a
+  shell discipline function was defined for IFS. Bug introduced on 2022-03-05.
+
+2024-03-03:
+
+- Fixed incorrect behaviour of {n1..n2..incr} range brace expansions, which
+  sometimes occurred if the value of n1 multiplied by incr falls outside of
+  the INT_MIN..INT_MAX range. For instance, {1696512000..1696512000..300}
+  now correctly outputs only 1696512000.
+
+2024-03-30:
+
+- A regression was fixed in ordinal specifiers in 'printf %T' date
+  specifications. For example,
+	printf '%(%F)T\n' '4th tuesday in march 2016'
+  wrongly printed '2016-04-09' and now again correctly prints '2016-03-22'.
+  This regression was introduded with the printf fixes on 2023-05-18.
+
+2024-03-24:
+
+- We now support building a dynamically linked ksh 93u+m with libast,
+  libdll, libcmd, and libshell available as dynamic libraries for other
+  applications to use. The dynamically linked version is built in a 'dyn'
+  subdirectory; there are no changes to the statically linked version. See
+  README.md for more information. Dynamic linking is tested and supported
+  on Linux, Android, macOS, FreeBSD, NetBSD, OpenBSD, illumos and Solaris.
+  Please test this on other platforms and send us your reports and patches.
+
+2024-03-22:
+
+- Fixed a crash in the getconf built-in that could occur after the 'builtin'
+  command was used to bind it to the same path as the external getconf command.
+
+2024-03-20:
+
+- Android with Termux is now a supported environment for ksh 93u+m. Testing
+  was done on Android 14.0 with Termux 0.118.0. Please report any breakage.
+  Build dependencies (Termux packages): clang, binutils, getconf. Runtime
+  depenencies: ncurses-utils (for --multiline), getconf (fallback for the
+  /opt/ast/bin/getconf builtin).
+
+2024-03-12:
+
+- Fixed a regression in the 'printf' built-in, introduced on 2023-05-17,
+  where each instance of '\0' or '%Z' in the format operand caused a string
+  argument to be incorrectly skipped.
+
+2024-03-10:
+
+- Fixed a longstanding bug where the default terminal width for typeset -L, -R,
+  or -Z, if not given, was miscalculated for multibyte or control characters.
+
+- Fixed a crash on redefining an array inherited from the parent environment
+  in a subshell.
+
+- Fixed corner case breakage of universe handling in the 'echo' command: it
+  broke when used in a namespace block before being used anywhere else, and
+  only if _AST_FEATURES was not exported first. The bug caused _AST_FEATURES to
+  be incorrectly placed in that namespace. Bug introduced on 2023-06-02.
+
+2024-03-07:
+
+- Fixed a bug that caused some systems to corrupt the display of multibyte
+  characters in the command prompt.
+
+2024-03-05:
+
+- Fixed a regression, introduced on 2021-02-07, that made the common AST
+  options '--???ESC' and '--???noESC' ineffective for enabling/disabling
+  ANSI escape codes for emphasis in the output of --man or --help.
+  (Type, e.g., print '--???' for more information about common options.)
+
+- Fixed a rare crash in the 'print' built-in due to the use of uninitialised
+  memory while parsing options. Bug introduced in ksh 93u+ 2012-05-31.
+
+- Fixed a 2021-04-14 regression: the 'exec' command (which runs a command
+  that replaces the shell process and therefore should only run external
+  commands) would run a path-bound built-in if /opt/ast/bin is in PATH.
+
+- Fixed a corner case bug: a ${ shared-state command substitution;} failed to
+  capture the standard output of a command that replces the shell via 'exec'.
+
+2024-02-29:
+
+- Improved the robustness of the routines handling the execution by ksh of a
+  script without an initial #! path. More memory is freed up after ksh forks.
+
+- Fixed a crash that could occur after 'typeset +x var' when var was imported
+  from the environment and then a discipline function was set for it.
+
+2024-02-23:
+
+- [v1.1] The commands ':', 'true', 'false', 'break' and 'continue' have been
+  optimised to run faster in loops in certain common cases. For example, the
+  'true' in 'while true; do some_stuff || break; done' now runs faster.
+
+2024-02-22:
+
+- Fixed a crash that occurred when starting ksh with no TERM variable in the
+  environment (e.g., in single user mode on NetBSD and DragonFlyBSD).
+
+- Fixed a regression of 'return' within traps, reintroduced on 2023-12-25
+  after being fixed on 2020-09-09. The regression caused a 'return' or
+  'exit' with no arguments to assume the before-trap exit status instead of
+  that of the last-run command. This broke the shipped 'autocd' function.
+
+- Fixed some integer overflows that could occur when using TMOUT.
+
+- Fixed a crash on Solaris and illumos when cancelling a here-document
+  with ^C or ^D in an interactive shell.
+
+2024-02-17:
+
+- Fixed a crash that could occur when using 'typeset -T' typed variables
+  in a virtual subshell.
+
 2024-02-11:
 
 - Added SHOPT_PRINTF_LEGACY compile-time option for compatibility with

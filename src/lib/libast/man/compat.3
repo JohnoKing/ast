@@ -24,7 +24,7 @@
 .de EX		\" start example
 .ta 1i 2i 3i 4i 5i 6i
 .PP
-.RS 
+.RS
 .PD 0
 .ft 5
 .nf
@@ -43,43 +43,23 @@ compatibility \- AST library compatibility routines
 .EX
 #include <ast.h>
 
-char*	confstr(int);
-int	dup2(int, int);
-long	fpathconf(int, int);
-int	getgroups(int, int*);
-char*	getwd(char*);
 int	killpg(int, int);
 int	link(const char*, const char*);
-int	lstat(const char*, struct stat*);
-int	memcmp(const char*, const char*, unsigned int);
-char*	memcpy(char*, const char*, int);
 char*	memset(char*, char, int);
 int	mkdir(const char*, mode_t);
 int	mkfifo(const char*, mode_t);
 int	mknod(const char*, mode_t);
 char*	mktemp(char*);
 int	mount(const char*, const char*, int);
-long	pathconf(const char*, int);
-int	perror(const char*);
-FILE*	popen(const char*, const char*);
-int	readlink(const char*, char*, int);
 int	remove(const char*);
 int	rename(const char*, const char*);
 int	rmdir(const char*);
-int	setpgid(pid_t, pid_t);
-int	sigmask(int);
-int	sigsetmask(long);
 int	sigunblock(int);
-char*	strchr(const char*, int);
-char*	strrchr(const char*, int);
 double	strtod(const char*, char**);
 long	strtol(const char*, char**, int);
-int	symlink(const char*, const char*);
-long	sysconf(int);
 int	system(const char*);
 char*	tmpnam(char*);
 int	unlink(const char*);
-int	waitpid(pid_t, int*, int);
 .EE
 .SH DESCRIPTION
 These routines are described in the ANSI C, POSIX, BSD and System V manual

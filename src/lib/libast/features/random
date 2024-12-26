@@ -38,7 +38,7 @@ tst note{ does arc4random(3) become predictable after forking }end output{
 		pid_t		child;
 		uint32_t	r[3], r2[3];
 		/* create data file */
-		while (*t = *f++ && t < &file[PATHSIZE-4])
+		while ((*t = *f++) && t < &file[PATHSIZE-4])
 			t++;
 		*t++ = '.', *t++ = 'D', *t = 0;
 		if ((fd = open(file, O_CREAT|O_TRUNC|O_WRONLY, 0666)) < 0)

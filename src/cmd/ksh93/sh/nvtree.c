@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -130,7 +130,7 @@ static  Namfun_t *nextdisc(Namval_t *np)
 	Namfun_t *fp;
 	if(nv_isref(np))
 		return NULL;
-        for(fp=np->nvfun;fp;fp=fp->next)
+	for(fp=np->nvfun;fp;fp=fp->next)
 	{
 		if(fp && fp->disc && fp->disc->nextf)
 			return fp;
@@ -297,7 +297,7 @@ char *nv_dirnext(void *dir)
 					else
 						root = (Dt_t*)np;
 					/* check for recursive walk */
-					for(save=dp; save;  save=save->prev) 
+					for(save=dp; save;  save=save->prev)
 					{
 						if(save->root==root)
 							break;
@@ -346,7 +346,7 @@ static void outtype(Namval_t *np, Namfun_t *fp, Sfio_t* out, const char *prefix)
 {
 	char *type=0;
 	Namval_t *tp = fp->type;
-	if(!tp && fp->disc && fp->disc->typef) 
+	if(!tp && fp->disc && fp->disc->typef)
 		tp = (*fp->disc->typef)(np,fp);
 	for(fp=fp->next;fp;fp=fp->next)
 	{
@@ -380,7 +380,7 @@ void nv_attribute(Namval_t *np,Sfio_t *out,char *prefix,int noname)
 	char *cp;
 	unsigned val,mask,attr;
 	char *ip=0;
-	Namfun_t *fp=0; 
+	Namfun_t *fp=0;
 	Namval_t *typep=0;
 #if SHOPT_FIXEDARRAY
 	int fixed=0;
@@ -401,7 +401,7 @@ void nv_attribute(Namval_t *np,Sfio_t *out,char *prefix,int noname)
 		{
 			if(nv_isvtree(np))
 				sfprintf(out,"%s -C ",prefix);
-			else if((!np->nvalue.cp||np->nvalue.cp==Empty) && nv_isattr(np,~NV_NOFREE)==NV_MINIMAL && strcmp(np->nvname,"_"))
+			else if((!np->nvalue||np->nvalue==Empty) && nv_isattr(np,~NV_NOFREE)==NV_MINIMAL && strcmp(np->nvname,"_"))
 				sfputr(out,prefix,' ');
 		}
 		if(np->dynscope)
@@ -689,7 +689,7 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 	{
 		if(nv_isattr(np,NV_BINARY))
 			return;
-		if(fp && np->nvalue.cp && np->nvalue.cp!=Empty)
+		if(fp && np->nvalue && np->nvalue!=Empty)
 		{
 			nv_local = 1;
 			fp = 0;
@@ -733,7 +733,9 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 		_nv_unset(np,NV_RDONLY);
 		if(sh.subshell || (wp->flags!=NV_RDONLY) || nv_isattr(np,NV_MINIMAL|NV_NOFREE))
 			wp->root = 0;
-		nv_delete(np,wp->root,nv_isattr(np,NV_MINIMAL)?NV_NOFREE:0);
+		/* Delete the node from the tree and free np, unless we're unsetting variables in sh_reinit() */
+		if(!sh_isstate(SH_INIT))
+			nv_delete(np,wp->root,nv_isattr(np,NV_MINIMAL)?NV_NOFREE:0);
 		return;
 	}
 	if(isarray==1 && !nq)
@@ -743,7 +745,7 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 			sfputc(wp->out,'\n');
 		return;
 	}
-	if(isarray==0 && nv_isarray(np) && (nv_isnull(np)||np->nvalue.cp==Empty))  /* empty array */
+	if(isarray==0 && nv_isarray(np) && (nv_isnull(np)||np->nvalue==Empty))  /* empty array */
 		isarray = 2;
 	special |= wp->nofollow;
 	if(!wp->array && wp->indent>0)
@@ -766,7 +768,7 @@ static void outval(char *name, const char *vname, struct Walk *wp)
 #endif
 		}
 		nv_outname(wp->out,name,-1);
-		if((np->nvalue.cp && np->nvalue.cp!=Empty) || nv_isattr(np,~(NV_MINIMAL|NV_NOFREE)) || nv_isvtree(np))  
+		if((np->nvalue && np->nvalue!=Empty) || nv_isattr(np,~(NV_MINIMAL|NV_NOFREE)) || nv_isvtree(np))
 			sfputc(wp->out,(isarray==2?(wp->indent>=0?'\n':';'):'='));
 		if(isarray==2)
 			return;
@@ -948,8 +950,8 @@ static char *walk_tree(Namval_t *np, Namval_t *xp, int flags)
 	Sfio_t *outfile;
 	Sfoff_t	off = 0;
 	int len, savtop = stktell(sh.stk);
-	char *savptr = stkfreeze(sh.stk,0);
-	struct argnod *ap=0; 
+	void *savptr = stkfreeze(sh.stk,0);
+	struct argnod *ap=0;
 	struct argnod *arglist=0;
 	char *name,*cp, **argv;
 	char *subscript=0;
@@ -1012,9 +1014,9 @@ static char *walk_tree(Namval_t *np, Namval_t *xp, int flags)
 		}
 		stkseek(sh.stk,ARGVAL);
 		sfputr(sh.stk,cp,-1);
-		ap = (struct argnod*)stkfreeze(sh.stk,1);
+		ap = stkfreeze(sh.stk,1);
 		ap->argflag = ARG_RAW;
-		ap->argchn.ap = arglist; 
+		ap->argchn.ap = arglist;
 		n++;
 		arglist = ap;
 	}
@@ -1024,7 +1026,7 @@ static char *walk_tree(Namval_t *np, Namval_t *xp, int flags)
 		sh.var_tree = save_tree;
 		return NULL;
 	}
-	argv = (char**)stkalloc(sh.stk,(n+1)*sizeof(char*));
+	argv = stkalloc(sh.stk,(n+1)*sizeof(char*));
 	argv += n;
 	*argv = 0;
 	for(; ap; ap=ap->argchn.ap)
@@ -1032,7 +1034,7 @@ static char *walk_tree(Namval_t *np, Namval_t *xp, int flags)
 	if(flags&1)
 		outfile = 0;
 	else if(!(outfile=out))
-		outfile = out =  sfnew(NULL,NULL,-1,-1,SF_WRITE|SF_STRING);
+		outfile = out =  sfnew(NULL,NULL,-1,-1,SFIO_WRITE|SFIO_STRING);
 	else if(flags&NV_TABLE)
 		off = sftell(outfile);
 	else

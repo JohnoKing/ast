@@ -117,8 +117,6 @@ fi
 ((.sh.version >= 20210316)) &&
 for disc in get set
 do	(
-		ulimit -t unlimited 2>/dev/null  # fork subshell to cope with a possible crash
-
 		eval ".sh.tilde.$disc()
 		{
 			case \${.sh.${ [[ $disc == get ]] && print tilde || print value; }} in

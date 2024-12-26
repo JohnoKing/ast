@@ -29,6 +29,7 @@
 #include	"streval.h"
 #include	"variables.h"
 #include	"builtins.h"
+#include	<ast_release.h>
 
 #ifndef LLONG_MAX
 #define LLONG_MAX	LONG_MAX
@@ -80,7 +81,7 @@ static Namval_t *scope(Namval_t *np,struct lval *lvalue,int assign)
 		&& sh_macfun(cp, offset = stktell(sh.stk)))
 		{
 			Fun = sh_arith(sub=stkptr(sh.stk,offset));
-			FunNode.nvalue.ldp = &Fun;
+			FunNode.nvalue = &Fun;
 			nv_onattr(&FunNode,NV_NOFREE|NV_LDOUBLE|NV_RDONLY);
 			cp[flag] = c;
 			return &FunNode;
@@ -149,7 +150,10 @@ static Namval_t *scope(Namval_t *np,struct lval *lvalue,int assign)
 					while(c=mbchar(cp),isaname(c));
 				}
 				if(c=='[')
+				{
+					cp--;
 					continue;
+				}
 			}
 			flag = *cp;
 			*cp = 0;
@@ -182,7 +186,7 @@ static Namval_t *scope(Namval_t *np,struct lval *lvalue,int assign)
 				if(ap && !ap->table)
 					ap->table = dtopen(&_Nvdisc,Dtoset);
 				if(ap && ap->table && (nq=nv_search(nv_getsub(np),ap->table,NV_ADD)))
-					nq->nvenv = (char*)np;
+					nq->nvmeta = np;
 				if(nq && nv_isnull(nq))
 					np = nv_arraychild(np,nq,0);
 			}
@@ -251,9 +255,9 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 			}
 		}
 		nv_putval(np, (char*)&n, NV_LDOUBLE);
-		if(lvalue->eflag)
-			lvalue->ptr = nv_hasdisc(np,&ENUM_disc);
-		lvalue->eflag = 0;
+		if(lvalue->isenum)
+			lvalue->enum_p = nv_hasdisc(np,&ENUM_disc);
+		lvalue->isenum = 0;
 		lvalue->value = (char*)np;
 		/*
 		 * The result (r) of an assignment is its value (n), cast to the type of the variable
@@ -268,18 +272,20 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 			r = (float)n;
 		else if((attr & NV_DOUBLE)==NV_DOUBLE)		/* normal float */
 			r = (double)n;
+		/* Avoid typecasting a negative float (Sfdouble_t) to an
+		 * unsigned integer (uint*_t), which is undefined behaviour */
 		else if((attr & NV_UINT64)==NV_UINT64)		/* long unsigned integer */
-			r = (uintmax_t)n;
+			r = n < 0 ? -((uintmax_t)(-n)) : (uintmax_t)n;
 		else if((attr & NV_UINT16)==NV_UINT16)		/* short unsigned integer */
-			r = (uint16_t)n;
+			r = n < 0 ? -((uint16_t)(-n)) : (uint16_t)n;
 		else if((attr & NV_UINT32)==NV_UINT32)		/* normal unsigned integer */
-			r = (uint32_t)n;
+			r = n < 0 ? -((uint32_t)(-n)) : (uint32_t)n;
 		else if((attr & NV_INT64)==NV_INT64)		/* long signed integer */
 			r = (intmax_t)n;
 		else if((attr & NV_INT16)==NV_INT16)		/* short signed integer */
-			r = (int16_t)n;
+			r = (int16_t)((intmax_t)n);
 		else if((attr & NV_INT32)==NV_INT32)		/* normal signed integer */
-			r = (int32_t)n;
+			r = (int32_t)((intmax_t)n);
 #if _AST_release
 		else	r = n;					/* should never happen */
 #else
@@ -328,9 +334,10 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 				stkseek(sh.stk,off);
 				if(np=nv_search(stkptr(sh.stk,off),sh.fun_tree,0))
 				{
-						lvalue->nargs = -np->nvalue.rp->argc;
-						lvalue->fun = (Math_f)np;
-						break;
+					struct Ufunction *rp = np->nvalue;
+					lvalue->nargs = -rp->argc;
+					lvalue->fun = (Math_f)np;
+					break;
 				}
 				if(fsize<=(sizeof(tp->fname)-2))
 					lvalue->fun = (Math_f)sh_mathstdfun(*ptr,fsize,&lvalue->nargs);
@@ -382,17 +389,23 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 				cp = (char*)*ptr;
 				if(!sh_isoption(SH_POSIX) && (cp[0] == 'i' || cp[0] == 'I') && (cp[1] == 'n' || cp[1] == 'N') && (cp[2] == 'f' || cp[2] == 'F') && cp[3] == 0)
 				{
-					Inf = strtold("Inf", NULL);
-					Infnod.nvalue.ldp = &Inf;
+					if (!Infnod.nvalue)
+					{
+						Inf = strtold("Inf", NULL);
+						Infnod.nvalue = &Inf;
+						nv_onattr(&Infnod,NV_NOFREE|NV_LDOUBLE|NV_RDONLY);
+					}
 					np = &Infnod;
-					nv_onattr(np,NV_NOFREE|NV_LDOUBLE|NV_RDONLY);
 				}
 				else if(!sh_isoption(SH_POSIX) && (cp[0] == 'n' || cp[0] == 'N') && (cp[1] == 'a' || cp[1] == 'A') && (cp[2] == 'n' || cp[2] == 'N') && cp[3] == 0)
 				{
-					NaN = strtold("NaN", NULL);
-					NaNnod.nvalue.ldp = &NaN;
+					if (!NaNnod.nvalue)
+					{
+						NaN = strtold("NaN", NULL);
+						NaNnod.nvalue = &NaN;
+						nv_onattr(&NaNnod,NV_NOFREE|NV_LDOUBLE|NV_RDONLY);
+					}
 					np = &NaNnod;
-					nv_onattr(np,NV_NOFREE|NV_LDOUBLE|NV_RDONLY);
 				}
 				else if(!(np = nv_open(*ptr,root,NV_NOREF|NV_VARNAME|dot)))
 				{
@@ -433,17 +446,12 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 		else
 		{
 			char	lastbase=0, *val = xp, oerrno = errno;
-			lvalue->eflag = 0;
+			lvalue->isenum = 0;
 			errno = 0;
-			if(!sh_isoption(sh.bltinfun==b_let ? SH_LETOCTAL : SH_POSIX))
-			{
-				/* Skip leading zeros to avoid parsing as octal */
-				while(*val=='0' && isdigit(val[1]))
-					val++;
-			}
 			r = strtonll(val,&str, &lastbase,-1);
-			if(*str=='8' || *str=='9')
+			if(lastbase==8 && *val=='0' && !sh_isoption(sh.bltinfun==b_let ? SH_LETOCTAL : SH_POSIX))
 			{
+				/* disable leading-0 octal by reparsing as decimal */
 				lastbase=10;
 				errno = 0;
 				r = strtonll(val,&str, &lastbase,-1);
@@ -463,8 +471,9 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 				c = *str;
 			if(c=='.' && sh.radixpoint!='.')
 			{
-				errormsg(SH_DICT,ERROR_exit(1),"%s: radix point '.' requires LC_NUMERIC=C",val);
-				UNREACHABLE();
+				sfprintf(sh.strbuf, "%s: radix point '.' requires LC_NUMERIC=C", val);
+				lvalue->value = sfstruse(sh.strbuf);
+				return r;
 			}
 			if(c==sh.radixpoint || c=='e' || c == 'E' || lastbase == 16 && (c == 'p' || c == 'P'))
 			{
@@ -506,20 +515,24 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 			return 0;
 		}
 		lvalue->ovalue = (char*)np;
-		if(lvalue->eflag)
-			lvalue->ptr = nv_hasdisc(np,&ENUM_disc);
-		else if((Namfun_t*)lvalue->ptr && !nv_hasdisc(np,&ENUM_disc) && !nv_isattr(np,NV_INTEGER))
+		if(lvalue->isenum)
 		{
+			lvalue->enum_p = nv_hasdisc(np,&ENUM_disc);
+			lvalue->isenum = 0;
+		}
+		else if(lvalue->enum_p && !nv_hasdisc(np,&ENUM_disc) && !nv_isattr(np,NV_INTEGER))
+		{
+			/* convert the enum rvalue of the lvalue's enum type to its number */
 			Namval_t *mp,node;
-			mp = ((Namfun_t*)lvalue->ptr)->type;
+			mp = ((Namfun_t*)lvalue->enum_p)->type;
 			memset(&node,0,sizeof(node));
 			nv_clone(mp,&node,0);
 			nv_offattr(&node,NV_RDONLY|NV_NOFREE);
 			nv_putval(&node,np->nvname,0);
-			if(nv_isattr(&node,NV_NOFREE))
-				return r=nv_getnum(&node);
+			r = nv_getnum(&node);
+			_nv_unset(&node,0);
+			return r;
 		}
-		lvalue->eflag = 0;
 		if(((lvalue->emode&2) || lvalue->level>1 || sh_isoption(SH_NOUNSET)) && nv_isnull(np) && !nv_isattr(np,NV_INTEGER))
 		{
 			*ptr = nv_name(np);

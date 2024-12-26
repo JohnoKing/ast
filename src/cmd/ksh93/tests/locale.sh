@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -315,7 +315,7 @@ unset LC_ALL LC_MESSAGES
 export LANG=debug
 function message
 {
-        print -r $"An error occurred."
+	print -r $"An error occurred."
 }
 exp=$'(libshell,3,46)\nAn error occurred.\n(libshell,3,46)'
 alt=$'(debug,message,libshell,An error occurred.)\nAn error occurred.\n(debug,message,libshell,An error occurred.)'
@@ -347,7 +347,7 @@ x=$"hello"
 	print 'cat << \\EOF'
 	for ((i=1; i < 164; i++))
 	do	print 123456789+123456789+123456789+123456789+123456789
-	done 
+	done
 	print $'next character is multibyte<2b|>c<3d|\>foo'
 	for ((i=1; i < 10; i++))
 	do	print 123456789+123456789+123456789+123456789+123456789
@@ -452,6 +452,20 @@ then	unset LANG "${!LC_@}" i
 			"(expected status 0, '$exp';" \
 			"got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 	fi
+fi
+
+# ======
+# double-width characters should count for two for default justification width
+# https://github.com/ksh93/ksh/issues/189
+if	((SHOPT_MULTIBYTE))
+then	unset s "${!LC_@}"
+	LANG=C.UTF-8
+	s='コーンシェル'
+	typeset -L s
+	got=$(typeset -p s; echo ${#s})
+	exp=$'typeset -L 12 s=コーンシェル\n6'  # each double-width character counts for two terminal positions
+	[[ $got == "$exp" ]] || err_exit "default terminal width for typeset -L incorrect" \
+		"(expected $(printf %q "$exp"); got $(printf %q "$got"))"
 fi
 
 # ======

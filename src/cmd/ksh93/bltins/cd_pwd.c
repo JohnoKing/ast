@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -41,7 +41,7 @@
  */
 static void rehash(Namval_t *np,void *data)
 {
-	Pathcomp_t *pp = (Pathcomp_t*)np->nvalue.cp;
+	Pathcomp_t *pp = np->nvalue;
 	if(pp && *pp->name!='/')
 		nv_rehash(np,data);
 }
@@ -135,7 +135,7 @@ int	b_cd(int argc, char *argv[],Shbltin_t *context)
 	&& !(dir[0]=='.' && (dir[1]=='/' || dir[1]==0))
 	&& !(dir[0]=='.' && dir[1]=='.' && (dir[2]=='/' || dir[2]==0)))
 	{
-		if((dp=sh_scoped(CDPNOD)->nvalue.cp) && !(cdpath = (Pathcomp_t*)sh.cdpathlist))
+		if((dp=sh_scoped(CDPNOD)->nvalue) && !(cdpath = (Pathcomp_t*)sh.cdpathlist))
 		{
 			if(cdpath=path_addpath(NULL,dp,PATH_CDPATH))
 				sh.cdpathlist = cdpath;
@@ -171,7 +171,7 @@ int	b_cd(int argc, char *argv[],Shbltin_t *context)
 #endif /* _WINIX */
 		if(*stkptr(sh.stk,PATH_OFFSET)!='/')
 		{
-			char *last=(char*)stkfreeze(sh.stk,1);
+			char *last = stkfreeze(sh.stk,1);
 			stkseek(sh.stk,PATH_OFFSET);
 			sfputr(sh.stk,oldpwd,-1);
 			/* don't add '/' if oldpwd is / itself */

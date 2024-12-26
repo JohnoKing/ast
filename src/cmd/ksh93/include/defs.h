@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -56,7 +56,7 @@
 #define Empty			((char*)(e_sptbnl+3))
 #define AltEmpty		((char*)(e_dot+1))	/* alternative pointer to empty string */
 
-#define	env_change()		(++ast.env_serial)
+#define env_change()		(++ast.env_serial)
 
 extern char*	sh_getenv(const char*);
 extern char*	sh_setenviron(const char*);
@@ -69,9 +69,8 @@ extern char*	sh_setenviron(const char*);
 #include	<shell.h>
 
 #include	"shtable.h"
-#include	"regress.h"
 
-#define	NIL(type)	NULL		/* for backward compatibility */
+#define NIL(type)	NULL		/* for backward compatibility */
 
 #define exitset()	(sh.savexit=sh.exitval)
 
@@ -116,7 +115,6 @@ extern void		sh_chktrap(void);
 extern void		sh_deparse(Sfio_t*,const Shnode_t*,int,int);
 extern int		sh_debug(const char*,const char*,const char*,char *const[],int);
 extern char 		**sh_envgen(void);
-extern void 		sh_envnolocal(Namval_t*,void*);
 extern Sfdouble_t	sh_arith(const char*);
 extern void		*sh_arithcomp(char*);
 extern pid_t 		sh_fork(int,int*);
@@ -133,7 +131,7 @@ extern int		sh_outtype(Sfio_t*);
 extern char 		*sh_mactry(char*);
 extern int		sh_mathstd(const char*);
 extern void		sh_printopts(Shopt_t,int,Shopt_t*);
-extern int 		sh_readline(char**,volatile int,int,ssize_t,long);
+extern int 		sh_readline(char**,volatile int,int,ssize_t,Sflong_t);
 extern Sfio_t		*sh_sfeval(char*[]);
 extern void		sh_setmatch(const char*,int,int,int[],int);
 extern void             sh_scope(struct argnod*, int);
@@ -190,16 +188,16 @@ extern char		*sh_getcwd(void);
 
 #define sh_state(x)	( 1<<(x))
 #if SHOPT_SCRIPTONLY
-#define	sh_isstate(x)	( (x)==SH_INTERACTIVE || (x)==SH_HISTORY ? 0 : (sh.st.states&sh_state(x)) )
-#define	sh_onstate(x)	( (x)==SH_INTERACTIVE || (x)==SH_HISTORY ? 0 : (sh.st.states |= sh_state(x)) )
-#define	sh_offstate(x)	( (x)==SH_INTERACTIVE || (x)==SH_HISTORY ? 0 : (sh.st.states &= ~sh_state(x)) )
+#define sh_isstate(x)	( (x)==SH_INTERACTIVE || (x)==SH_HISTORY ? 0 : (sh.st.states&sh_state(x)) )
+#define sh_onstate(x)	( (x)==SH_INTERACTIVE || (x)==SH_HISTORY ? 0 : (sh.st.states |= sh_state(x)) )
+#define sh_offstate(x)	( (x)==SH_INTERACTIVE || (x)==SH_HISTORY ? 0 : (sh.st.states &= ~sh_state(x)) )
 #else
-#define	sh_isstate(x)	(sh.st.states&sh_state(x))
-#define	sh_onstate(x)	(sh.st.states |= sh_state(x))
-#define	sh_offstate(x)	(sh.st.states &= ~sh_state(x))
+#define sh_isstate(x)	(sh.st.states&sh_state(x))
+#define sh_onstate(x)	(sh.st.states |= sh_state(x))
+#define sh_offstate(x)	(sh.st.states &= ~sh_state(x))
 #endif /* SHOPT_SCRIPTONLY */
-#define	sh_getstate()	(sh.st.states)
-#define	sh_setstate(x)	(sh.st.states = (x))
+#define sh_getstate()	(sh.st.states)
+#define sh_setstate(x)	(sh.st.states = (x))
 
 #define sh_sigcheck()	do { if(sh.trapnote & SH_SIGSET) sh_exit(SH_EXITSIG); } while(0)
 

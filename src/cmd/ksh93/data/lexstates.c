@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -729,11 +729,20 @@ const char *sh_lexrstates[ST_NONE] =
 const char e_lexversion[]	= "%d: invalid binary script version";
 const char e_lexspace[]		= "line %d: use space or tab to separate operators %c and %c";
 const char e_lexslash[]		= "line %d: $ not preceded by \\";
-const char e_lexsyntax1[]	= "syntax error at line %d: `%s' %s";
-const char e_lexsyntax2[]	= "syntax error: `%s' %s";
-const char e_lexsyntax3[]	= "syntax error at line %d: duplicate label %s";
-const char e_lexsyntax4[]	= "syntax error at line %d: invalid reference list";
-const char e_lexsyntax5[]	= "syntax error at line %d: `<<%s' here-document not contained within command substitution";
+
+/* syntax error messages */
+const char e_syntaxerror[]	= "syntax error: ";
+const char e_syntaxerror_at[]	= "syntax error at line %d: ";
+const char e_unexpected[]	= "`%s' unexpected";
+const char e_unmatched[]	= "`%s' unmatched";
+const char e_emptysubscr[]	= "[]: empty subscript";
+const char e_badreflist[]	= "invalid reference list";
+const char e_heredoccomsub[]	= "`<<%s' here-document not contained within command substitution";
+const char e_lexzerobyte[]	= "zero byte";
+const char e_endoffile[]	= "end of file";
+const char e_newline[]		= "newline";
+
+/* noexec linter warning messages */
 const char e_lexwarnvar[]	= "line %d: in '((%s))', using '$' as in '$%.*s' is slower and can introduce rounding errors";
 const char e_lexarithwarn[]	= "line %d: %s is slower than ((%.*s%s";
 const char e_lexobsolete1[]	= "line %d: `...` obsolete, use $(...)";
@@ -750,7 +759,6 @@ const char e_lexnested[]	= "line %d: spaces required for nested subshell";
 const char e_lexbadchar[]	= "%c: invalid character in expression - %s";
 const char e_lexfuture[]	= "line %d: \\ in front of %c reserved for future use";
 const char e_lexlongquote[]	= "line %d: %c quote may be missing";
-const char e_lexzerobyte[]	= "zero byte";
 const char e_lexemptyfor[]	= "line %d: empty for list";
 const char e_lextypeset[]	= "line %d: %s invalid typeset option order";
 const char e_lexcharclass[]	= "line %d: '^' as first character in character class not portable";

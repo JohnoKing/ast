@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -30,7 +30,6 @@
 #include <error.h>
 #include <ls.h>
 #include <regex.h>
-#include <vmalloc.h>
 
 #define FF_old		1	/* old format - 7 bit bigram		*/
 #define FF_gnu		2	/* GNU 8 bit no bigram			*/
@@ -100,7 +99,6 @@ typedef struct
 
 #define _FIND_PRIVATE_			\
 	Finddisc_t*	disc;		\
-	Vmalloc_t*	vm;		\
 	char**		dirs;		\
 	int*		lens;		\
 	Sfio_t*		fp;		\

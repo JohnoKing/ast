@@ -8,6 +8,24 @@ For more details, see the NEWS file and for complete details, see the git log.
 	from the environment. Any script that depends on this will need to
 	be changed to typeset the expected attributes itself.
 
+2.	Defining a function called '.sh.tilde' is an error. To customize tilde
+	expansion, use .sh.tilde.get instead (see the manual page for details).
+
+3.	The 'hash' and 'alias -t' commands now issue an error message for
+	each command given that was not found on PATH, and return a non-zero
+	exit status if any of the commands given were not found.
+
+4.	In printf formatters and C-style $'quoted' strings, \xNN is now
+	limited to two hexadecimal digits (yielding one byte). For
+	multi-byte characters, \u and \U should be used instead.
+
+5.	If a 'typeset -T' type declaration sets a discipline function for
+	one of its subvariables (such as var.get() or var.getn()), then,
+	within that discipline function, the automatic '_' nameref now
+	refers to the type variable and no longer to the subvariable that
+	the discipline function was set for. This means '_' now always
+	refers to the type variable when used in a type declaration.
+
 ____________________________________________________________________________
 
 		ksh 93u+m/1.0.9 vs. ksh 93u+

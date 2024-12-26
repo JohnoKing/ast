@@ -22,6 +22,28 @@
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
 ((!.sh.level))||err_exit ".sh.level should be 0 after dot script, is ${.sh.level}"
 
+# ======
+# The following tests are run in parallel because they are slow; they are checked at the end
+
+# setting TMOUT in a virtual subshell removes its special meaning
+# https://github.com/ksh93/ksh/issues/782
+(
+	typeset -i s=SECONDS
+	"$SHELL" -c 'TMOUT=2; (TMOUT=3); TMOUT=1; read v' </dev/tty
+	((SECONDS < s + 2))
+) &
+parallel_1=$!
+
+# TMOUT applies to 'read' from a non-terminal
+# https://github.com/ksh93/ksh/issues/783
+(
+	typeset -F s=SECONDS
+	"$SHELL" -c 'TMOUT=1; { sleep 1.1; print; } | read a'
+	(($? == 0 || SECONDS > s + 1.05))
+) &
+parallel_2=$!
+
+# ======
 [[ ${.sh.version} == "$KSH_VERSION" ]] || err_exit '.sh.version != KSH_VERSION'
 unset ss
 [[ ${@ss} ]] && err_exit '${@ss} should be empty string when ss is unset'
@@ -138,7 +160,7 @@ sleep $secSleep
 secElapsed=SECONDS
 if	(( secElapsed < secSleep ))
 then	err_exit "slept ${secElapsed} seconds instead of ${secSleep}: " \
-                 "either 'sleep' or \$SECONDS not working"
+		 "either 'sleep' or \$SECONDS not working"
 fi
 unset -v secElapsed secSleep
 # _
@@ -255,7 +277,7 @@ fi
 ACCESS=0
 function COUNT.set
 {
-        (( ACCESS++ ))
+	(( ACCESS++ ))
 }
 COUNT=0
 (( COUNT++ ))
@@ -314,7 +336,7 @@ done
 kill -s 0 $! || err_exit '$! does not point to latest asynchronous process'
 kill $!
 unset x
-cd /tmp || exit
+cd /dev || exit
 CDPATH=/
 x=$(cd ${tmp#/})
 if	[[ $x != $tmp ]]
@@ -332,19 +354,19 @@ fi
 unset CDPATH
 cd "${tmp#/}" >/dev/null 2>&1 && err_exit "CDPATH not deactivated after unset"
 cd "$tmp" || exit
-TMOUT=100
-(TMOUT=20)
-if	(( TMOUT !=100 ))
+
+if	"$SHELL" -c 'TMOUT=100; (TMOUT=20); (( TMOUT != 100 ))'
 then	err_exit 'setting TMOUT in subshell affects parent'
 fi
+
 unset y
 function setdisc # var
 {
-        eval function $1.get'
-        {
-                .sh.value=good
-        }
-        '
+	eval function $1.get'
+	{
+		.sh.value=good
+	}
+	'
 }
 y=bad
 setdisc y
@@ -667,6 +689,8 @@ function dave.unset
 unset dave
 [[ $(typeset +f) == *dave.* ]] && err_exit 'unset discipline not removed'
 
+# ======
+
 x=$(
 	dave=dave
 	function dave.unset
@@ -674,7 +698,28 @@ x=$(
 		print dave.unset
 	}
 )
-[[ $x == dave.unset ]] || err_exit 'unset discipline not called with subset completion'
+[[ -n $x ]] && err_exit "unset discipline wrongly called upon subshell completion (got '$x')"
+
+x=$(
+	v="still set"
+	v.unset()
+	{
+		print UNSET
+	}
+	ulimit -c 0
+	print "$v"
+)
+[[ $x == 'still set' ]] || err_exit "incorrect behaviour of unset discipline in forked subshell (got $(printf %q "$x"))"
+
+echo 'echo ok' >script
+v.unset() { echo UNSET; }
+v=1
+./script >out
+{ unset v; } >/dev/null
+got=$(<out)
+[[ $got = ok ]]  || err_exit "incorrect behaviour of unset discipline when running #!-less script (got $(printf %q "$got"))"
+
+# ======
 
 print 'print ${VAR}' > $tmp/script
 unset VAR
@@ -905,6 +950,10 @@ $SHELL -c "$cmd" 2>/dev/null || err_exit "'$cmd' exit status $?, expected 0"
 SHLVL=1
 level=$($SHELL -c $'$SHELL -c \'print -r "$SHLVL"\'')
 [[ $level  == 3 ]]  || err_exit "SHLVL should be 3 not $level"
+echo 'print -r "$SHLVL"' >script
+chmod +x script
+level=$($SHELL -c '$SHELL ./script')
+[[ $level == 3 ]] || err_exit "SHLVL should be 3 not $level"
 
 [[ $($SHELL -c '{ x=1; : ${x.};print ok;}' 2> /dev/null) == ok ]] || err_exit '${x.} where x is a simple variable causes shell to abort'
 
@@ -1176,8 +1225,8 @@ $SHELL -c '
 
 # ${.sh.pid} should be the PID of the running job
 echo ${.sh.pid} > "$tmp/jobpid" &
-wait
-[[ $(cat "$tmp/jobpid") == ${.sh.pid} ]] && err_exit "\${.sh.pid} is not set to a job's PID (expected $!, got $(cat "$tmp/jobpid"))"
+wait "$!"
+[[ $(<$tmp/jobpid) == $! ]] || err_exit "\${.sh.pid} is not set to a job's PID (expected $!, got $(<$tmp/jobpid))"
 
 # ${.sh.pid} should be the same as $$ in the parent shell
 [[ $$ == ${.sh.pid} ]] || err_exit "\${.sh.pid} and \$$ differ in the parent shell (expected $$, got ${.sh.pid})"
@@ -1526,7 +1575,7 @@ got=$(f && bar)
 
 unset var
 function three {
-        :
+	:
 }
 function two {
 	var+='wrong ' sh -c 'true'
@@ -1659,6 +1708,31 @@ for i in 0 10000; do
 done
 unset i got bound
 SRANDOM=0
+
+# ======
+# https://github.com/ksh93/ksh/issues/435
+"$SHELL" <<\EOF >/dev/null 2>&1; (((e=$?)==1)) || err_exit "getn/get discipline crash" \
+	"(expected status 1, got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
+unset nonexistent_var
+foo=nonexistent_var
+foo.getn() { :; }
+foo.get() { :; }
+unset -f foo.getn
+trap 'echo $((foo))' EXIT   # throw the echo $((foo)) 'unset parameter' error twice
+echo $((foo))
+EOF
+
+# ======
+# exec after unset SHLVL
+# https://github.com/ksh93/ksh/issues/788
+{ "$SHELL" -c 'unset SHLVL; exec true'; } 2>/dev/null
+(((e=$?)==0)) || err_exit "crash after unsetting SHLVL" \
+	"(expected status 0, got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"))"
+
+# ======
+# checks for tests run in parallel (see top)
+wait "$parallel_1" || err_exit 'setting TMOUT in a virtual subshell removes its special meaning'
+wait "$parallel_2" || err_exit "TMOUT applies to 'read' from a non-terminal"
 
 # ======
 exit $((Errors<125?Errors:125))

@@ -285,6 +285,24 @@ T '2020-2-3 12:34:56 next fri'		'2020-02-14 12:34:56'
 T '2020-2-3T12:34:56Z'			'2020-02-03 12:34:56'
 T '2020-2-3 12:34:56Z'			'2020-02-03 12:34:56'
 
+C='Ordinal access'
+format='%F'
+T '1th tuesday in 2016-3'		'2016-03-01'
+T '2th tuesday in 2016-3'		'2016-03-08'
+T '3th tuesday in 2016-3'		'2016-03-15'
+T '4th tuesday in 2016-3'		'2016-03-22'
+T '5th tuesday in 2016-3'		'2016-03-29'
+T 'first tuesday in march 2016'		'2016-03-01'
+T 'second tuesday in march 2016'	'2016-03-08'
+T 'third tuesday in march 2016'		'2016-03-15'
+T 'fourth tuesday in march 2016'	'2016-03-22'
+T 'fifth tuesday in march 2016'		'2016-03-29'
+T '1st tuesday in march 2016'		'2016-03-01'
+T '2nd tuesday in march 2016'		'2016-03-08'
+T '3rd tuesday in march 2016'		'2016-03-15'
+T '4th tuesday in march 2016'		'2016-03-22'
+T '5th tuesday in march 2016'		'2016-03-29'
+
 # The following tests for times relative to the current time require GNU 'date' to compare our results to.
 if	! gd=$(	set -o noglob
 		IFS=:
@@ -512,6 +530,34 @@ printf -v got '%s %s %d %..20d %s' "$n" "$((n *= -1))" n n "$n"
 exp='20#j12 -7622 -7622 -j12 -20#j12'
 [[ $got == "$exp" ]] || err_exit "issue 696 reproducer (expected $(printf %q "$exp"), got $(printf %q "$got"))"
 unset n
+
+# ======
+# '\0' in format string skips input
+# https://github.com/ksh93/ksh/issues/725
+exp=1N2N3N4N5N6N7N
+got=$(printf '%s\0' 1 2 3 4 5 6 7 | tr '\0' N)
+[[ $got == "$exp" ]] || err_exit "'\0' in format string skips input (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(printf '%s%Z' 1 2 3 4 5 6 7 | tr '\0' N)
+[[ $got == "$exp" ]] || err_exit "'%Z' in format string skips input (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+exp=1NN2NN3NN4NN5NN6NN7NN
+got=$(printf '%s\0\0' 1 2 3 4 5 6 7 | tr '\0' N)
+[[ $got == "$exp" ]] || err_exit "'\0\0' in format string skips input (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(printf '%s%Z%Z' 1 2 3 4 5 6 7 | tr '\0' N)
+[[ $got == "$exp" ]] || err_exit "'%Z%Z' in format string skips input (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+exp=$'1N\n2N\n3N\n4N\nX'
+got=$(printf '%s%c%c' 1 $'\0' $'\n' 2 $'\0' $'\n' 3 $'\0' $'\n' 4 $'\0' $'\n' | tr '\0' N; echo X)
+[[ $got == "$exp" ]] || err_exit "regression involving %c as \$'\0' (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# until 2024-07-31, TZ=UTC 'stuck' even if another TZ is set later
+(
+	ulimit -c 0	# if we have the bug, forking makes it local to the subshell
+	TZ=UTC printf -v one '%(%H)T'
+	TZ=Europe/Amsterdam printf -v two '%(%H)T'
+	[[ $one != "$two" ]]
+) || err_exit "printf %T: TZ=UTC sticks after changing TZ"
 
 # ======
 exit $((Errors<125?Errors:125))

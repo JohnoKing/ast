@@ -42,8 +42,8 @@ static const char usage[] =
 	"output is that of the input.]"
 "[+?One and only one of \b-b\b, \b-c\b, or \b-f\b must be specified.]"
 "[+?If no \afile\a is given, or if the \afile\a is \b-\b, \bcut\b "
-        "cuts from standard input.   The start of the file is defined "
-        "as the current offset.]"
+	"cuts from standard input.   The start of the file is defined "
+	"as the current offset.]"
 "[b:bytes]:[list?\bcut\b based on a list of byte counts.]"
 "[c:characters]:[list?\bcut\b based on a list of character counts.]"
 "[d:delimiter]:[delim?The field character for the \b-f\b option is set "
@@ -134,7 +134,7 @@ cutinit(int mode, char* str, Delim_t* wdelim, Delim_t* ldelim, size_t reclen)
 	char*	cp = str;
 	Cut_t*	cut;
 
-	if (!(cut = (Cut_t*)stkalloc(stkstd, sizeof(Cut_t) + strlen(cp) * sizeof(int))))
+	if (!(cut = stkalloc(stkstd, sizeof(Cut_t) + strlen(cp) * sizeof(int))))
 	{
 		error(ERROR_SYSTEM|ERROR_PANIC, "out of memory");
 		UNREACHABLE();
@@ -275,7 +275,7 @@ cutcols(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 			bp = sfreserve(fdin, len, -1);
 		else
 			bp = sfgetr(fdin, '\n', 0);
-		if (!bp && !(bp = sfgetr(fdin, 0, SF_LASTR)))
+		if (!bp && !(bp = sfgetr(fdin, 0, SFIO_LASTR)))
 			break;
 		len = sfvalue(fdin);
 		xx = 0;
@@ -328,7 +328,7 @@ cutcols(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 						z = 1;
 					s += z;
 					w -= z;
-					
+
 				}
 				c = s - bp;
 				ncol = !w && (ncol || !skip);
@@ -387,7 +387,7 @@ cutfields(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 	long offset = 0;
 	unsigned char mb[8];
 	/* process each buffer */
-	while ((bp = (unsigned char*)sfreserve(fdin, SF_UNBOUND, -1)) && (c = sfvalue(fdin)) > 0)
+	while ((bp = (unsigned char*)sfreserve(fdin, SFIO_UNBOUND, -1)) && (c = sfvalue(fdin)) > 0)
 	{
 		cp = bp;
 		ep = cp + --c;
@@ -444,7 +444,7 @@ cutfields(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 									}
 									for (i = 0; i <= (ep - cp); i++)
 										mb[i] = cp[i];
-									if (!(bp = (unsigned char*)sfreserve(fdin, SF_UNBOUND, -1)) || (c = sfvalue(fdin)) <= 0)
+									if (!(bp = (unsigned char*)sfreserve(fdin, SFIO_UNBOUND, -1)) || (c = sfvalue(fdin)) <= 0)
 										goto failed;
 									cp = bp;
 									ep = cp + --c;
@@ -519,7 +519,7 @@ cutfields(Cut_t* cut, Sfio_t* fdin, Sfio_t* fdout)
 					if (!sp[lastchar])
 						break;
 				}
-				nodelim = 0;	
+				nodelim = 0;
 				if (--nfields > 0)
 					continue;
 				nfields = *++lp;

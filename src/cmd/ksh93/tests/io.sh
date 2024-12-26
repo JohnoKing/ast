@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -17,6 +17,11 @@
 ########################################################################
 
 . "${SHTESTS_COMMON:-${0%/*}/_common}"
+
+# Some systems (at least Android) don't allow inheriting stdout in closed state.
+# Disable the tests that rely on this on these systems.
+sh -c 'exec 3>&1' 1>&- 2>/dev/null
+typeset -si can_close_stdout=$?
 
 unset HISTFILE
 
@@ -151,7 +156,7 @@ exec 3>&- 4>&-
 	        read -r line; print -r -- "$line"
 	) & wait
 	while	read -r line
-        do	print -r -- "$line"
+	do	print -r -- "$line"
 	done
  } << !
 line 1
@@ -276,7 +281,9 @@ fi # !SHOPT_SCRIPTONL~Y
 
 $SHELL -c "{ > $tmp/1 ; date;} >&- 2> /dev/null" > $tmp/2
 [[ -s $tmp/1 || -s $tmp/2 ]] && err_exit 'commands with standard output closed produce output'
-$SHELL -c "$SHELL -c ': 3>&1' 1>&- 2>/dev/null" && err_exit 'closed standard output not passed to subshell'
+if ((can_close_stdout)); then
+$SHELL -c "$SHELL -c ': 3>&1' 1>&- 2>/dev/null" && err_exit 'closed standard output not passed to child shell'
+fi # can_close_stdout
 [[ $(cat  <<- \EOF | $SHELL
 	do_it_all()
 	{
@@ -475,7 +482,7 @@ print hello there world > $tmp/foobar
 sed  -e 's/there //' $tmp/foobar  >; $tmp/foobar
 [[ $(<$tmp/foobar) == 'hello world' ]] || err_exit '>; redirection not working on simple command'
 print hello there world > $tmp/foobar
-{ sed  -e 's/there //' $tmp/foobar;print done;} >; $tmp/foobar 
+{ sed  -e 's/there //' $tmp/foobar;print done;} >; $tmp/foobar
 [[ $(<$tmp/foobar) == $'hello world\ndone' ]] || err_exit '>; redirection not working for compound command'
 print hello there world > $tmp/foobar
 $SHELL -c "sed  -e 's/there //' $tmp/foobar  >; $tmp/foobar"
@@ -794,7 +801,7 @@ got=$(export tmp; "$SHELL" -ec \
 	}
 	consumer <(producer) > /dev/null
 } & pid=$!
-(sleep 15; kill -HUP $pid) 2> /dev/null &
+(sleep 30; kill -HUP $pid) 2> /dev/null &
 pid2=$!
 wait $pid 2> /dev/null || err_exit "process substitution hangs"
 kill $pid2 2> /dev/null
@@ -818,7 +825,7 @@ if kill -0 "$procsub_pid" 2>/dev/null; then
 	err_exit "process substitutions loop or linger after parent shell finishes"
 fi
 (true <(true) >(true) <(true) >(true); wait) &
-sleep .1
+sleep .2
 if kill -0 $! 2> /dev/null; then
 	kill -TERM $!
 	err_exit "process substitutions linger when unused"
@@ -906,6 +913,7 @@ got=$(< dir1/dir2/x)
 # ======
 # ksh misbehaved when stdout is closed
 # https://github.com/ksh93/ksh/issues/314
+if ((can_close_stdout)); then
 "$SHELL" -c 'pwd; echo "$?" >&2; echo test; echo "$?" > file' >&- 2>stderr
 exp='1'
 [[ $(<file) == "$exp" ]] || err_exit "ksh misbehaves when stdout is closed (1)" \
@@ -923,11 +931,11 @@ then	for cmd in echo print printf
 		"$SHELL" -c "$cmd hi" >/dev/full && err_exit "'$cmd' does not detect disk full (inherited FD)"
 	done
 fi
+fi # can_close_stdout
 
 # ======
 # Command substitution hangs, writing infinite zero bytes, when redirecting standard output on a built-in that forks
 # https://github.com/ksh93/ksh/issues/416
-exp='line'
 "$SHELL" -c 'echo "$(ulimit -t unlimited >/dev/null 2>&1; echo "ok $$")"' >out 2>&1 &
 pid=$!
 (sleep 1; kill -9 "$pid") 2>/dev/null &
@@ -936,6 +944,37 @@ then	kill "$!"  # the sleep process
 	[[ $(<out) == "ok $pid" ]] || err_exit "comsub fails after fork with stdout redirection" \
 		"(expected 'ok $pid', got $(printf %q "$(<out)"))"
 else	err_exit "comsub hangs after fork with stdout redirection"
+fi
+
+# https://github.com/ksh93/ksh/issues/416#issuecomment-1008866883
+exp='line'
+"$SHELL" -c 'alias foo=bar; echo $(alias foo >/dev/null; echo "$1")' "$0" "$exp" >out 2>&1 &
+pid=$!
+(sleep 1; kill -9 "$pid") 2>/dev/null &
+if	wait "$pid" 2>/dev/null
+then	kill "$!"  # the sleep process
+	[[ $(<out) == "$exp" ]] || err_exit "comsub fails after stdout redirection" \
+		"(expected '$exp', got '$(<out)')"
+else	err_exit "comsub hangs after stdout redirection"
+fi
+
+# same bug for compound/block commands: https://github.com/ksh93/ksh/issues/784
+exp=$'funA\nA'
+"$SHELL" -c '
+	BugFunction() {
+	  { echo "funA" >&2; } >&2
+	  echo A
+	}
+	Result=$(BugFunction)
+	echo $Result
+' >out 2>&1 &
+pid=$!
+(sleep 1; kill -9 "$pid") 2>/dev/null &
+if	wait "$pid" 2>/dev/null
+then	kill "$!"  # the sleep process
+	[[ $(<out) == "$exp" ]] || err_exit "double redirection in command substitution" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$(<out)"))"
+else	err_exit "double redirection in command substitution causes shell hang"
 fi
 
 # ======

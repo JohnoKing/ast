@@ -23,6 +23,9 @@
 # to your regular 'man' command so you won't notice a difference. Result: you
 # can just use 'man somecommand' for everything.
 #
+# If you want to pass extra options to your operating system's "man" command,
+# put those in the .sh.manopts variable.
+#
 # This function only handles 'man' commands with a single argument. If more
 # or less than one argument is given, it passes control to the system's 'man'.
 #
@@ -58,10 +61,10 @@ namespace man
 
 	builtin_has_selfdoc()
 	{
-		[[ $(unset -f -- "$1" 2>/dev/null; whence -t -- "$1") == builtin ]] \
+		[[ $(unset -f -- "$1"; whence -t -- "$1") == builtin ]] \
 			&& [[ ! $1 =~ ^(:|true|false|echo)$ \
 			&& $'\n'$(builtin)$'\n' == *$'\n'"$(unset -f -- "$1"; whence -- "$1")"$'\n'* ]]
-	}
+	} 2>/dev/null
 
 	# Check if a binary or script has --man self-documentation by grepping
 	# for an AST optget(3) usage string.
@@ -85,8 +88,17 @@ namespace man
 
 	show_selfdoc()
 	{
-		typeset -x ERROR_OPTIONS=emphasis
-		export LINES COLUMNS
+		typeset -x COLUMNS=$COLUMNS  # export in local scope
+		if ((stdout_on_terminal)); then
+			# enable emphasis only for pagers that support ANSI escapes
+			typeset pager=${PAGER:-less}
+			case ${pager##*/} in
+			less | less[[:blank:]]* | most | most[[:blank:]]* )
+				typeset -x ERROR_OPTIONS=emphasis ;;
+			esac
+		else
+			COLUMNS=80
+		fi
 		case $1 in
 		test )	command test '--??man' -- ;;
 		[ )	command [ '--??man' -- ] ;;
@@ -101,9 +113,21 @@ namespace man
 
 	pager()
 	{
-		typeset IFS		# local default split...
-		set -o noglob		# ...and no pathname expansion...
-		${PAGER:-less -R}	# ...so we can safely split $PAGER
+		typeset pager=${MANPAGER:-${PAGER-}}
+		((!stdout_on_terminal)) && pager=cat
+		case $pager in
+		'')	pager="less $lessopt" ;;
+		less | */less | less[[:blank:]]* | */less[[:blank:]]*)
+			pager+=" $lessopt" ;;
+		esac
+		command -- $pager
+	}
+
+	# Shorthand for invoking the OS man(1) command on the default system PATH.
+
+	os_man()
+	{
+		command -p man ${.sh.manopts-} "$@"
 	}
 
 	# Try if a system manual page in a section exists. Unfortunately, we
@@ -114,7 +138,7 @@ namespace man
 
 	try_os_man()
 	{
-		[[ $2 != */* && $(command man -s "$1" "$2" 2>/dev/null) == *$'\n'*$'\n'*$'\n'* ]]
+		[[ $2 != */* && $(os_man -s "$1" "$2" 2>/dev/null) == *$'\n'*$'\n'*$'\n'* ]]
 	}
 
 	# The main function puts it all together. When given a single argument,
@@ -127,18 +151,18 @@ namespace man
 
 	main()
 	{
-		if (($# != 1)); then
-			command man "$@"
+		if (($# != 1)) || [[ $1 == -* ]]; then
+			os_man "$@"
 		elif builtin_has_selfdoc "$1"; then
 			show_selfdoc "$1" | pager
 		elif try_os_man 1 "$1"; then
-			command man -s 1 "$1"
+			os_man -s 1 "$1"
 		elif try_os_man 8 "$1"; then
-			command man -s 8 "$1"
+			os_man -s 8 "$1"
 		elif extcmd_has_selfdoc "$1"; then
 			show_selfdoc "$1" | pager
 		else
-			command man "$1"
+			os_man "$1"
 		fi
 	}
 }
@@ -159,6 +183,13 @@ namespace man
 
 function man
 {
+	typeset IFS	# local default split...
+	set -o noglob	# ...and no pathname expansion, for safe field splitting
+	# set stdout_on_terminal to 1 if standard output is on a terminal;
+	# this needs flagging now as show_selfdoc() will have stdout on a pipe
+	[[ -t 1 ]]
+	typeset -si stdout_on_terminal=$((! $?))
+	# and off we go
 	.man.main "$@"
 }
 
@@ -169,4 +200,39 @@ function man
 if ((.sh.version < 20211227)); then
 	print "WARNING: this man wrapper function requires ksh 93u+m 2021-12-27 or later" >&2
 	sleep 1
+fi
+
+# Check if 'less' has an -R option. Some versions have only -r.
+# In the man namespace functions above, ${.man.lessopt} is simply $lessopt.
+if echo test | less -R >/dev/null 2>&1; then
+	.man.lessopt=-R
+else
+	.man.lessopt=-r
+fi
+
+# Check for QNX, which uses 'use' instead of 'man'.
+# Override .man.main function with QNX version.
+# Instead of .sh.manotps, 'use' options may be set in .sh.useopts.
+
+if	command -pv use >/dev/null && [[ $(command -p uname -s) == QNX ]]
+then	namespace man
+	{
+		unset -f os_man try_os_man
+		os_use()
+		{
+			command -p use ${.sh.useopts-} "$@"
+		}
+		main()
+		{
+			if (($# != 1)) || [[ $1 == -* ]]; then
+				os_use "$@"
+			elif builtin_has_selfdoc "$1" || extcmd_has_selfdoc "$1"; then
+				show_selfdoc "$1" | pager
+			elif os_use "$1" >/dev/null 2>&1; then
+				os_use "$1" | pager
+			else
+				os_use "$1" # show error without pager
+			fi
+		}
+	}
 fi

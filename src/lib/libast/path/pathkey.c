@@ -44,6 +44,14 @@ pathkey(char* key, char* attr, const char* lang, const char* tool, const char* p
 
 #include <ast_api.h>
 
+/* disable false positive warning at the end of pathkey_20100601 */
+#if __clang__
+#pragma clang diagnostic ignored "-Wreturn-stack-address"
+#elif __GNUC__
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wreturn-local-addr"
+#endif
+
 char*
 pathkey_20100601(const char* lang, const char* tool, const char* apath, char* key, size_t keysize, char* attr, size_t attrsize)
 {
@@ -280,11 +288,5 @@ pathkey_20100601(const char* lang, const char* tool, const char* apath, char* ke
 		while (k > key + 8)
 			*--k = '.';
 	}
-/* disable false positive warning */
-#if __clang__
-#pragma clang diagnostic ignored "-Wreturn-stack-address"
-#elif __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
-#pragma GCC diagnostic ignored "-Wreturn-local-addr"
-#endif
 	return key == buf ? strdup(key) : key;
 }

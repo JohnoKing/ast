@@ -30,9 +30,9 @@
 #include	"jobs.h"
 #include	"FEATURE/cmds"
 #include	"FEATURE/poll"
-#define	bltin(x)	(b_##x)
+#define bltin(x)	(b_##x)
 /* The following is for builtins that do not accept -- options */
-#define	Bltin(x)	(B_##x)
+#define Bltin(x)	(B_##x)
 
 #ifndef SHOPT_CMDLIB_DIR
 #   define SHOPT_CMDLIB_DIR	SH_CMDLIB_DIR
@@ -56,7 +56,7 @@ const struct shtable3 shtab_builtins[] =
 {
 	"exec",		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(exec),
 	"redirect",	NV_BLTIN|BLT_ENV,		bltin(exec),
-	"set",		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(set),	
+	"set",		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(set),
 	":",		NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(true),
 	"true",		NV_BLTIN|BLT_ENV,		bltin(true),
 	"command",	NV_BLTIN|BLT_ENV|BLT_EXIT,	bltin(command),
@@ -122,14 +122,13 @@ const struct shtable3 shtab_builtins[] =
 	"times",	NV_BLTIN|BLT_ENV|BLT_SPC,	bltin(times),
 	"ulimit",	NV_BLTIN|BLT_ENV,		bltin(ulimit),
 	"umask",	NV_BLTIN|BLT_ENV,		bltin(umask),
-#ifdef _cmd_universe
+#if _cmd_universe
 	"universe",	NV_BLTIN|BLT_ENV,		bltin(universe),
 #endif /* _cmd_universe */
 	"wait",		NV_BLTIN|BLT_ENV|BLT_EXIT,	bltin(wait),
 	"type",		NV_BLTIN|BLT_ENV,		bltin(whence),
 	"whence",	NV_BLTIN|BLT_ENV,		bltin(whence),
 #ifdef SHOPT_CMDLIB_HDR
-#undef	mktemp		/* undo possible map-libc mktemp => _ast_mktemp */
 #include SHOPT_CMDLIB_HDR
 #else
 #if SHOPT_ALL_LIBCMD
@@ -176,24 +175,18 @@ const struct shtable3 shtab_builtins[] =
 	CMDLIST(ln)
 	CMDLIST(mktemp)
 	CMDLIST(mv)
-#if !_std_malloc && !_AST_std_malloc
-	CMDLIST(vmstate)  /* vmstate only works with vmalloc */
 #endif
-#endif
-#if SHOPT_REGRESS
-	"__regress__",		NV_BLTIN|BLT_ENV,	bltin(__regress__),
-#endif
-	"",		0, 0 
+	"",		0, 0
 };
 
 #define _JOB_	"[+?Each \ajob\a can be specified as one of the following:]{" \
-        "[+\anumber\a?\anumber\a refers to a process ID.]" \
-        "[+-\anumber\a?\anumber\a refers to a process group ID.]" \
-        "[+%\anumber\a?\anumber\a refer to a job number.]" \
-        "[+%\astring\a?Refers to a job whose name begins with \astring\a.]" \
-        "[+%??\astring\a?Refers to a job whose name contains \astring\a.]" \
-        "[+%+ \bor\b %%?Refers to the current job.]" \
-        "[+%-?Refers to the previous job.]" \
+	"[+\anumber\a?\anumber\a refers to a process ID.]" \
+	"[+-\anumber\a?\anumber\a refers to a process group ID.]" \
+	"[+%\anumber\a?\anumber\a refer to a job number.]" \
+	"[+%\astring\a?Refers to a job whose name begins with \astring\a.]" \
+	"[+%??\astring\a?Refers to a job whose name contains \astring\a.]" \
+	"[+%+ \bor\b %%?Refers to the current job.]" \
+	"[+%-?Refers to the previous job.]" \
 	"}"
 
 
@@ -323,8 +316,7 @@ const char sh_set[] =
  * --posix is an AST optget(3) default option, so for ksh to use it, it must be listed
  * explicitly (and handled by sh_argopts() in sh/args.c) to stop optget(3) overriding it.
  */
-"[05:posix?Enable the \bposix\b option. When given at invocation time, "
-	"disables importing variable type attributes from the environment.]"
+"[05:posix?Enable the \bposix\b option.]"
 "[p?Privileged mode. Disabling \b-p\b sets the effective user ID to the "
 	"real user ID, and the effective group ID to the real group ID. "
 	"Enabling \b-p\b restores the effective user and group IDs to their "
@@ -377,7 +369,7 @@ const char sh_optcont[] =
 "[-1c?\n@(#)$Id: continue (ksh 93u+m) 2023-03-09 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?continue - continue execution at top of the loop]"
-"[+DESCRIPTION?\bcontinue\b is a shell special built-in that continues " 
+"[+DESCRIPTION?\bcontinue\b is a shell special built-in that continues "
 	"execution at the top of smallest enclosing enclosing \bfor\b, "
 	"\bselect\b, \bwhile\b, or \buntil\b loop, if any; or the top of "
 	"the \an\a-th enclosing loop if \an\a is specified.]"
@@ -398,7 +390,7 @@ const char sh_optalias[] =
 "[+NAME?alias - define or display aliases]"
 "[+DESCRIPTION?\balias\b creates or redefines alias definitions "
 	"or writes the existing alias definitions to standard output. "
-	"An alias definitions provides a string value that will replace "
+	"An alias definition provides a string value that will replace "
 	"a command name when the command is read. Alias names can "
 	"contain any printable character which is not special to the shell. "
 	"If an alias value ends in a space or tab, then the word "
@@ -409,15 +401,13 @@ const char sh_optalias[] =
 	"each \aname\a that is specified, and \b=\b\avalue\a is not "
 	"specified, the current value of the alias corresponding to "
 	"\aname\a is written to standard output. If \b=\b\avalue\a is "
-	"specified, the alias \aname\a will be created or redefined.]" 
+	"specified, the alias \aname\a will be created or redefined.]"
 "[+?Aliasing is performed when scripts are read, not while they are executed. "
 	"So, for an alias to take effect, the alias definition command must "
 	"be executed before the command that references the alias is read.]"
 "[p?Causes the output to be in the form of alias commands that can be used "
 	"as input to the shell to recreate the current aliases.]"
-"[t?Each \aname\a is looked up as a command in \b$PATH\b and its path is "
-	"added to the hash table as a 'tracked alias'. If no \aname\a is "
-	"given, this prints the hash table. See \bhash(1)\b.]"
+"[t?Same as \bhash\b(1).]"
 "[x?This option is obsolete. In most contexts the \b-x\b option is ignored, "
 	"although when it's combined with \b-t\b it will make \balias\b do "
 	"nothing.]"
@@ -425,8 +415,8 @@ const char sh_optalias[] =
 "\n[name[=value]...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?Successful completion.]"
-        "[+>0?One or more \aname\a operands did not have an alias "
+	"[+0?Successful completion.]"
+	"[+>0?One or more \aname\a operands did not have an alias "
 		"definition, or an error occurred.]"
 "}"
 "[+SEE ALSO?\bsh\b(1), \bhash\b(1), \bunalias\b(1)]"
@@ -617,7 +607,7 @@ const char sh_optdot[]	 =
 	"the script completes execution.]"
 "[+?When \aname\a refers to a file, the \bPATH\b variable is searched "
 	"for the file containing commands. In this case execute permission "
-	"is not required for \aname\a.]" 
+	"is not required for \aname\a.]"
 "[+?If any \aarg\as are specified, these become the positional parameters "
 	"for the duration of the function or script and are restored "
 	"upon completion.]"
@@ -659,13 +649,14 @@ const char sh_opteval[] =
 ;
 
 const char sh_optexec[] =
-"[-1c?\n@(#)$Id: exec (ksh 93u+m) 2020-06-11 $\n]"
+"[-1c?\n@(#)$Id: exec (ksh 93u+m) 2024-11-15 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?exec - execute command, open/close and duplicate file descriptors]"
 "[+DESCRIPTION?\bexec\b is a special built-in command that can be used to "
 	"manipulate file descriptors or to replace the current shell "
 	"with a new command.]"
-"[+?If \acommand\a is specified, then the current shell process will be "
+"[+?If \acommand\a is specified, then \acommand\a is searched on PATH as "
+	"an external command and the current shell process will be "
 	"replaced by \acommand\a rather than running \acommand\a and waiting "
 	"for it to complete. Note that there is no need to use "
 	"\bexec\b to enhance performance since the shell implicitly "
@@ -674,7 +665,14 @@ const char sh_optexec[] =
 	"or close files or manipulate file descriptors as in \bredirect\b(1).]"
 "[c?Clear all environment variables before executions except variable "
 	"assignments that are part of the current \bexec\b command.]"
-"[a]:[name?\bargv[0]]\b will be set to \aname\a for \acommand\a]"
+"[a]:[name?"
+#if _execve_ignores_argv0
+	"Not supported on this system; emits a warning. "
+	"Normally, \bargv[0]]\b would"
+#else
+	"\bargv[0]]\b will"
+#endif /* _execve_ignores_argv0 */
+	" be set to \aname\a for \acommand\a.]"
 "\n"
 "\n[command [arg ...]]\n"
 "\n"
@@ -717,7 +715,7 @@ const char sh_optexport[] =
 	"If \b=\b\avalue\a is specified, the variable \aname\a is "
 	"set to \avalue\a.]"
 "[+?If no \aname\as are specified then the names and values of all "
-	"exported variables are written to standard output.]" 
+	"exported variables are written to standard output.]"
 "[+?\bexport\b is built in to the shell as a declaration command so that "
 	"field splitting and pathname expansion are not performed on "
 	"the arguments. Tilde expansion occurs on \avalue\a.]"
@@ -727,8 +725,8 @@ const char sh_optexport[] =
 "\n[name[=value]...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?Successful completion.]"
-        "[+>0?An error occurred.]"
+	"[+0?Successful completion.]"
+	"[+>0?An error occurred.]"
 "}"
 
 "[+SEE ALSO?\bsh\b(1), \btypeset\b(1), \blocal\b(1)]"
@@ -792,15 +790,15 @@ const char sh_optgetopts[] =
 	"combining \aoptstring\a values from multiple passes.]"
       "[+l?Display only \alongname\a options in help messages.]"
       "[+n?Associate -\anumber\a and +\anumber\a options with the first "
-        "option with numeric arguments.]"
+	"option with numeric arguments.]"
       "[+o?The \b-\b option character prefix is optional (supports "
-        "obsolete \bps\b(1) option syntax).]"
+	"obsolete \bps\b(1) option syntax).]"
       "[+p?\anumber\a specifies the number of \b-\b characters that must "
 	"prefix long option names. The default is \b2\b; \b0\b, \b1\b or "
 	"\b2\b are accepted (e.g., \bp0\b for \bdd\b(1) and \bp1\b for "
 	"\bfind\b(1)).]"
       "[+s?\anumber\a specifies the \b--??man\b section number, "
-        "\b1\b by default.]"
+	"\b1\b by default.]"
   "}"
   "[+2.?An option specification of the form "
     "[\aoption\a[!]][=\anumber\a]][:\alongname\a]][?\atext\a]]]]. In this "
@@ -919,7 +917,7 @@ _JOB_
 "[+EXIT STATUS?]{"
 	"[+0?If all background jobs are started.]"
 	"[+>0?If one more jobs does not exist or there are no background "
-		"jobs.]" 
+		"jobs.]"
 "}"
 
 "[+SEE ALSO?\bwait\b(1), \bfg\b(1), \bdisown\b(1), \bjobs\b(1)]"
@@ -999,14 +997,15 @@ _JOB_
 ;
 
 const char sh_opthash[] =
-"[-1c?\n@(#)$Id: hash (ksh 93u+m) 2021-01-07 $\n]"
+"[-1c?\n@(#)$Id: hash (ksh 93u+m) 2024-06-30 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?hash - display the locations of recently used programs]"
 "[+DESCRIPTION?\bhash\b displays or modifies the hash table with the "
 	"locations of recently used programs. If given no arguments, it lists "
 	"all command/path associations (a.k.a. 'tracked aliases') in the hash "
 	"table. Otherwise, \bhash\b performs a \bPATH\b search for each "
-	"\autility\a supplied and adds the result to the hash table.]"
+	"\autility\a supplied and adds the result to the hash table. "
+	"An error is issued for each \autility\a that is not found.]"
 "[r?Empty the hash table. This can also be achieved by resetting \bPATH\b.]"
 "\n"
 "\n[utility...]\n"
@@ -1019,8 +1018,8 @@ const char sh_opthash[] =
 ;
 
 #if !SHOPT_SCRIPTONLY
-const char sh_opthist[]	= 
-"[-1cn?\n@(#)$Id: hist (AT&T Research) 2000-04-02 $\n]"
+const char sh_opthist[]	=
+"[-1cn?\n@(#)$Id: hist (ksh 93u+m) 2024-12-23 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?\f?\f - process command history list]"
 "[+DESCRIPTION?\b\f?\f\b lists, edits, or re-executes, commands  "
@@ -1058,11 +1057,13 @@ const char sh_opthist[]	=
 "[+?If no editor is specified, then the editor specified by the \bHISTEDIT\b "
 	"variable will be used if set, or the \bFCEDIT\b variable will be "
 	"used if set, otherwise, \bed\b will be used.]"
+"[E?Only execute the edited command line if the file is saved before "
+	"exiting the editor.]"
 "[e]:[editor?\aeditor\a specifies the editor to use to edit the history "
 	"command. A value of \b-\b for \aeditor\a is equivalent to "
 	"specifying the \b-s\b option.]"
 "[l?List the commands rather than editing and re-executing them.]"
-"[N]#[num?Start at \anum\a commands back.]" 
+"[N]#[num?Start at \anum\a commands back.]"
 "[n?Suppress the command numbers when the commands are listed.]"
 #if SHOPT_HISTEXPAND
 "[p?Writes the result of history expansion for each operand to standard "
@@ -1081,14 +1082,14 @@ const char sh_opthist[]	=
 	"the command that gets re-executed. Otherwise, it is one of the "
 	"following:]{"
 	"[+0?Successfully completion of the listing.]"
-	"[+>0?An error occurred.]" 
+	"[+>0?An error occurred.]"
 "}"
 
 "[+SEE ALSO?\bksh\b(1), \bsh\b(1), \bed\b(1)]"
 ;
 #endif /* !SHOPT_SCRIPTONLY */
 
-const char sh_optkill[]	 = 
+const char sh_optkill[]	 =
 "[-1c?\n@(#)$Id: kill (ksh 93u+m) 2023-09-16 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?kill - terminate or signal process]"
@@ -1203,7 +1204,7 @@ const char sh_optprint[] =
 "[--catalog?" SH_DICT "]"
 "[+NAME?print - write arguments to standard output]"
 "[+DESCRIPTION?By default, \bprint\b writes each \astring\a operand to "
-	"standard output and appends a newline character.]"  
+	"standard output and appends a newline character.]"
 "[+?Unless the \b-r\b or \b-f\b option is specified, each \b\\\b "
 	"character in each \astring\a operand is processed specially as "
 	"follows:]{"
@@ -1226,7 +1227,7 @@ const char sh_optprint[] =
 	"operands than format specifiers, the format string is "
 	"reprocessed from the beginning. If there are fewer \astring\a "
 	"operands than format specifiers, then outputting will end "
-	"at the first unneeded format specifier.]" 
+	"at the first unneeded format specifier.]"
 "[e?Unless \b-f\b is specified, process \b\\\b sequences in each \astring\a "
 	"operand as described above. This is the default behavior.]"
 "[n?Do not append a new-line character to the output.]"
@@ -1257,11 +1258,11 @@ const char sh_optprint[] =
 ;
 
 const char sh_optprintf[] =
-"[-1c?\n@(#)$Id: printf (ksh 93u+m) 2024-02-11 $\n]"
+"[-1c?\n@(#)$Id: printf (ksh 93u+m) 2024-07-31 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?printf - write formatted output]"
 "[+DESCRIPTION?\bprintf\b writes each \astring\a operand to "
-	"standard output using \aformat\a to control the output format.]"  
+	"standard output using \aformat\a to control the output format.]"
 #if SHOPT_PRINTF_LEGACY
 "[+?For backward compatibility with this system's external \bprintf\b(1) "
 	"command, this built-in version allows the \aformat\a operand to "
@@ -1389,7 +1390,8 @@ const char sh_optprintf[] =
 	"[+-?The escape sequence \b\\C[.\b\aname\a\b.]]\b expands to "
 		"the collating element \aname\a.]"
 	"[+-?The escape sequence \b\\x{\b\ahex\a\b}\b expands to the "
-		"character corresponding to the hexadecimal value \ahex\a.]"
+		"single-byte character corresponding to the one- or "
+		"two-digit hexadecimal value \ahex\a.]"
 	"[+-?The escape sequence \b\\u{\b\ahex\a\b}\b expands to the unicode "
 		"character corresponding to the hexadecimal value \ahex\a.]"
 	"[+-?The format modifier flag \b=\b can be used to center a field to "
@@ -1471,7 +1473,7 @@ const char sh_optread[] =
 	"the bytes that are read are stored directly into \bvar\b.]"
 "[+?If you append \b?\b\aprompt\a to the first \avar\a, then \bread\b "
 	"will display \aprompt\a on standard error before reading "
-        "if standard input is a terminal or pipe. "
+	"if standard input is a terminal or pipe. "
 	"The \b?\b should be quoted to protect it from pathname expansion.]"
 "[+?If an end-of file is encountered on a line "
 	"that is not terminated by a newline control character, the data is "
@@ -1526,9 +1528,9 @@ const char sh_optreadonly[] =
 	"default.]"
 "[+?Within a type definition, if the value is not specified, then a "
 	"value must be specified when creating each instance of the type "
-        "and the value is readonly for each instance.]"
+	"and the value is readonly for each instance.]"
 "[+?If no \aname\as are specified then the names and values of all "
-	"readonly variables are written to standard output.]" 
+	"readonly variables are written to standard output.]"
 "[+?\breadonly\b is built in to the shell as a declaration command so that "
 	"field splitting and pathname expansion are not performed on "
 	"the arguments. Tilde expansion occurs on \avalue\a.]"
@@ -1539,8 +1541,8 @@ const char sh_optreadonly[] =
 "\n[name[=value]...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?Successful completion.]"
-        "[+>0?An error occurred.]"
+	"[+0?Successful completion.]"
+	"[+>0?An error occurred.]"
 "}"
 
 "[+SEE ALSO?\bsh\b(1), \btypeset\b(1), \blocal\b(1)]"
@@ -1668,20 +1670,16 @@ const char sh_optksh[] =
 	"in \afile\a that can be used in a separate shell script browser. The "
 	"-R option requires a script to be specified as the first operand.]"
 #endif /* SHOPT_KIA */
-#if SHOPT_REGRESS
-"[I:regress]:[intercept?Enable the regression test \aintercept\a. Must be "
-	"the first command line option(s).]"
-#endif
 "\fabc\f"
 "\n"
 "\n[arg ...]\n"
 "\n"
 "[+EXIT STATUS?If \b\f?\f\b executes commands, the exit status will be that "
-        "of the last command executed. Otherwise, it will be one of "
-        "the following:]{"
-        "[+0?The script or command line to be executed consists entirely "
+	"of the last command executed. Otherwise, it will be one of "
+	"the following:]{"
+	"[+0?The script or command line to be executed consists entirely "
 		"of zero or more blank lines or comments.]"
-        "[+1-125?A noninteractive shell detected a syntax error, a variable "
+	"[+1-125?A noninteractive shell detected a syntax error, a variable "
 		"assignment error, or an error in a special built-in.]"
 	"[+126?\b-c\b and \b-s\b were not specified and the command script "
 		"was found on \bPATH\b but was not executable.]"
@@ -1726,8 +1724,8 @@ const char sh_optset[] =
 "\n[arg ...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?No errors occurred.]"
-        "[+>0?An error occurred.]"
+	"[+0?No errors occurred.]"
+	"[+>0?An error occurred.]"
 "}"
 
 "[+SEE ALSO?\btypeset\b(1), \blocal\b(1), \bshift\b(1)]"
@@ -1741,23 +1739,23 @@ const char sh_optshift[] =
 	"positional parameters to the left by the number of places "
 	"defined by \an\a, or \b1\b if \an\a is omitted. The number of "
 	"positional parameters remaining will be reduced by the "
-	"number of places that are shifted.]" 
+	"number of places that are shifted.]"
 "[+?If \an\a is given, it will be evaluated as an arithmetic expression "
-	"to determinate the number of places to shift. It is an error "
+	"to determine the number of places to shift. It is an error "
 	"to shift more than the number of positional parameters or a "
 	"negative number of places.]"
 "\n"
 "\n[n]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?The positional parameters were successfully shifted.]"
-        "[+>0?An error occurred.]"
+	"[+0?The positional parameters were successfully shifted.]"
+	"[+>0?An error occurred.]"
 "}"
 "[+SEE ALSO?\bset\b(1)]"
 ;
 
 const char sh_optsleep[] =
-"[-1c?\n@(#)$Id: sleep (AT&T Research) 2009-03-12 $\n]"
+"[-1c?\n@(#)$Id: sleep (ksh 93u+m) 2024-11-17 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?sleep - suspend execution for an interval]"
 "[+DESCRIPTION?\bsleep\b suspends execution for at least the time specified "
@@ -1767,7 +1765,7 @@ const char sh_optsleep[] =
 	"[+integer?The number of seconds to sleep.]"
 	"[+floating point?The number of seconds to sleep. The actual "
 		"granularity depends on the underlying system, normally "
-		"around 1 millisecond.]"
+		"around 1 millisecond. Use \binf\b to sleep forever.]"
 	"[+P\an\a\bY\b\an\a\bM\b\an\a\bDT\b\an\a\bH\b\an\a\bM\b\an\a\bS?An ISO 8601 duration "
 		"where at least one of the duration parts must be specified.]"
 	"[+P\an\a\bW?An ISO 8601 duration specifying \an\a weeks.]"
@@ -1829,30 +1827,30 @@ const char sh_opttrap[] =
 	"the shell does not know about causes \btrap\b to exit with a "
 	"non-zero exit status, but does not terminate the invoking shell.]"
 "[+?If no \aaction\a or \acondition\as are specified then all the current "
-	"trap settings are written to standard output.]" 
+	"trap settings are written to standard output.]"
 "[p?Causes the current traps to be output in a format that can be processed "
 	"as input to the shell to recreate the current traps.]"
 "\n"
 "\n[action condition ...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?Successful completion.]"
-        "[+>0?An error occurred.]"
+	"[+0?Successful completion.]"
+	"[+>0?An error occurred.]"
 "}"
 
 "[+SEE ALSO?\bkill\b(1), \beval\b(1), \bsignal\b(2)]"
 ;
 
 const char sh_opttypeset[] =
-"+[-1c?\n@(#)$Id: typeset (ksh 93u+m) 2023-05-01 $\n]"
+"+[-1c?\n@(#)$Id: typeset (ksh 93u+m) 2024-12-25 $\n]"
 "[--catalog?" SH_DICT "]"
 "[+NAME?typeset - declare or display variables with attributes]"
 "[+DESCRIPTION?Without the \b-f\b option, \btypeset\b sets, unsets, "
 	"or displays attributes of variables as specified with the "
-	"options. If the first option is specified with a \b-\b "
+	"options. If the first option is specified with a \b-\b, "
 	"then the attributes are set for each of the given \aname\as. "
 	"If the first option is specified with a \b+\b, then the specified "
-	"attributes are unset. If \b=\b\avalue\a is specified value is "
+	"attributes are unset. If \b=\b\avalue\a is specified, \avalue\a is "
 	"assigned before the attributes are set.]"
 "[+?When \btypeset\b is called inside a function defined with the "
 	"\bfunction\b reserved word, and \aname\a does not contain a "
@@ -1873,9 +1871,9 @@ const char sh_opttypeset[] =
 	"[+integer?\btypeset -li\b]"
 	"[+nameref?\btypeset -n\b]"
 "}"
-"[+?If no \aname\as are specified then variables that have the specified "
+"[+?If no \aname\as are specified, then variables that have the specified "
 	"options are displayed. If the first option is specified with "
-	"a leading \b-\b then the name and value of each variable is "
+	"a leading \b-\b, then the name and value of each variable is "
 	"written to standard output. Otherwise, only the names are "
 	"written. If no options are specified or just \b-p\b is "
 	"specified, then the names and attributes of all variables that have "
@@ -1948,14 +1946,14 @@ const char sh_opttypeset[] =
 	"UNIX format pathname will cause it to be converted to a pathname "
 	"suitable for the current host. This has no effect when the "
 	"native system is UNIX.]"
-"[L]#?[n?Left justify. If \an\a is given it represents the field width. If "
+"[L]#?[n?Left justify. If \an\a is given, it represents the field width. If "
 	"the \b-Z\b attribute is also specified, then leading zeros are "
 	"stripped.]"
 "[M]:?[mapping?\amapping\a is the name of a character mapping known by "
 	"\bwctrans\b(3) such as \btolower\b or \btoupper\b. When the option "
 	"value \bmapping\b is omitted and there are no operands, all mapped "
 	"variables are displayed.]"
-"[R]#?[n?Right justify. If \an\a is given it represents the field width. If "
+"[R]#?[n?Right justify. If \an\a is given, it represents the field width. If "
 	"the \b-Z\b attribute is also specified, then zeros will "
 	"be used as the fill character. Otherwise, spaces are used.]"
 "[X]#?[n:=2*sizeof(long long)?Floating point number represented in hexadecimal "
@@ -1969,7 +1967,7 @@ const char sh_opttypeset[] =
 	"will have function static scope. Otherwise, the variable is "
 	"unset prior to processing the assignment list.]"
 "[T]:?[tname?\atname\a is the name of a type name given to each \aname\a.]"
-"[Z]#?[n?Zero fill. If \an\a is given it represents the field width.]"
+"[Z]#?[n?Zero fill. If \an\a is given, it represents the field width.]"
 "[D?Modifies variables using a dynamic local scope in functions.]"
 "[P?Modifies variables using a static local scope in functions.]"
 "\n"
@@ -1980,8 +1978,8 @@ const char sh_opttypeset[] =
 " -T [tname[=(type definition)]...]\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?No errors occurred.]"
-        "[+>0?An error occurred.]"
+	"[+0?No errors occurred.]"
+	"[+>0?An error occurred.]"
 "}"
 
 "[+SEE ALSO?\breadonly\b(1), \bexport\b(1)]"
@@ -2080,8 +2078,8 @@ const char sh_optunset[] =
 "\nname...\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?All \aname\as were successfully unset.]"
-        "[+>0?One or more \aname\a operands could not be unset "
+	"[+0?All \aname\as were successfully unset.]"
+	"[+>0?One or more \aname\a operands could not be unset "
 	"or an error occurred.]"
 "}"
 
@@ -2102,8 +2100,8 @@ const char sh_optunalias[] =
 "\nname...\n"
 "\n"
 "[+EXIT STATUS?]{"
-        "[+0?Successful completion.]"
-        "[+>0?\b-a\b was not specified and one or more \aname\a operands "
+	"[+0?Successful completion.]"
+	"[+>0?\b-a\b was not specified and one or more \aname\a operands "
 	"did not have an alias definition, or an error occurred.]"
 "}"
 
@@ -2148,7 +2146,7 @@ const char sh_optwhence[] =
 	"is not found, then no output is produced.]"
 "[+?If \b-v\b is specified, the output will also contain information "
 	"that indicates how the given \aname\a would be interpreted by "
-	"the shell in the current execution environment.]" 
+	"the shell in the current execution environment.]"
 "[+?The \btype\b command is equivalent to \bwhence -v\b.]"
 "[a?Like \b-v\b but displays all uses for each \aname\a rather than the first.]"
 "[f?Do not check for functions.]"

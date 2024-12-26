@@ -150,7 +150,7 @@ vecopen(int inc, int siz)
 		inc = 16;
 	if (!(sp = stkopen(STK_SMALL|STK_NULL)))
 		return NULL;
-	if (!(v = (Vector_t*)stkseek(sp, sizeof(Vector_t) + inc * siz)))
+	if (!(v = stkseek(sp, sizeof(Vector_t) + inc * siz)))
 	{
 		stkclose(sp);
 		return NULL;
@@ -171,7 +171,7 @@ vecseek(Vector_t** p, int index)
 	if (index >= v->max)
 	{
 		while ((v->max += v->inc) <= index);
-		if (!(v = (Vector_t*)stkseek(v->stk, sizeof(Vector_t) + v->max * v->siz)))
+		if (!(v = stkseek(v->stk, sizeof(Vector_t) + v->max * v->siz)))
 			return NULL;
 		*p = v;
 		v->vec = (char*)v + sizeof(Vector_t);
@@ -207,7 +207,7 @@ stkpush(Stk_t* sp, size_t size)
 
 	stknew(sp, &p);
 	size = sizeof(Stk_frame_t) + sizeof(size_t) + size - 1;
-	if (!(f = (Stk_frame_t*)stkalloc(sp, sizeof(Stk_frame_t) + sizeof(Stk_frame_t*) + size - 1)))
+	if (!(f = stkalloc(sp, sizeof(Stk_frame_t) + sizeof(Stk_frame_t*) + size - 1)))
 		return NULL;
 	f->pos = p;
 	stkframe(sp) = f;
@@ -252,7 +252,7 @@ _matchpush(Env_t* env, Rex_t* rex)
 
 	if (rex->re.group.number <= 0 || (num = rex->re.group.last - rex->re.group.number + 1) <= 0)
 		num = 0;
-	if (!(f = (Match_frame_t*)stkpush(env->mst, sizeof(Match_frame_t) + (num - 1) * sizeof(regmatch_t))))
+	if (!(f = stkpush(env->mst, sizeof(Match_frame_t) + (num - 1) * sizeof(regmatch_t))))
 	{
 		env->error = REG_ESPACE;
 		return 1;
@@ -436,7 +436,7 @@ parserep(Env_t* env, Rex_t* rex, Rex_t* cont, unsigned char* s, int n)
 		{
 			if (matchpush(env, rex))
 				return BAD;
-			if (pospush(env, rex, s, BEG_ONE))	
+			if (pospush(env, rex, s, BEG_ONE))
 				return BAD;
 DEBUG_TEST(0x0004,(sfprintf(sfstdout,"AHA#%04d 0x%04x PUSH %d   (%z,%z)(%z,%z)(%z,%z) (%z,%z)(%z,%z)(%z,%z)\n", __LINE__, debug_flag, rex->re.group.number, env->best[0].rm_so, env->best[0].rm_eo, env->best[1].rm_so, env->best[1].rm_eo, env->best[2].rm_so, env->best[2].rm_eo, env->match[0].rm_so, env->match[0].rm_eo, env->match[1].rm_so, env->match[1].rm_eo, env->match[2].rm_so, env->match[2].rm_eo)),(0));
 		}
@@ -960,7 +960,7 @@ DEBUG_TEST(0x0008,(sfprintf(sfstdout, "AHA#%04d 0x%04x parse %s `%-.*s'\n", __LI
 			e = env->end;
 			if (!(rex->flags & REG_MINIMAL))
 			{
-				if (!(b = (unsigned char*)stkpush(env->mst, n)))
+				if (!(b = stkpush(env->mst, n)))
 				{
 					env->error = REG_ESPACE;
 					return BAD;
@@ -1110,7 +1110,7 @@ DEBUG_TEST(0x0008,(sfprintf(sfstdout, "AHA#%04d 0x%04x parse %s `%-.*s'\n", __LI
 				}
 				else
 				{
-					if (!(b = (unsigned char*)stkpush(env->mst, n)))
+					if (!(b = stkpush(env->mst, n)))
 					{
 						env->error = REG_ESPACE;
 						return BAD;
@@ -1422,7 +1422,7 @@ DEBUG_TEST(0x0200,(sfprintf(sfstdout,"AHA#%04d 0x%04x parse %s=>%s `%-.*s'\n", _
 			n = ((i + 7) >> 3) + 1;
 			catcher.type = REX_NEG_CATCH;
 			catcher.re.neg_catch.beg = s;
-			if (!(p = (unsigned char*)stkpush(env->mst, n)))
+			if (!(p = stkpush(env->mst, n)))
 				return BAD;
 			memset(catcher.re.neg_catch.index = p, 0, n);
 			catcher.next = rex->next;
@@ -1521,7 +1521,7 @@ DEBUG_TEST(0x0200,(sfprintf(sfstdout,"AHA#%04d 0x%04x parse %s=>%s `%-.*s'\n", _
 				}
 				else
 				{
-					if (!(b = (unsigned char*)stkpush(env->mst, n)))
+					if (!(b = stkpush(env->mst, n)))
 					{
 						env->error = REG_ESPACE;
 						return BAD;
@@ -1888,7 +1888,7 @@ regnexec_20120528(const regex_t* p, const char* s, size_t len, size_t nmatch, re
 	if (env->stack = env->hard || !(env->flags & REG_NOSUB) && nmatch)
 	{
 		n = env->nsub;
-		if (!(env->match = (regmatch_t*)stkpush(env->mst, 2 * (n + 1) * sizeof(regmatch_t))) ||
+		if (!(env->match = stkpush(env->mst, 2 * (n + 1) * sizeof(regmatch_t))) ||
 		    !env->pos && !(env->pos = vecopen(16, sizeof(Pos_t))) ||
 		    !env->bestpos && !(env->bestpos = vecopen(16, sizeof(Pos_t))))
 		{
@@ -2064,9 +2064,7 @@ regfree(regex_t* p)
  */
 
 #undef	regnexec
-#if _map_libc
 #define regnexec	_ast_regnexec
-#endif
 
 extern int
 regnexec(const regex_t* p, const char* s, size_t len, size_t nmatch, oldregmatch_t* oldmatch, regflags_t flags)

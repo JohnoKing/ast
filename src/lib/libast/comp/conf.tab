@@ -1,9 +1,9 @@
 #
 # posix { getconf limits } macro table
 #
-# @(#)conf.tab (AT&T Research) 2010-06-28
+# @(#)conf.tab (ksh 93u+m) 2024-07-01
 #
-# name standard section call flags [ header ... ] [ value ... ]
+# name standard call section flags [ header ... ] [ value ... ]
 #
 # name:		sans prefix
 # standard:	AST, C, POSIX, SVID, XOPEN, <vendor> { SCO, SGI, SUN, ... }
@@ -40,6 +40,7 @@
 ABI_AIO_XFER_MAX		C	QQ 1 L
 ABI_ASYNCHRONOUS_IO		C	QQ 1 L
 ABI_ASYNC_IO			C	QQ 1 L
+ACL_ENABLED			SUN	PC 1 0
 ADVISORY_INFO			POSIX	SC 1 FUW
 AIO_LISTIO_MAX			POSIX	SC 1 LMU	2
 AIO_MAX				POSIX	SC 1 LMU	1
@@ -127,16 +128,6 @@ IOV_MAX				XOPEN	SC 1 LMU	16
 IO_TYPE				C	QQ 1 L
 IPV6				POSIX	SC 1 FUW
 IP_SECOPTS			C	QQ 1 L
-JOB_CONTROL			POSIX	SC 1 FUW	cc{
-	#include "FEATURE/wait"
-	#if _ok_wif
-	int main(void)
-	{
-		printf("1");
-		return 0;
-	}
-	#endif
-}
 KERNEL_CLIST			SCO	SC 1 0
 KERNEL_CLIST_MAX		SCO	SC 1 0
 KERNEL_DISK			SCO	SC 1 0
@@ -187,13 +178,14 @@ LPBIG_OFFBIG_LINTFLAGS		XBS5	CS 1 FU
 MACHINE				SVID	SI 1 O
 MAPPED_FILES			POSIX	SC 1 CDFUW	_lib_mmap
 MAX_CANON			POSIX	PC 1 LMU	CANBSIZ 255
-MAX_INPUT			POSIX	PC 1 LMU	MAX_CANON 255	
+MAX_INPUT			POSIX	PC 1 LMU	MAX_CANON 255
 MB_LEN_MAX			C	XX 1 L		1
 MCAS_OFFSET			C	QQ 1 L
 MEMLOCK				POSIX	SC 1 CDFUW
 MEMLOCK_RANGE			POSIX	SC 1 CDFUW
 MEMORY_PROTECTION		POSIX	SC 1 CDFUW
 MESSAGE_PASSING			POSIX	SC 1 CDFUW
+MIN_HOLE_SIZE			POSIX	PC 1 LMU
 MMAP_FIXED_ALIGNMENT		C	QQ 1 L		_AST_PAGESIZE
 MONOTONIC_CLOCK			POSIX	SC 1 FUW
 MQ_OPEN_MAX			POSIX	SC 1 LMU	8
@@ -339,47 +331,14 @@ PAGESIZE			POSIX	SC 1 MU		PAGESIZE PAGE_SIZE 4096	cc{
 PAGE_SIZE			POSIX	SC 1 MU		_AST_PAGESIZE
 PASS_MAX			SVID	SC 1 CDLMU	8
 PATH				AST	CS 1 MU		sh{
-	CONF_path=
-	case $CONF_getconf in
-	'')	;;
-	*)	CONF_path=`"$CONF_getconf" PATH` ;;
+	# DEFPATH should have been exported from package(1)
+	echo "\\"$DEFPATH\\""
+}
+PATH_LEADING_SLASHES		AST	CS 1 M		sh{
+	# HOSTTYPE should have been exported from package(1)
+	case $HOSTTYPE in
+	cygwin.*)	echo "\\"1\\"" ;;  # support UNC paths (with two leading slashes)
 	esac
-	case $CONF_path in
-	'' | [!/]* | *:[!/]* | *: )
-		CONF_path=/bin:/usr/bin:/sbin:/usr/sbin ;;
-	esac
-	# Fix for NixOS. Not all POSIX standard utilities come with the default system,
-	# e.g. 'bc', 'file', 'vi'. The command that NixOS recommends to get missing
-	# utilities, e.g. 'nix-env -iA nixos.bc', installs them in a default profile
-	# directory that is not in $(getconf PATH). So add this path to the standard path.
-	# See: https://github.com/NixOS/nixpkgs/issues/65512
-	if	test -e /etc/NIXOS &&
-		nix_profile_dir=/nix/var/nix/profiles/default/bin &&
-		test -d "$nix_profile_dir"
-	then	case ":$CONF_path:" in
-		*:"$nix_profile_dir":* )
-			# nothing to do
-			;;
-		* )	# insert the default profile directory as the second entry
-			CONF_path=`
-				set -f
-				IFS=:
-				set $CONF_path
-				one=$1
-				shift
-				echo "$one:$nix_profile_dir${1+:}$*"
-			` ;;
-		esac
-	fi
-	# Fix for AIX. At least as of version 7.1, the system default 'find', 'diff -u' and 'patch' utilities
-	# are broken and/or non-compliant in ways that make them incompatible with POSIX 2018. However, GNU
-	# utilities are commonly installed in /opt/freeware/bin, and under standard names (no g- prefix).
-	if	test -d /opt/freeware/bin
-	then	case `uname` in
-		AIX )	CONF_path="/opt/freeware/bin:$CONF_path" ;;
-		esac
-	fi
-	echo "\\"$CONF_path\\""
 }
 PATH_MAX			POSIX	PC 1 CDLMUX	MAXPATHLEN 1024
 PBS				POSIX	SC 2 FUW
@@ -456,6 +415,7 @@ RELEASE				AST	XX 1 L
 RESOURCE_LIMITS			POSIX	SC 1 FU
 RE_DUP_MAX			POSIX	SC 2 LMN	255
 RTSIG_MAX			POSIX	SC 1 LMU	8
+SATTR_ENABLED			SUN	PC 1 0
 SAVED_IDS			POSIX	SC 1 FUW	cc{
 	#if _lib_setuid && !_lib_setreuid
 	int main(void)
@@ -473,7 +433,7 @@ SEMAPHORES			POSIX	SC 1 CDFUW
 SEM_NSEMS_MAX			POSIX	SC 1 LMU	256
 SEM_VALUE_MAX			POSIX	SC 1 LMU	32767
 SF_BUFSIZE			AST	XX 1 MUX	sh{
-	sed -e '/[ 	]*#[ 	]*define[ 	][ 	]*SF_BUFSIZE[ 	]/!d' -e 's/^[^0-9]*//' -e 's/[^0-9]*$//' $PACKAGEROOT/src/lib/libast/include/sfio.h
+	sed -e '/[ 	]*#[ 	]*define[ 	][ 	]*SFIO_BUFSIZE[ 	]/!d' -e 's/^[^0-9]*//' -e 's/[^0-9]*$//' $PACKAGEROOT/src/lib/libast/include/sfio.h
 }
 SH				AST	CS 1 MU		sh{
 	ifs=$IFS
@@ -603,6 +563,8 @@ WCHAR_MIN			C	XX 1 L		stddef.h
 WINT_MIN			C	XX 1 L		wchar.h
 WINT_MAX			C	XX 1 L		wchar.h
 WORD_BIT			XOPEN	XX 1 L		(8*sizeof(int))
+XATTR_ENABLED			SUN	PC 1 0
+XATTR_EXISTS			SUN	PC 1 0
 XCU_VERSION			XOPEN	SC 1 CDFSU
 XPG2				XOPEN	XX 1 FU
 XPG3				XOPEN	XX 1 FU

@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -26,9 +26,8 @@
 
 #include	"shopt.h"
 #include	"defs.h"
-#include	<error.h>
-#include	<errno.h>
 #include	<tmx.h>
+#include	<ast_float.h>
 #include	"builtins.h"
 #include	"FEATURE/time"
 #include	"FEATURE/poll"
@@ -64,6 +63,10 @@ int	b_sleep(int argc,char *argv[],Shbltin_t *context)
 	if(cp = *argv)
 	{
 		d = strtod(cp, &last);
+#if _lib_isnan
+		if (isnan(d))
+			last = cp;  /* trigger error */
+#endif /* _lib_isnan */
 		if(*last)
 		{
 			Time_t now,ns;
@@ -140,9 +143,20 @@ skip:
  */
 void sh_delay(double t, int sflag)
 {
-	int n = (int)t;
+	uint32_t n;
 	Tv_t ts, tx;
-
+#if _lib_isinf
+	if (isinf(t))
+	{
+		while (1)
+		{
+			pause();
+			if ((sh.trapnote & (SH_SIGSET | SH_SIGTRAP)) || sflag)
+				return;
+		}
+	}
+#endif /* _lib_isinf */
+	n = (uint32_t)t;
 	ts.tv_sec = n;
 	ts.tv_nsec = 1000000000 * (t - (double)n);
 	while(tvsleep(&ts, &tx) < 0)

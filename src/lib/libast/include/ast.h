@@ -45,13 +45,10 @@
 #endif
 
 /*
- * workaround botched headers that assume <stdio.h>
+ * work around botched headers that assume <stdio.h>
  */
 
 #ifndef FILE
-#ifndef _SFIO_H
-struct _sfio_s;
-#endif
 #define FILE		struct _sfio_s
 #ifndef	__FILE_typedef
 #define __FILE_typedef	1
@@ -90,20 +87,25 @@ struct _sfio_s;
  * exit() support -- this matches shell exit codes
  */
 
-#define EXIT_BITS	8	/* # exit status bits	*/
+#define EXIT_BITS	8			/* # exit status bits	*/
 
-#define EXIT_USAGE	2	/* usage exit code	*/
-#define EXIT_QUIT	255	/* parent should quit	*/
-#define EXIT_NOTFOUND	127	/* command not found	*/
-#define EXIT_NOEXEC	126	/* other exec error	*/
+#define EXIT_USAGE	2			/* usage exit code	*/
+#define EXIT_QUIT	((1<<(EXIT_BITS))-1)	/* parent should quit	*/
+#define EXIT_NOTFOUND	((1<<(EXIT_BITS-1))-1)	/* command not found	*/
+#define EXIT_NOEXEC	((1<<(EXIT_BITS-1))-2)	/* other exec error	*/
 
-#define EXIT_CODE(x)	((x) & EXIT_QUIT)
-#define EXIT_CORE(x)	(EXIT_CODE(x) | 256 | 128)
-#define EXIT_TERM(x)	(EXIT_CODE(x) | 256)
+#define EXIT_CODE(x)	((x)&((1<<EXIT_BITS)-1))
+#define EXIT_CORE(x)	(EXIT_CODE(x)|(1<<EXIT_BITS)|(1<<(EXIT_BITS-1)))
+#define EXIT_TERM(x)	(EXIT_CODE(x)|(1<<EXIT_BITS))
 
-#define EXIT_STATUS(x)	(((x) & 63) ? (x) : EXIT_CODE((x) >> 8))
-#define EXITED_CORE(x)	(((x) & (256 | 128)) == (256 | 128) || ((x) & (128 | 64)) == (128 | 64))
-#define EXITED_TERM(x)	((x) & (256 | 128))
+/*
+ * NOTE: for compatibility the following work for EXIT_BITS={7,8}
+ */
+
+#define EXIT_STATUS(x)	(((x)&((1<<(EXIT_BITS-2))-1))?(x):EXIT_CODE((x)>>EXIT_BITS))
+
+#define EXITED_CORE(x)	(((x)&((1<<EXIT_BITS)|(1<<(EXIT_BITS-1))))==((1<<EXIT_BITS)|(1<<(EXIT_BITS-1)))||((x)&((1<<(EXIT_BITS-1))|(1<<(EXIT_BITS-2))))==((1<<(EXIT_BITS-1))|(1<<(EXIT_BITS-2))))
+#define EXITED_TERM(x)	((x)&((1<<EXIT_BITS)|(1<<(EXIT_BITS-1))))
 
 /*
  * astconflist() flags
@@ -140,7 +142,7 @@ struct _sfio_s;
 #define PATH_READ	004
 #define PATH_WRITE	002
 #define PATH_EXECUTE	001
-#define	PATH_REGULAR	010
+#define PATH_REGULAR	010
 #define PATH_ABSOLUTE	020
 
 /*
@@ -213,8 +215,8 @@ typedef struct
 #define mbcoll()	( ast.mb_xfrm != 0 )
 #define mbwide()	( mbmax() > 1 )
 
-#define mb2wc(w,p,n)	( (*ast.mb_towc)(&w, (char*)p, n) )
-#define	mbchar(p)	mbnchar(p, mbmax())
+#define mb2wc(w,p,n)	( (*ast.mb_towc)(&w, (char*)(p), n) )
+#define mbchar(p)	mbnchar(p, mbmax())
 #define mbnchar(p,n)	( mbwide() ? ( (ast.tmp_int = (*ast.mb_towc)(&ast.tmp_wchar, (char*)(p), n)) > 0 ? \
 				( (p+=ast.tmp_int),ast.tmp_wchar) : (p+=ast.mb_sync+1,ast.tmp_int) ) : (*(unsigned char*)(p++)) )
 #define mbinit()	( ast.mb_sync = 0 )
@@ -258,8 +260,8 @@ typedef struct
 #define roundof(x,y)	(((x)+(y)-1)&~((y)-1))
 #define ssizeof(x)	((int)sizeof(x))
 
-#define streq(a,b)	(*(a)==*(b)&&!strcmp(a,b))
-#define strneq(a,b,n)	(*(a)==*(b)&&!strncmp(a,b,n))
+#define streq(a,b)	(!strcmp(a,b))
+#define strneq(a,b,n)	(!strncmp(a,b,n))
 #define strsignal(s)	fmtsignal(s)
 
 #define NiL		NULL			/* for backward compatibility */
@@ -347,7 +349,6 @@ extern char*		fmttime(const char*, time_t);
 extern char*		fmtuid(int);
 extern char*		fmtversion(unsigned long);
 extern void*		memdup(const void*, size_t);
-extern void		memfatal(void);
 extern unsigned int	memhash(const void*, int);
 extern unsigned long	memsum(const void*, int, unsigned long);
 extern char*		pathaccess(char*, const char*, const char*, const char*, int);
@@ -370,8 +371,6 @@ extern size_t		pathnative(const char*, char*, size_t);
 extern char*		pathpath(char*, const char*, const char*, int);
 extern char*		pathpath_20100601(const char*, const char*, int, char*, size_t);
 extern size_t		pathposix(const char*, char*, size_t);
-extern char*		pathprobe(char*, char*, const char*, const char*, const char*, int);
-extern char*		pathprobe_20100601(const char*, const char*, const char*, int, char*, size_t, char*, size_t);
 extern size_t		pathprog(const char*, char*, size_t);
 extern char*		pathrepl(char*, const char*, const char*);
 extern char*		pathrepl_20100601(char*, size_t, const char*, const char*);
@@ -428,25 +427,9 @@ extern int		wc2utf8(char*, uint32_t);
  */
 
 #if !defined(environ) && defined(__DYNAMIC__)
-#define	environ		__DYNAMIC__(environ)
+#define environ		__DYNAMIC__(environ)
 #else
 extern char**		environ;
-#endif
-
-/*
- * really handy malloc()/free() (__FILE__,__LINE__,__FUNCTION__) tracing
- * make with VMDEBUG==1 or debug=1 or CCFLAGS=$(CC.DEBUG)
- * VMDEBUG==0 disables
- * at runtime export VMALLOC_OPTIONS per vmalloc.3
- * to list originating call locations
- */
-
-#if !_std_malloc && !defined(VMFL) && !defined(_VMHDR_H) && \
-	(VMDEBUG || !defined(VMDEBUG) && _BLD_DEBUG)
-
-#define VMFL	1
-#include <vmalloc.h>
-
 #endif
 
 #include <ast_api.h>

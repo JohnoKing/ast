@@ -1,8 +1,8 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 1985-2013 AT&T Intellectual Property          *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -147,14 +147,18 @@ chrexp(const char* s, char** p, int* m, int flags)
 				c = CC_vt;
 				break;
 			case 'u':
+				q = s + 4;
+				goto wex;
 			case 'U':
+				q = s + 8;
+			wex:
+				if (!(flags & FMT_EXP_WIDE))
+					goto noexpand;
+				w = 1;
+				goto hex;
 			case 'x':
-				if (q = c == 'u' ? (s + 4) : c == 'U' ? (s + 8) : NULL)
-				{
-					if (!(flags & FMT_EXP_WIDE))
-						goto noexpand;
-					w = 1;
-				}
+				q = s + 2;
+			hex:
 				b = e = s;
 				n = 0;
 				c = 0;

@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -303,6 +303,21 @@ chmod +x script
 got=$({ "$SHELL" -i -c 'alias r=foo; ./script'; } 2>&1) \
 || err_exit "crash on running script after redefining predefined alias (got $(printf %q "$got"))"
 fi # !SHOPT_SCRIPTONLY
+
+# ======
+# Feature request for 93u+m/1.1+: https://github.com/ksh93/ksh/issues/732
+got=$(hash -r _non_existent_nonsense_ ls 2>&1; echo status=$?; hash) ln=$LINENO
+if	[[ ${.sh.version} == *93u+m/1.0.* || ${.sh.version} != *93u+m/* ]]
+then	exp=$'status=0\nls='$(command -v ls)
+else	exp=$0[$ln$']: hash: _non_existent_nonsense_: not found\nstatus=1\nls='$(command -v ls)
+fi
+[[ $got == "$exp" ]] || err_exit "hash nonexistent command (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# Bug fix: 'hash'/'alias -t' should not autoload functions
+echo 'bad_func() { :; }' >bad_func
+chmod +x bad_func  # bug only triggered if file is executable
+(FPATH=$PWD; alias -t bad_func 2>/dev/null; typeset -f bad_func >/dev/null)
+(($? > 0)) || err_exit "'hash'/'alias -t' autoloads function"
 
 # ======
 exit $((Errors<125?Errors:125))

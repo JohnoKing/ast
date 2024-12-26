@@ -465,8 +465,8 @@ if builtin cat 2> /dev/null; then
 	cat > "$tmp/sample_file" <<-EOF
 	foo
 	bar
-	
-	
+
+
 	baz
 	EOF
 	print \\033x > "$tmp/file_with_control_character"
@@ -905,5 +905,15 @@ if builtin getconf 2> /dev/null; then
 	[[ $exp == "$got" ]] || err_exit "'getconf -n' doesn't match names correctly" \
 		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 fi
+
+# ======
+# https://github.com/ksh93/ksh/issues/794
+
+if builtin cp 2>/dev/null; then
+	got=$(set +x; { (ulimit -c 0; cp --preserve=foo); } 2>&1)
+	let "(e=$?) == 2" || err_exit "crash on unexpected option value" \
+		"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
+fi
+
 # ======
 exit $((Errors<125?Errors:125))

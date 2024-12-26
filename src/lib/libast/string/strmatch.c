@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -189,11 +189,6 @@ strsubmatch(const char* s, const char* p, int flags)
 
 	return strngrpmatch(s, s ? strlen(s) : 0, p, match, 1, (flags ? STR_MAXIMAL : 0)|STR_LEFT) ? (char*)s + match[1] : NULL;
 }
-
-#undef	strgrpmatch
-#if _map_libc
-#define strgrpmatch	_ast_strgrpmatch
-#endif
 
 int
 strgrpmatch(const char* b, const char* p, ssize_t* sub, int n, int flags)

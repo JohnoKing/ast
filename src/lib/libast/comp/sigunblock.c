@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -17,24 +17,24 @@
 *                                                                      *
 ***********************************************************************/
 
+/*
+ * There is no longer a test for a native sigunblock() here because we
+ * always use the sigprocmask(3) version now. Obsolete functions don't
+ * necessarily mix with the POSIX interface. Plus, on QNX, sigunblock()
+ * expects a signal mask argument, not a signal number.
+ */
+
 #include <ast.h>
-
-#if _lib_sigunblock
-
-NoN(sigunblock)
-
-#else
-
 #include <sig.h>
 
-#ifndef SIG_UNBLOCK
-#undef	_lib_sigprocmask
-#endif
+/*
+ * remove s from the set of blocked signals
+ * s==0 unblocks them all
+ */
 
 int
 sigunblock(int s)
 {
-#if _lib_sigprocmask
 	int		op;
 	sigset_t	mask;
 
@@ -46,14 +46,4 @@ sigunblock(int s)
 	}
 	else op = SIG_SETMASK;
 	return sigprocmask(op, &mask, NULL);
-#else
-#if _lib_sigsetmask
-	return sigsetmask(s ? (sigsetmask(0L) & ~sigmask(s)) : 0L);
-#else
-	NoP(s);
-	return 0;
-#endif
-#endif
 }
-
-#endif

@@ -1,7 +1,10 @@
 lib	strsignal string.h signal.h
 
 tst	- run{
-	for sig in `/bin/kill -l 2>/dev/null`
+	# On Cygwin, '/bin/kill -l' is an error (!) but prints the list anyway (!)
+	sig=$(env kill -l 2>/dev/null)
+	test -n "$sig" || exit
+	for sig in $sig
 	do	case $sig in
 		*[!A-Za-z0-9_]*|*MIN|*MAX)
 			;;
@@ -11,4 +14,7 @@ tst	- run{
 			;;
 		esac
 	done
+}end fail{
+	echo "$0: failed to get list of signals from external 'kill -l'" >&2
+	exit 1
 }end

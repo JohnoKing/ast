@@ -52,7 +52,7 @@ tst	run{
 	esac
 	case $lib in
 	/usr/lib64/*|/usr/lib/*)
-		case `package` in
+		case ${HOSTTYPE?} in
 		sgi.mips3)
 			abi=/lib32
 			;;

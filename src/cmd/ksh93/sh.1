@@ -1682,7 +1682,10 @@ file when checking for mail.
 While defining a compound variable or a type,
 .B _
 is initialized as a reference to the compound variable or type.
-When a discipline function is invoked,
+When a discipline function is invoked
+for a variable that is not a type subvariable in the sense of
+.I "Type Variables"\^
+below, then
 .B _
 is initialized as a reference to the variable associated with
 the call to this function.
@@ -2536,19 +2539,11 @@ as well as any fields resulting from
 (see above),
 are checked to see if they contain one or more of the brace patterns
 .BR {*,*} ,
-.BI { l1 .. l2 }
-,
-.BI { n1 .. n2 }
-,
-.BI { n1 .. n2 %
-.IB fmt }
-,
-.BI { n1 .. n2
-.BI  .. n3 }
-, or
-.BI { n1 .. n2
-.BI  .. n3 % fmt }
-, where
+\f3{\fP\f2l1\fP\f3..\fP\f2l2\fP\f3}\fP,
+\f3{\fP\f2n1\fP\f3..\fP\f2n2\fP\f3}\fP,
+\f3{\fP\f2n1\fP\f3..\fP\f2n2\fP\f3%\fP\f2fmt\fP\f3}\fP,
+\f3{\fP\f2n1\fP\f3..\fP\f2n2\fP\f3..\fP\f2n3\fP\f3}\fP, or
+\f3{\fP\f2n1\fP\f3..\fP\f2n2\fP\f3..\fP\f2n3\fP\f3%\fP\f2fmt\fP\f3}\fP, where
 .B *
 represents any character,
 .IR l1\^ , l2\^
@@ -2598,7 +2593,7 @@ with
 .B *
 must be quoted.
 .PP
-In the seconds form,
+In the second form,
 .I l1\^
 and
 .I l2\^
@@ -2617,6 +2612,16 @@ incrementing
 .I n1\^
 by
 .IR n3\^ .
+The values of
+.IR n1\^ ,
+.I n2\^
+and
+.I n3\^
+are limited to the standard integer range as output by
+.B "getconf INT_MIN"
+and
+.BR "getconf INT_MAX" ;
+the behavior is undefined if this range is exceeded.
 The cases where
 .I n3\^
 is not specified behave as if
@@ -3066,7 +3071,7 @@ are quoted.
 A single quote cannot appear within the single quotes.
 A single quoted string preceded by an unquoted
 .B $
-is processed as an ANSI C string
+is processed as a C99 string
 except for the following:
 .RS
 .PD 0
@@ -3089,6 +3094,10 @@ Expands to the character control-\f2x\fP.
 .TP
 .BI \eC[. name .]
 Expands to the collating element \f2name\fP.
+.TP
+.BI \ex hh
+Expands to the single-byte character indicated by up to two hexadecimal digits \f2h\fP.
+Differently from C strings, no more than two hexadecimal digits are processed.
 .RE
 .PD
 .PP
@@ -3196,7 +3205,7 @@ and
 .BR _ ,
 respectively.
 For bases less than or equal to 36, upper and lower case
-characters can be used interchangeably.
+letters can be used interchangeably.
 .PP
 An arithmetic expression uses the same syntax, precedence, and
 associativity of
@@ -3917,10 +3926,11 @@ for reading and store
 the file descriptor number in variable
 .BR n .
 .PP
-A special shorthand redirection operator \fB&>\fR\fIword\fR is available; it
-is equivalent to \fB>\fR\fIword\fR\fB 2>&1\fR. It cannot be preceded by any
-digit or variable name. This shorthand is disabled if the \fBposix\fR shell
-option is active.
+Special shorthand redirection operators \fB&>\fR\fIword\fR and
+\fB&>>\fR\fIword\fR are available; they are equivalent to
+\fB>\fR\fIword\fR\fB 2>&1\fR and \fB>\fR\fIword\fR\fB 2>&1\fR, respectively.
+They cannot be preceded by any digit or variable name. These shorthands are
+disabled if the \fBposix\fR shell option is active.
 .PP
 The order in which redirections are specified is significant.
 The shell evaluates each redirection in terms of the
@@ -3990,8 +4000,10 @@ or
 commands.
 .PP
 The environment for any
-.I simple-command\^
-or function
+.IR simple-command\^ ,
+except calls of functions declared with the
+.IB name (\^)
+syntax,
 may be augmented by prefixing it with one or more variable assignments.
 A variable assignment argument is a word of the form
 .IR identifier=value .
@@ -4058,11 +4070,23 @@ below.)
 Functions defined by the
 .B function
 .I name
-syntax and called by name execute in the same process as the caller and
-share all files
+syntax and called by name execute in the same process as the caller
+and share all files
 and present working directory with the
 caller. Functions which use this syntax are called 'KornShell
 functions'.
+All changes to shell options are local to the function call.
+The
+.B errexit
+option is turned off in the function's scope.
+The same applies to the
+.B xtrace
+option, unless the
+.B functrace
+shell option is set
+or the function was tagged using
+.BR "typeset \-f \-t" .
+The state of all other shell options is inherited from the caller.
 Traps caught by the caller are reset to their default action
 inside the function.
 A trap condition that is not caught or ignored by the
@@ -4097,7 +4121,7 @@ syntax and functions defined with the
 syntax that are invoked with the \f3\s+2.\s-2\fP
 special built-in
 are executed in the caller's
-environment and share all variables
+environment and share all variables, options
 and traps with the caller.
 Errors within these function executions cause the script that contains
 them to abort.
@@ -4141,18 +4165,33 @@ file.
 .SS Discipline Functions.
 Each variable can have zero or more discipline functions
 associated with it.
-The shell initially understands the discipline names \f3get\fP,
-\f3set\fP, \f3append\fP, and \f3unset\fP but can be added
-when defining new types.  On most systems
+The shell initially understands the discipline names
+\f3get\fP, \f3getn\fP, \f3set\fP, \f3append\fP, and \f3unset\fP,
+but new disciplines can be added
+when defining new types. On most systems,
 others can be added at run time via the
 C programming interface extension provided by the
 .B builtin
 built-in utility.
+.PP
 If the \f3get\fP discipline is defined for a variable, it is invoked
 whenever the given variable is referenced.
 If the variable \f3.sh.value\fP is assigned a value inside
 the discipline function, the referenced variable will evaluate
 to this value instead.
+If the \f3getn\fP discipline is defined for a variable, it is invoked
+in preference to \f3get\fP whenever the given variable is referenced
+in an arithmetic expression.
+The variable \f3.sh.value\fP is assigned the
+.B \-F
+attribute
+inside \f3getn\fP discipline functions
+(see
+.B typeset
+under
+.I "Builtin Commands"
+below).
+Otherwise, it works like it does for \f3get\fP disciplines.
 If the \f3set\fP discipline is defined for a variable, it is invoked
 whenever the given variable is assigned a value.
 If the \f3append\fP discipline is defined for a variable, it is invoked
@@ -4175,7 +4214,9 @@ is the subscript of the variable, and
 will contain the value being assigned inside the
 .B set
 discipline function.
-The variable
+If the variable is not a type subvariable in the sense of
+.I "Type Variables"\^
+below, then the variable
 .B _
 is a reference to the variable including the subscript if any.
 For the \f3set\fP discipline,
@@ -4186,7 +4227,6 @@ Finally, the expansion \f3${\fP\f2var\^\fP\f3.\fP\f2name\^\fP\f3}\fP,
 when \f2name\^\fP is the name of a discipline, and there is
 no variable of this name, is equivalent to the command substitution
 \f3${ \fP\f2var\^\fP\f3.\fP\f2name\^\fP\f3;}\fP.
-
 .SS Name Spaces.
 Commands and functions that are executed as part of the
 .I list\^
@@ -4226,7 +4266,6 @@ By default, variables starting with
 \fB\s+2.\s-2sh\fP are in the
 .B sh
 name space.
-
 .SS Type Variables.
 Typed variables provide a way to create data structure and objects.
 A type can be defined either by a shared library, by the
@@ -4348,9 +4387,7 @@ like:
 indicating that the job which was started asynchronously was job number
 1 and had one (top-level) process, whose process ID was 1234.
 .PP
-This paragraph and the next require features that are
-not in all versions of UNIX and may not apply.
-If you are running a job and wish to do something else you may hit the key
+If you are running a job and wish to do something else, you may hit the key
 \fB^Z\fR (control-Z) which sends a STOP signal to the current job.
 The shell will then normally indicate that the job has been `Stopped',
 and print another prompt.
@@ -4415,6 +4452,9 @@ option of the
 command causes
 the shell to print these job change messages
 as soon as they occur.
+If this happens while you are typing a command with one of the
+built-in line editors active, the job change message appears
+above your input without disturbing your command entry.
 .PP
 When the
 .B monitor
@@ -4689,9 +4729,9 @@ command (see \f2Built-in Commands\fP below).
 .PP
 History expansions begin with the character \f3!\fP.
 They may begin anywhere in the input.
-The \f3!\fP may be preceded by a \f3\\\fP or enclosed in single quotes
-to prevent its special meaning.
-A \f3!\fP is also passed unchanged when it is followed by
+The \f3!\fP is passed unchanged with its special meaning disabled
+when preceded by \f3\\\fP or \f3${\fP,
+enclosed in single quotes, or followed by
 a space, tab, newline, \f3=\fP or \f3(\fP.
 History expansions do not nest.
 They are parsed separately before the shell parser is invoked,
@@ -5308,24 +5348,21 @@ by the
 command, usually
 .BR ^U .)
 Kill the entire current line.
-If two
-.I kill
-characters are entered in succession, all
-kill characters from then on cause a line feed
-(useful when using paper terminals).
-A subsequent pair of
-.I kill
-characters undoes this change.
 .TP 10
 .BI ^Y
 Restore last item removed from line. (Yank item back to the line.)
 .TP 10
 .BI ^X^E
-Return the command
-.BI "hist \-e ${\s-1VISUAL\s+1:\-${\s-1EDITOR\s+1:\-vi}}"
-in the input buffer to call a full editor \(em
-.BI vi
-by default \(em on the current command line.
+Edit the current command line in a full editor (as set in the
+.SM
+.B VISUAL
+or
+.SM
+.B EDITOR
+variable, or
+.IR vi (1),
+in that order of preference).
+The command line is executed if the file is saved before exiting the editor.
 .TP 10
 .BI ^L
 Line feed and print current line.
@@ -6081,14 +6118,21 @@ Undo the last text modifying command.
 Undo all the text modifying commands performed on the line.
 .TP 10
 [\f2count\fP]\f3v\fP
-Returns the command
-.BI "hist \-e ${\s-1VISUAL\s+1:\-${\s-1EDITOR\s+1:\-vi}}" " count"
-in the input buffer to call a full editor \(em
-.BI vi
-by default \(em on a history entry.
+Edit command line number
+.I count\^
+in a full editor (as set in the
+.SM
+.B VISUAL
+or
+.SM
+.B EDITOR
+variable, or
+.IR vi (1),
+in that order of preference).
 If
 .I count\^
 is omitted, then the current line is used.
+The command line is executed if the file is saved before exiting the editor.
 .TP 10
 .BI ^L
 Line feed and print current line.
@@ -6283,11 +6327,11 @@ causes the next word to be checked for
 alias substitution.
 With the
 .B \-t
-option, each name is looked up as a command in
-.B $PATH
-and its path is added to the hash table as a 'tracked alias'.
-If no name is given, this prints the hash table. See
-.BR hash.
+option,
+.B alias
+acts like
+.BR hash ;
+see there.
 Without the
 .B \-t
 option,
@@ -6675,7 +6719,8 @@ If
 .I arg\^
 is given,
 the command specified by
-the arguments is executed in place of this shell
+the arguments is seaerched on PATH as an external command
+and executed in place of the current shell
 without creating a new process.
 The value of the
 .SM
@@ -6697,12 +6742,15 @@ rather than the first
 .IR arg ,
 to become
 .B argv[0]
-for the new process.
+(a.k.a.
+.BR $0 )
+for the new process; on systems that disallow this, the option
+is ignored except for printing a "not supported" warning.
 If
 .I arg\^
 is not given and only I/O redirections are given,
 then this command persistently modifies file descriptors as in
-.BR redirect.
+.BR redirect .
 .TP
 \(dg \f3exit\fP \*(OK \f2n\^\fP \*(CK
 Causes the shell to exit
@@ -6752,7 +6800,7 @@ Does nothing, and exits 1. Used with
 for infinite loops.
 .TP
 .PD 0
-\f3fc\fP \*(OK \f3\-e\fP \f2ename\^\fP \ \*(CK \*(OK \f3\-N\fP \f2num\^\fP \*(CK \*(OK \f3\-nlr\^\fP \*(CK \*(OK \f2first\^\fP \*(OK \f2last\^\fP \*(CK \*(CK
+\f3fc\fP \*(OK \f3\-e\fP \f2ename\^\fP \ \*(CK \*(OK \f3\-N\fP \f2num\^\fP \*(CK \*(OK \f3\-Enlr\^\fP \*(CK \*(OK \f2first\^\fP \*(OK \f2last\^\fP \*(CK \*(CK
 .TP
 \f3fc \-s \fP \*(OK \f2old\fP\f3\=\fP\f2new\^\fP \*(CK \*(OK \f2command\^\fP \*(CK
 .PD
@@ -6901,7 +6949,7 @@ The option
 .B #
 can only be specified as the first option.
 .TP
-\f3hash\fP \*(OK \f3\-r\fP \f2\^\fP\*(CK \*(OK \f3utility\^\fP \*(CK
+\f3hash\fP \*(OK \f3\-r\fP \f2\^\fP\*(CK \*(OK \f2utility\^\fP ... \*(CK
 .B hash
 displays or modifies the hash table with the locations of recently used
 programs. If given no arguments, it lists all command/path associations
@@ -6912,13 +6960,16 @@ performs a
 search for each
 .I utility\^
 supplied and adds the result to the hash table.
+An error message is issued for each
+.I utility\^
+that is not found and the exit status is non-zero if any were not found.
 The
 .B \-r
 option empties the hash table. This can also be achieved by resetting
 .BR PATH.
 .TP
 .PD 0
-\f3hist\fP \*(OK \f3\-e\fP \f2ename\^\fP \ \*(CK \*(OK \f3\-N\fP \f2num\^\fP \*(CK \*(OK \f3\-nlr\^\fP \*(CK \*(OK \f2first\^\fP \*(OK \f2last\^\fP \*(CK \*(CK
+\f3hist\fP \*(OK \f3\-e\fP \f2ename\^\fP \ \*(CK \*(OK \f3\-N\fP \f2num\^\fP \*(CK \*(OK \f3\-Enlr\^\fP \*(CK \*(OK \f2first\^\fP \*(OK \f2last\^\fP \*(CK \*(CK
 .TP
 \f3hist \-s\fP \*(OK \f2old\fP\f3\=\fP\f2new\^\fP \*(CK \*(OK \f2command\^\fP \*(CK
 .PD
@@ -6963,8 +7014,11 @@ is not set, then
 (default
 .BR /bin/ed\^ )
 is used as the editor.
-When editing is complete, the edited command(s)
-is executed if the changes have been saved.
+When the editor exits, the contents of the file become
+the new command line and it is either executed
+regardless of any change, or if the
+.B \-E
+option is given, it is executed if the file has been saved.
 If
 .I last\^
 is not specified,
@@ -8048,9 +8102,14 @@ class characters in the
 .B IFS
 variable;
 .IP \[bu]
-causes file descriptors > 2 to be left open when invoking another program;
+causes
+.B redirect
+and
+.B exec
+to open file descriptors > 2 without the close-on-exec flag,
+so that they are left open when invoking another program;
 .IP \[bu]
-disables the \fB&>\fR redirection shorthand;
+disables the \fB&>\fR and \fB&>>\fR redirection shorthands;
 .IP \[bu]
 disables fast filescan loops of type
 \f3while\fP \f2inputredirection\^\fP \f3;do\fP \f2list\^\fP \f3;done\fP;
@@ -9124,10 +9183,9 @@ Unsetting
 .BR RANDOM ,
 .BR SECONDS ,
 .BR SRANDOM ,
-.BR TMOUT ,
 and
 .SM
-.B _
+.B TMOUT
 removes their special meaning even if they are
 subsequently assigned to.
 .TP
@@ -9393,14 +9451,14 @@ or
 .IP \[bu]
 specifying path or
 command names containing
-.BR / 
+.BR /
 .IP \[bu]
 redirecting output
 .RB ( > ,
 .BR >| ,
 .BR <> ,
 and
-.BR >> ) 
+.BR >> )
 .IP \[bu]
 adding or deleting built-in commands
 .IP \[bu]
@@ -9513,7 +9571,6 @@ The null device.
 .IR exec (2),
 .IR fork (2),
 .IR getpwnam (3),
-.IR ioctl (2),
 .IR lseek (2),
 .IR paste (1),
 .IR pathconf (2),

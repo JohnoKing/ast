@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -67,14 +67,7 @@ procclose(Proc_t* p)
 					signal(SIGINT, p->sigint);
 				if (p->sigquit != SIG_IGN)
 					signal(SIGQUIT, p->sigquit);
-#if _lib_sigprocmask
 				sigprocmask(SIG_SETMASK, &p->mask, NULL);
-#elif _lib_sigsetmask
-				sigsetmask(p->mask);
-#else
-				if (p->sigchld != SIG_DFL)
-					signal(SIGCHLD, p->sigchld);
-#endif
 			}
 			status = status == -1 ?
 				 EXIT_QUIT :

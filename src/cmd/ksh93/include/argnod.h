@@ -38,7 +38,11 @@ struct comnod
 {
 	int		comtyp;
 	struct ionod	*comio;
-	struct argnod	*comarg;
+	union
+	{
+		struct argnod	*ap;	/* use if (comtyp&COMSCAN) */
+		struct dolnod	*dp;	/* use if (!(comtyp&COMSCAN)) */
+	}		comarg;
 	struct argnod	*comset;
 	void		*comnamp;
 	void		*comnamq;
@@ -57,7 +61,7 @@ struct slnod 	/* struct for linked list of stacks */
 	struct slnod	*slchild;
 	Sfio_t		*slptr;
 	/* slpad aligns struct functnod = struct slnod + 1 on some architectures */
-	struct slnod	*slpad;	
+	struct slnod	*slpad;
 };
 
 /*
@@ -70,7 +74,7 @@ struct dolnod
 	int		dolmax;		/* size of dolval array */
 	int		dolnum;		/* number of elements */
 	int		dolbot;		/* current first element */
-	struct dolnod	*dolnxt;	/* used when list are chained */
+	struct dolnod	*dolnxt;	/* used when lists are chained */
 	char		*dolval[1];	/* array of value pointers */
 };
 
@@ -91,7 +95,6 @@ struct argnod
 	{
 		struct argnod	*ap;
 		char		*cp;
-		int		len;
 	}		argchn;
 	unsigned char	argflag;
 	char		argval[4];
@@ -109,7 +112,7 @@ struct argnod
 #define ARG_RAW		0x1	/* string needs no processing */
 #define ARG_MAKE	0x2	/* bit set during argument expansion */
 #define ARG_MAC		0x4	/* string needs macro expansion */
-#define	ARG_EXP		0x8	/* string needs file expansion */
+#define ARG_EXP		0x8	/* string needs file expansion */
 #define ARG_ASSIGN	0x10	/* argument is an assignment */
 #define ARG_QUOTED	0x20	/* word contained quote characters */
 #define ARG_MESSAGE	0x40	/* contains international string */

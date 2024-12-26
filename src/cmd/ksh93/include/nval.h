@@ -25,6 +25,8 @@
  * Interface definitions of structures for name-value pairs
  * These structures are used for named variables, functions and aliases
  *
+ * NOTE: this header defines a public libshell interface,
+ * unless _BLD_ksh is defined as nonzero
  */
 
 
@@ -119,13 +121,9 @@ struct Namval
 	unsigned short 	nvsize;		/* size or base */
 	unsigned int	dynscope;
 #endif
-#ifdef _NV_PRIVATE
-	_NV_PRIVATE
-#else
-	Namfun_t	*nvfun;
-	char		*nvalue;
-	char		*nvprivate;
-#endif /* _NV_PRIVATE */
+	Namfun_t	*nvfun;		/* pointer to trap functions */
+	void		*nvalue;	/* pointer to any kind of value */
+	void		*nvmeta;	/* pointer to any of various kinds of type-dependent data */
 };
 
 #define NV_CLASS	".sh.type"
@@ -138,13 +136,14 @@ struct Namval
 #define NV_ARRAY	0x400	/* node is an array */
 #define NV_REF		0x4000	/* reference bit */
 #define NV_TABLE	0x800	/* node is a dictionary table */
-#define NV_IMPORT	0x1000	/* value imported from environment */
-#define NV_MINIMAL	NV_IMPORT	/* node does not contain all fields */
+#define NV_MINIMAL	0x1000	/* node does not contain all fields */
+#if _BLD_ksh
 #if SHOPT_OPTIMIZE
 #define NV_NOOPTIMIZE	NV_TABLE	/* disable loop invariants optimizer */
 #else
 #define NV_NOOPTIMIZE	0
-#endif
+#endif /* SHOPT_OPTIMIZE */
+#endif /* _BLD_ksh */
 
 #define NV_INTEGER	0x2	/* integer attribute */
 /* The following attributes are valid only when NV_INTEGER is off */
@@ -183,7 +182,7 @@ struct Namval
 #define NV_NOREF	NV_REF		/* don't follow reference */
 #define NV_IDENT	0x80		/* name must be identifier */
 #define NV_VARNAME	0x20000		/* name must be ?(.)id*(.id) */
-#define NV_NOADD	0x40000		/* do not add node */ 	
+#define NV_NOADD	0x40000		/* do not add node */
 #define NV_NOSCOPE	0x80000		/* look only in current scope */
 #define NV_NOFAIL	0x100000	/* return 0 on failure, no msg */
 #define NV_NODISC	NV_IDENT	/* ignore disciplines */
@@ -199,10 +198,7 @@ struct Namval
 #define NV_SCOPES	(NV_DYNAMIC|NV_GLOBAL|NV_STATSCOPE)
 
 /* numeric types */
-/* NV_INT16 and NV_UINT16 store values directly in the node; all the others use pointers */
-#define NV_INT16P	(NV_LJUST|NV_SHORT|NV_INTEGER)
 #define NV_INT16	(NV_SHORT|NV_INTEGER)
-#define NV_UINT16P	(NV_LJUST|NV_UNSIGN|NV_SHORT|NV_INTEGER)
 #define NV_UINT16	(NV_UNSIGN|NV_SHORT|NV_INTEGER)
 #define NV_INT32	(NV_INTEGER)
 #define NV_UINT32	(NV_UNSIGN|NV_INTEGER)
@@ -240,7 +236,7 @@ struct Namval
 /* The following are operations for nv_putsub() */
 #define ARRAY_BITS	22
 #define ARRAY_ADD	(1L<<ARRAY_BITS)	/* add subscript if not found */
-#define	ARRAY_SCAN	(2L<<ARRAY_BITS)	/* For ${array[@]} */
+#define ARRAY_SCAN	(2L<<ARRAY_BITS)	/* For ${array[@]} */
 #define ARRAY_UNDEF	(4L<<ARRAY_BITS)	/* For ${array} */
 
 

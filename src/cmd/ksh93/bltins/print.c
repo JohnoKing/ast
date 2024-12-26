@@ -34,7 +34,6 @@
 #include	"builtins.h"
 #include	"streval.h"
 #include	<tmx.h>
-#include	<ccode.h>
 
 union types_t
 {
@@ -176,6 +175,7 @@ int    b_print(int argc, char *argv[], Shbltin_t *context)
 	Namval_t *vname=0;
 	Optdisc_t disc;
 	exitval = 0;
+	memset(&disc, 0, sizeof(disc));
 	disc.version = OPT_VERSION;
 	disc.infof = infof;
 	if(argc>0)
@@ -307,7 +307,9 @@ int    b_print(int argc, char *argv[], Shbltin_t *context)
 			errormsg(SH_DICT,ERROR_usage(2), "%s", opt_info.arg);
 			UNREACHABLE();
 	}
+#if SHOPT_PRINTF_LEGACY
 skipopts:
+#endif /* SHOPT_PRINTF_LEGACY */
 	opt_info.disc = NULL;
 	argv += opt_info.index;
 	if(error_info.errors || (argc<0 && !(format = *argv++)))
@@ -353,13 +355,13 @@ skip2:
 	if(!(outfile=sh.sftable[fd]))
 	{
 		sh_onstate(SH_NOTRACK);
-		n = SF_WRITE|((n&IOREAD)?SF_READ:0);
+		n = SFIO_WRITE|((n&IOREAD)?SFIO_READ:0);
 		sh.sftable[fd] = outfile = sfnew(NULL,sh.outbuff,IOBSIZE,fd,n);
 		sh_offstate(SH_NOTRACK);
-		sfpool(outfile,sh.outpool,SF_WRITE);
+		sfpool(outfile,sh.outpool,SFIO_WRITE);
 	}
 	/* turn off share to guarantee atomic writes for printf */
-	n = sfset(outfile,SF_SHARE|SF_PUBLIC,0);
+	n = sfset(outfile,SFIO_SHARE|SFIO_PUBLIC,0);
 printf_v:
 	if(format)
 	{
@@ -372,7 +374,7 @@ printf_v:
 		pdata.hdr.reloadf = reload;
 		pdata.nextarg = argv;
 		sh_offstate(SH_STOPOK);
-		pool=sfpool(sfstderr,NULL,SF_WRITE);
+		pool=sfpool(sfstderr,NULL,SFIO_WRITE);
 		do
 		{
 			pdata.argv0 = pdata.nextarg;
@@ -384,7 +386,7 @@ printf_v:
 		if(pdata.nextarg == nullarg && pdata.argsize>0)
 			if(sfwrite(outfile,stkptr(sh.stk,stktell(sh.stk)),pdata.argsize) < 0)
 				exitval = 1;
-		sfpool(sfstderr,pool,SF_WRITE);
+		sfpool(sfstderr,pool,SFIO_WRITE);
 		if (pdata.err)
 			exitval = 1;
 	}
@@ -422,8 +424,8 @@ printf_v:
 #endif /* !SHOPT_SCRIPTONLY */
 	else
 	{
-		if(n&SF_SHARE)
-			sfset(outfile,SF_SHARE|SF_PUBLIC,1);
+		if(n&SFIO_SHARE)
+			sfset(outfile,SFIO_SHARE|SFIO_PUBLIC,1);
 		if (sfsync(outfile) < 0)
 			exitval = 1;
 	}
@@ -466,27 +468,27 @@ static int echolist(Sfio_t *outfile, int raw, char *argv[])
  */
 static char strformat(char *s)
 {
-        char*		t;
-        int		c;
-        char*		b;
-        char*		p;
+	char*		t;
+	int		c;
+	char*		b;
+	char*		p;
 #if SHOPT_MULTIBYTE && defined(FMT_EXP_WIDE)
 	int		w;
 #endif
-        b = t = s;
-        for (;;)
-        {
-                switch (c = *s++)
-                {
-                    case '\\':
+	b = t = s;
+	for (;;)
+	{
+		switch (c = *s++)
+		{
+		    case '\\':
 			if(*s==0)
 				break;
 #if SHOPT_MULTIBYTE && defined(FMT_EXP_WIDE)
-                        c = chrexp(s - 1, &p, &w, FMT_EXP_CHAR|FMT_EXP_LINE|FMT_EXP_WIDE);
+			c = chrexp(s - 1, &p, &w, FMT_EXP_CHAR|FMT_EXP_LINE|FMT_EXP_WIDE);
 #else
-                        c = chresc(s - 1, &p);
+			c = chresc(s - 1, &p);
 #endif
-                        s = p;
+			s = p;
 #if SHOPT_MULTIBYTE
 #if defined(FMT_EXP_WIDE)
 			if(w)
@@ -509,13 +511,13 @@ static char strformat(char *s)
 				*t++ = '%';
 				c = 'Z';
 			}
-                        break;
-                    case 0:
-                        *t = 0;
-                        return t - b;
-                }
-                *t++ = c;
-        }
+			break;
+		    case 0:
+			*t = 0;
+			return t - b;
+		}
+		*t++ = c;
+	}
 }
 
 static char *genformat(char *format)
@@ -542,8 +544,6 @@ static char *fmthtml(const char *string, int flags)
 		/* Encode for HTML and XML, for main text and single- and double-quoted attributes. */
 		while(op = cp, c = mbchar(cp))
 		{
-			if(!mbwide())
-				c = CCMAPC(c,CC_NATIVE,CC_ASCII);
 			if(mbwide() && c < 0)		/* invalid multibyte char */
 				sfputc(sh.stk,'?');
 			else if(c == 60)		/* < */
@@ -583,7 +583,7 @@ static char *fmthtml(const char *string, int flags)
 				if(strchr(URI_RFC3986_UNRESERVED, c))
 					sfputc(sh.stk,c);
 				else
-					sfprintf(sh.stk, "%%%02X", CCMAPC(c, CC_NATIVE, CC_ASCII));
+					sfprintf(sh.stk, "%%%02X", c);
 			}
 		}
 	}
@@ -644,7 +644,7 @@ static ssize_t fmtbase64(Sfio_t *iop, char *string, int alt)
 			else
 			{
 				size =  sizeof(short);
-				number.i = (int)d; 
+				number.i = (int)d;
 			}
 		}
 		return sfwrite(iop, &number, size);
@@ -658,7 +658,7 @@ static ssize_t fmtbase64(Sfio_t *iop, char *string, int alt)
 				break;
 		}
 		if(fp)
-			return (*fp->disc->writef)(np, iop, 0, fp); 		
+			return (*fp->disc->writef)(np, iop, 0, fp);
 		else
 		{
 			int n = nv_size(np);
@@ -669,7 +669,7 @@ static ssize_t fmtbase64(Sfio_t *iop, char *string, int alt)
 				nv_offattr(np,NV_RAW);
 			}
 			else
-				cp = (char*)np->nvalue.cp;
+				cp = np->nvalue;
 			if((size = n)==0)
 				size = strlen(cp);
 			size = sfwrite(iop, cp, size);
@@ -797,7 +797,7 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 		case 'E':
 		case 'F':
 		case 'G':
-                        if(SFFMT_LDOUBLE)
+			if(SFFMT_LDOUBLE)
 				value->ld = 0.;
 			else
 				value->d = 0.;
@@ -810,6 +810,7 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 			break;
 		case 'T':
 			fe->fmt = 'd';
+			tm_info.flags = 0;
 			value->ll = tmxgettime();
 			break;
 		case '.':
@@ -840,15 +841,15 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 			np = nv_open(argp,sh.var_tree,NV_VARNAME|NV_NOARRAY);
 			_nv_unset(np,0);
 			nv_onattr(np,NV_INTEGER);
-			if (np->nvalue.lp = new_of(int32_t,0))
-				*np->nvalue.lp = 0;
+			if (np->nvalue = new_of(int32_t,0))
+				*((int32_t*)np->nvalue) = 0;
 			nv_setsize(np,10);
 			if(sizeof(int)==sizeof(int32_t))
-				value->ip = (int*)np->nvalue.lp;
+				value->ip = np->nvalue;
 			else
 			{
 				int32_t sl = 1;
-				value->ip = (int*)(((char*)np->nvalue.lp) + (*((char*)&sl) ? 0 : sizeof(int)));
+				value->ip = (int*)(((char*)np->nvalue) + (*((char*)&sl) ? 0 : sizeof(int)));
 			}
 			break;
 		}
@@ -992,7 +993,7 @@ static int extend(Sfio_t* sp, void* v, Sffmt_t* fe)
 					d = sh_strnum(argp,&lastchar,0);
 				break;
 			}
-                        if(SFFMT_LDOUBLE)
+			if(SFFMT_LDOUBLE)
 			{
 				value->ld = d;
 				fe->size = sizeof(value->ld);
@@ -1191,7 +1192,7 @@ static int fmtvecho(const char *string, struct printf *pp)
 		if( c=='\\') switch(*++cp)
 		{
 			case 'E':
-				c = ('a'==97?'\033':39); /* ASCII/EBCDIC */
+				c = '\033'; /* ASCII */
 				break;
 			case 'a':
 				c = '\a';

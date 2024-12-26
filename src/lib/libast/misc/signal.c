@@ -29,28 +29,6 @@
 #undef	_def_map_ast
 #include <ast_map.h>
 
-#if defined(SV_ABORT)                                         
-#undef	SV_INTERRUPT
-#define SV_INTERRUPT	SV_ABORT
-#endif
-
-#if !_std_signal && (_lib_sigaction && defined(SA_NOCLDSTOP) || _lib_sigvec && defined(SV_INTERRUPT))
-
-#if !defined(SA_NOCLDSTOP) || !defined(SA_INTERRUPT) && defined(SV_INTERRUPT)
-#undef	SA_INTERRUPT
-#define SA_INTERRUPT	SV_INTERRUPT
-#undef	sigaction
-#define sigaction	sigvec
-#undef	sigemptyset
-#define sigemptyset(p)	(*(p)=0)
-#undef	sa_flags
-#define sa_flags	sv_flags
-#undef	sa_handler
-#define sa_handler	sv_handler
-#undef	sa_mask
-#define	sa_mask		sv_mask
-#endif
-
 Sig_handler_t
 signal(int sig, Sig_handler_t fun)
 {
@@ -100,9 +78,3 @@ signal(int sig, Sig_handler_t fun)
 		sigunblock(sig);
 	return oa.sa_handler;
 }
-
-#else
-
-NoN(signal)
-
-#endif

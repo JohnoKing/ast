@@ -2,9 +2,10 @@ ref	-D_def_map_ast=1
 
 cmd	universe
 
-hdr	dirent,direntry,filio,fmtmsg,fnmatch,jioctl,libgen,limits
+sys	mman
+hdr	fcntl,dirent,direntry,filio,fmtmsg,fnmatch,jioctl,libgen,limits
 hdr	locale,ndir,nl_types,process,spawn,utime
-hdr	linux/fs,linux/msdos_fs,sys/ioctl
+hdr	linux/fs,linux/msdos_fs
 hdr	wctype
 hdr	wchar note{ <wchar.h> and isw*() really work }end execute{
 	#include <wchar.h>
@@ -23,19 +24,17 @@ dat	_tzname,tzname
 
 lib	BSDsetpgrp
 lib	_cleanup
-lib	bcopy,bzero,catclose,catgets,catopen,confstr,dirread,dup2
-lib	execlp,execve,execvp,execvpe
+lib	bcopy,bzero,confstr,dirread
 lib	fchmod,fcntl,fmtmsg,fnmatch,fork,fsync
-lib	getconf,getdents,getdirentries,getdtablesize,getdate
-lib	getgroups,gethostname,getlogin,getpagesize,getrlimit,getuniverse
-lib	getopt,getsubopt,getopt_long,getopt_long_only
+lib	getconf,getdents,getdirentries,getdtablesize
+lib	gethostname,getpagesize,getrlimit,getuniverse
 lib	glob,iswblank,iswctype,killpg,link,localeconv,madvise
-lib	mbtowc,mbrtowc,memalign,memchr,memcpy,memdup,memmove,memset
+lib	mbtowc,mbrtowc,memalign,memdup
 lib	mkdir,mkfifo,mktemp,mktime
 lib	mount,opendir,pathconf
 lib	readlink,remove,rename,rewinddir,rmdir,setlocale
-lib	setpgid,setpgrp,setpgrp2,setreuid,setsid,setuid,sigaction
-lib	sigprocmask,sigsetmask,sigunblock,sigvec,socketpair
+lib	setpgrp,setpgrp2,setreuid,setuid
+lib	socketpair
 lib	spawn,spawnve
 lib	strcoll,strdup,strerror,strcasecmp,strncasecmp,strlcat,strlcpy
 lib	strmode,strxfrm,strftime,swab,symlink,sysconf,sysinfo
@@ -52,7 +51,7 @@ mem	DIR.dd_fd sys/types.h - dirent.h - sys/dir.h
 mem	inheritance.pgroup spawn.h
 mem	tm.tm_zone time.h
 
-sys	dir,filio,jioctl,localedef,ptem,resource
+sys	dir,filio,ioctl,jioctl,localedef,ptem,resource
 sys	socket,stream,systeminfo,universe
 
 tst	tst_errno note{ errno can be assigned }end link{
@@ -85,25 +84,6 @@ tst	lib_poll note{ poll() args comply with the POSIX standard }end execute{
 		if (write(rw[1], "x", 1) != 1) return 1;
 		if (poll(&fd, 1, 0) < 0 || fd.revents == 0) return 1;
 		return 0;
-	}
-}end
-
-tst	lib_poll_notimer note{ poll with no fds ignores timeout }end execute{
-	#include <sys/types.h>
-	#include <poll.h>
-	extern time_t	time(time_t*);
-	#define TIMEOUT		4
-	int
-	main(void)
-	{
-		unsigned long	start;
-		unsigned long	finish;
-		struct pollfd	fd;
-		start = time(NULL);
-		if (poll(&fd, 0, TIMEOUT * 1000) < 0)
-			return 0;
-		finish = time(NULL);
-		return (finish - start) > (TIMEOUT / 2);
 	}
 }end
 
@@ -329,7 +309,7 @@ tst	socket_peek note{ recv(MSG_PEEK) works on socketpair() }end execute{
 	#include <sys/socket.h>
 	int
 	main(void)
-	{	
+	{
 		int		i;
 		int		fds[2];
 		char		buf[128];
@@ -360,140 +340,6 @@ tst	socket_peek note{ recv(MSG_PEEK) works on socketpair() }end execute{
 	}
 }end
 
-tst	lib_memcmp string.h note{ standard memcmp interface that works }end execute{
-	/* SGI again -- we're sick of being their regression test */
-	#define L	8
-	char		a[L] = { '0' };
-	char		b[L] = { '1' };
-	int
-	main(void)
-	{
-		return memcmp(a, b, L) >= 0;
-	}
-}end
-
-tst	lib_memccpy string.h unistd.h stdlib.h fcntl.h signal.h sys/types.h sys/stat.h sys/mman.h fcntl.h note{ standard memccpy interface that works }end execute{
-	#ifndef MAP_FAILED
-	#define MAP_FAILED ((void*)-1)	/* introduced in POSIX-1.2017 */
-	#endif
-	static void gotcha(int sig)
-	{
-		exit(1);
-	}
-	#ifdef MAP_PRIVATE
-	static const char x[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxN";
-	static int indict_sgi_ia64_4Q_2004(int n)
-	{
-		char*		b;
-		char*		s;
-		char*		e;
-		char*		t;
-		long		m;
-		int		d;
-		char		u[1024];
-
-		static char	p[32] = {'/','t','m','p','/','m','m'};
-
-		for (d = 7; d < 13; d++)
-			p[d] = 'X';
-		p[d] = 0;
-		if ((d = mkstemp(p)) < 0)
-			return 1;
-		remove(p);
-		for (m = 0; m < n; m++)
-			if (write(d, x, sizeof(x)-1) != sizeof(x)-1)
-			{
-				close(d);
-				return 1;
-			}
-		if (lseek(d, 0, SEEK_SET))
-		{
-			close(d);
-			return 1;
-		}
-		m = n * (sizeof(x)-1);
-		if ((b = mmap(NULL, m, PROT_READ|PROT_WRITE, MAP_PRIVATE, d, 0)) == MAP_FAILED)
-		{
-			close(d);
-			return 1;
-		}
-		for (e = (s = b) + m; s < e && (t = memccpy(u, s, 'N', (e-s) > sizeof(u) ? sizeof(u) : (e-s))); s += (t-u))
-			if ((t-u) != (sizeof(x)-1) || memcmp(u, s, t-u))
-			{
-				close(d);
-				return 1;
-			}
-		if (s < e)
-		{
-			close(d);
-			return 1;
-		}
-		close(d);
-		return 0;
-	}
-	#endif
-
-	int
-	main(void)
-	{
-		char	buf[1024];
-	#ifdef MAP_PRIVATE
-		char*	srcbuf;
-		char*	dstbuf;
-		int	fd;
-		size_t	siz;
-		int	i;
-	#endif
-
-	#if defined(__ia64) || defined(__ia64__) || defined(__itanium__)
-		/*
-		 * 0 faith that the itanium coders will ever get this right
-		 * prove me wrong
-		 */
-
-		return 1;
-	#endif
-	
-		/*
-		 * early Mac OS X failed here -- fixed 3Q 2001
-		 */
-
-		if (memccpy(buf, "abc", 0, sizeof(buf)) != (buf + 4))
-			return 1;
-	#ifdef MAP_PRIVATE
-		siz = 64 * 1024;
-		if (!(dstbuf = malloc(2 * siz)))
-			return 0;
-		if ((fd = open("/dev/zero", O_RDWR)) < 0)
-			return 0;
-		if ((srcbuf = (char*)mmap(NULL, siz, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0)) == MAP_FAILED)
-			return 0;
-		if (mmap(srcbuf + siz, siz, PROT_NONE, MAP_PRIVATE, fd, 0) == MAP_FAILED)
-			return 0;
-		for (i = 0; i < siz; i++)
-			srcbuf[i] = 'x';
-		srcbuf[siz - 1] = 0;
-		alarm(10);
-		signal(SIGSEGV, gotcha);
-		signal(SIGBUS, gotcha);
-		signal(SIGALRM, gotcha);
-		/*
-		 * SGI ia64 dumps here as of 3Q 2001
-		 * bug acknowledged 1Q 2003
-		 */
-		memccpy(dstbuf, srcbuf, 0, siz + 10);
-		alarm(0);
-		if (strcmp(srcbuf, dstbuf))
-			return 1;
-		if (indict_sgi_ia64_4Q_2004(1))
-			return 1;
-		if (indict_sgi_ia64_4Q_2004(257))
-			return 1;
-	#endif
-		return 0;
-	}
-}end
-
 tst	lib_utime_now note{ utime works with 0 time vector }end execute{
 	#include <sys/types.h>
 	extern int	utime(const char*, void*);
@@ -506,9 +352,9 @@ tst	lib_utime_now note{ utime works with 0 time vector }end execute{
 
 tst	cross{
 	u=att
-	case `/bin/cat -s /dev/null/foo 2>&1` in
+	case $(env cat -s /dev/null/foo 2>&1) in
 	'')	;;
-	*)	case `/bin/echo '\\t'` in
+	*)	case $(env echo '\t') in
 		'\t')	u=ucb ;;
 		esac
 		;;
@@ -528,12 +374,6 @@ std	remove note{ stuck with standard remove() }end nostatic{
 	extern int unlink(const char*);
 	int remove(const char* path) { return 0; }
 	int main(void) { return unlink("foo"); }
-}end
-
-std	signal note{ stuck with standard signal }end nolink{
-	extern void abort(void);
-	int signal(void) { return 0; }
-	int main(void) { signal(); abort(); return 0; }
 }end
 
 std	strcoll note{ standard strcoll works }end execute{

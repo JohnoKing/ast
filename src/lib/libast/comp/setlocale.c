@@ -89,11 +89,11 @@ header(void)
 #endif
 
 #if !_lib_strcoll
-#define	strcoll		0
+#define strcoll		0
 #endif
 
 #if !_lib_strxfrm
-#define	strxfrm		0
+#define strxfrm		0
 #endif
 
 /*
@@ -397,7 +397,7 @@ debug_strcoll(const char* a, const char* b)
 #define debug_mbtowc	0
 #define debug_wctomb	0
 #define debug_mblen	0
-#define	debug_wcwidth	0
+#define debug_wcwidth	0
 #define debug_alpha	0
 #define debug_strxfrm	0
 #define debug_strcoll	0
@@ -464,7 +464,7 @@ sjis_mbtowc(wchar_t* p, const char* s, size_t n)
 #if !AST_NOMULTIBYTE
 
 static int
-utf8_wctomb(char* u, wchar_t w) 
+utf8_wctomb(char* u, wchar_t w)
 {
 	return u ? wc2utf8(u, w) : 0;
 }
@@ -2253,7 +2253,7 @@ set_numeric(Lc_category_t* cp)
 }
 
 /*
- * this table is indexed by AST_LC_[A-Z]*
+ * The order of this table must correspond to the numbers of the #defines in ast_std.h
  */
 
 Lc_category_t		lc_categories[] =
@@ -2269,7 +2269,6 @@ Lc_category_t		lc_categories[] =
 { "LC_ADDRESS",       LC_ADDRESS,       AST_LC_ADDRESS,       0               },
 { "LC_NAME",          LC_NAME,          AST_LC_NAME,          0               },
 { "LC_TELEPHONE",     LC_TELEPHONE,     AST_LC_TELEPHONE,     0               },
-{ "LC_XLITERATE",     LC_XLITERATE,     AST_LC_XLITERATE,     0               },
 { "LC_MEASUREMENT",   LC_MEASUREMENT,   AST_LC_MEASUREMENT,   0               },
 { "LC_PAPER",         LC_PAPER,         AST_LC_PAPER,         0               },
 };
@@ -2331,29 +2330,6 @@ default_setlocale(int category, const char* locale)
 }
 
 #endif
-
-/* <TODO> [2022-07-21]: remove this and _vmkeep? obsolete? */
-/*
- * workaround for Solaris and FreeBSD systems
- * they call free() with addresses that look like they came from the stack
- */
-
-extern int	_vmkeep(int);
-
-static char*
-_sys_setlocale(int category, const char* locale)
-{
-	char*	r;
-	int	k;
-
-	k = _vmkeep(1);
-	r = setlocale(category, locale);
-	(void)_vmkeep(k);
-	return r;
-}
-
-#define setlocale(a,b)	_sys_setlocale(a,b)
-/* </TODO> */
 
 /*
  * set a single AST_LC_* locale category

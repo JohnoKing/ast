@@ -13,6 +13,7 @@
 *                  David Korn <dgk@research.att.com>                   *
 *                  Martijn Dekker <martijn@inlv.org>                   *
 *            Johnothan King <johnothanking@protonmail.com>             *
+*               Vincent Mihalkovic <vmihalko@redhat.com>               *
 *                                                                      *
 ***********************************************************************/
 /*
@@ -61,7 +62,7 @@
 #   define WIFCONTINUED(wstat)	(0)
 #endif
 
-#define	NJOB_SAVELIST	4
+#define NJOB_SAVELIST	4
 
 /*
  * temporary hack to get W* macros to work
@@ -181,25 +182,6 @@ static char		*job_string;
 
     static void		job_unstop(struct process*, int);
     static void		job_fgrp(struct process*, int);
-#ifndef _lib_tcgetpgrp
-#	ifdef TIOCGPGRP
-	   static int _i_;
-#	   define tcgetpgrp(a) (ioctl(a, TIOCGPGRP, &_i_)>=0?_i_:-1)	
-#	endif /* TIOCGPGRP */
-	int tcsetpgrp(int fd,pid_t pgrp)
-	{
-		int pgid = pgrp;
-#		ifdef TIOCGPGRP
-			return ioctl(fd, TIOCSPGRP, &pgid);
-#		else
-			return -1;
-#		endif /* TIOCGPGRP */
-	}
-#endif /* _lib_tcgetpgrp */
-
-#ifndef OTTYDISC
-#   undef NTTYDISC
-#endif /* OTTYDISC */
 
 typedef int (*Waitevent_f)(int,long,int);
 
@@ -278,12 +260,6 @@ int job_reap(int sig)
 	int nochild = 0, oerrno = errno, wstat;
 	Waitevent_f waitevent = sh.waitevent;
 	static int wcontinued = WCONTINUED;
-	if (vmbusy())
-	{
-		errormsg(SH_DICT,ERROR_warn(0),"vmbusy() inside job_reap() -- should not happen");
-		if (getenv("_AST_KSH_VMBUSY_ABORT"))
-			abort();
-	}
 #ifdef DEBUG
 	if(sfprintf(sfstderr,"ksh: job line %4d: reap PID=%lld critical=%d signal=%d\n",__LINE__,(Sflong_t)sh.current_pid,job.in_critical,sig) <=0)
 		write(2,"waitsafe\n",9);
@@ -452,7 +428,7 @@ int job_reap(int sig)
 			pw->p_flag &= ~P_NOTIFY;
 		if(job.jobcontrol && pid==pw->p_fgrp && pid==tcgetpgrp(JOBTTY))
 		{
-			px = job_byjid((int)pw->p_job);
+			px = job_byjid(pw->p_job);
 			for(; px && (px->p_flag&P_DONE); px=px->p_nxtproc);
 			if(!px)
 				tcsetpgrp(JOBTTY,job.mypid);
@@ -504,7 +480,7 @@ int job_reap(int sig)
  */
 static void job_waitsafe(int sig)
 {
-	if(job.in_critical || vmbusy())
+	if(job.in_critical)
 	{
 		job.savesig = sig;
 		job.waitsafe++;
@@ -526,30 +502,14 @@ void job_init(int lflag)
 		init_savelist();
 	if(!sh_isoption(SH_INTERACTIVE))
 		return;
-	/* use new line discipline when available */
-#ifdef NTTYDISC
-#   ifdef FIOLOOKLD
-	if((job.linedisc = ioctl(JOBTTY, FIOLOOKLD, 0)) <0)
-#   else
-	if(ioctl(JOBTTY,TIOCGETD,&job.linedisc) !=0)
-#   endif /* FIOLOOKLD */
-		return;
-	if(job.linedisc!=NTTYDISC && job.linedisc!=OTTYDISC)
-	{
-		/* no job control when running with MPX */
-		return;
-	}
-	if(job.linedisc==NTTYDISC)
-		job.linedisc = -1;
-#endif /* NTTYDISC */
 	job.mypgid = getpgrp();
 	/* some systems have job control, but not initialized */
 	if(job.mypgid<=0)
-        {
+	{
 		/* Get a controlling terminal and set process group */
 		/* This should have already been done by rlogin */
-                int fd;
-                char *ttynam;
+		int fd;
+		char *ttynam;
 		if(job.mypgid<0 || !(ttynam=ttyname(JOBTTY)))
 			return;
 		while(close(JOBTTY)<0 && errno==EINTR)
@@ -559,8 +519,8 @@ void job_init(int lflag)
 		if(fd!=JOBTTY)
 			sh_iorenumber(fd,JOBTTY);
 		tcsetpgrp(JOBTTY,sh.pid);
-                job.mypgid = sh.pid;
-        }
+		job.mypgid = sh.pid;
+	}
 	possible = (setpgid(0,job.mypgid) >= 0) || errno==EPERM;
 	if(possible)
 	{
@@ -580,32 +540,7 @@ void job_init(int lflag)
 			}
 		}
 	}
-#ifdef NTTYDISC
-	/* set the line discipline */
-	if(job.linedisc>=0)
-	{
-		int linedisc = NTTYDISC;
-#   ifdef FIOPUSHLD
-		tty_get(JOBTTY,&my_stty);
-		if (ioctl(JOBTTY, FIOPOPLD, 0) < 0)
-			return;
-		if (ioctl(JOBTTY, FIOPUSHLD, &linedisc) < 0)
-		{
-			ioctl(JOBTTY, FIOPUSHLD, &job.linedisc);
-			return;
-		}
-		tty_set(JOBTTY,TCSANOW,&my_stty);
-#   else
-		if(ioctl(JOBTTY,TIOCSETD,&linedisc) !=0)
-			return;
-#   endif /* FIOPUSHLD */
-		if(lflag==0)
-			errormsg(SH_DICT,0,e_newtty);
-		else
-			job.linedisc = -1;
-	}
-#endif /* NTTYDISC */
-	if(!possible)
+	else
 		return;
 	/* make sure that we are a process group leader */
 	setpgid(0,sh.pid);
@@ -685,28 +620,6 @@ int job_close(void)
 	job_unlock();
 	if(job.jobcontrol && setpgid(0,job.mypgid)>=0)
 		tcsetpgrp(job.fd,job.mypgid);
-#   ifdef NTTYDISC
-	if(job.linedisc>=0)
-	{
-		/* restore old line discipline */
-#	ifdef FIOPUSHLD
-		tty_get(job.fd,&my_stty);
-		if (ioctl(job.fd, FIOPOPLD, 0) < 0)
-			return 0;
-		if (ioctl(job.fd, FIOPUSHLD, &job.linedisc) < 0)
-		{
-			job.linedisc = NTTYDISC;
-			ioctl(job.fd, FIOPUSHLD, &job.linedisc);
-			return 0;
-		}
-		tty_set(job.fd,TCSAFLUSH,&my_stty);
-#	else
-		if(ioctl(job.fd,TIOCSETD,&job.linedisc) !=0)
-			return 0;
-#	endif /* FIOPUSHLD */
-		errormsg(SH_DICT,0,e_oldtty);
-	}
-#   endif /* NTTYDISC */
 #   ifdef CNSUSP
 	if(possible && job.suspend==CNSUSP)
 	{
@@ -1037,7 +950,7 @@ int job_kill(struct process *pw,int sig)
 				sh_delay(.05,0);
 			}
 		}
-		while(pw && pw->p_pgrp==0 && (r=kill(pw->p_pid,sig))>=0) 
+		while(pw && pw->p_pgrp==0 && (r=kill(pw->p_pid,sig))>=0)
 		{
 			if(also_send_sigcont(pw,sig))
 			{
@@ -1227,7 +1140,7 @@ int job_post(pid_t pid, pid_t join)
 		pw->p_nxtjob = job.pwlist;
 		pw->p_nxtproc = 0;
 	}
-	pw->p_exitval = job.exitval; 
+	pw->p_exitval = job.exitval;
 	job.pwlist = pw;
 	pw->p_env = sh.curenv;
 	pw->p_pid = pid;
@@ -1249,7 +1162,7 @@ int job_post(pid_t pid, pid_t join)
 		pw->p_pid,pw->p_pgrp,job.savesig,join);
 	sfsync(sfstderr);
 #endif /* DEBUG */
-	if(hp && !sh_isstate(SH_PROFILE))
+	if(hp && !sh_isstate(SH_PROFILE) && !sh.realsubshell)
 		pw->p_name=hist_tell(sh.hist_ptr,(int)hp->histind-1);
 	else
 		pw->p_name = -1;
@@ -1542,7 +1455,7 @@ int job_switch(struct process *pw,int bgflag)
 {
 	const char *msg;
 	job_lock();
-	if(!pw || !(pw=job_byjid((int)pw->p_job)))
+	if(!pw || !(pw=job_byjid(pw->p_job)))
 	{
 		job_unlock();
 		return 1;
@@ -1556,7 +1469,7 @@ int job_switch(struct process *pw,int bgflag)
 	}
 	if(bgflag=='b')
 	{
-		sfprintf(outfile,"[%d]\t",(int)pw->p_job);
+		sfprintf(outfile,"[%d]\t",pw->p_job);
 		sh.bckpid = pw->p_pid;
 		pw->p_flag |= P_BG;
 		msg = "&";
@@ -1637,11 +1550,11 @@ static struct process *job_unpost(struct process *pwtop,int notify)
 	sfprintf(sfstderr,"ksh: job line %4d: drop PID=%lld critical=%d PID=%d env=%u\n",__LINE__,(Sflong_t)sh.current_pid,job.in_critical,pwtop->p_pid,pwtop->p_env);
 	sfsync(sfstderr);
 #endif /* DEBUG */
-	pwtop = pw = job_byjid((int)pwtop->p_job);
+	pwtop = pw = job_byjid(pwtop->p_job);
 	if(!pw)
 		return NULL;
 #if SHOPT_BGX
-	if(pw->p_flag&P_BG) 
+	if(pw->p_flag&P_BG)
 		return pw;
 #endif /* SHOPT_BGX */
 	for(; pw && (pw->p_flag&P_DONE)&&(notify||!(pw->p_flag&P_NOTIFY)||pw->p_env); pw=pw->p_nxtproc);
@@ -1653,8 +1566,13 @@ static struct process *job_unpost(struct process *pwtop,int notify)
 	job_unlink(pwtop);
 	for(pw=pwtop; pw; pw=pw->p_nxtproc)
 	{
+		/* save the exit status for the pipefail option */
 		if(pw && pw->p_exitval)
+		{
 			*pw->p_exitval = pw->p_exit;
+			if(pw->p_flag&P_SIGNALLED)
+				*pw->p_exitval |= SH_EXITSIG;
+		}
 		/* save the exit status for background jobs */
 		if((pw->p_flag&P_EXITSAVE) ||  pw->p_pid==sh.spid)
 		{
@@ -1678,7 +1596,7 @@ static struct process *job_unpost(struct process *pwtop,int notify)
 	sfprintf(sfstderr,"ksh: job line %4d: free PID=%lld critical=%d job=%d\n",__LINE__,(Sflong_t)sh.current_pid,job.in_critical,pwtop->p_job);
 	sfsync(sfstderr);
 #endif /* DEBUG */
-	job_free((int)pwtop->p_job);
+	job_free(pwtop->p_job);
 	return NULL;
 }
 

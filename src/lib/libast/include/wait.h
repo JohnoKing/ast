@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -25,60 +25,22 @@
 #define _WAIT_H
 
 #include <ast.h>
-#include <ast_wait.h>
 
-#if _sys_wait
 #define wait		______wait
 #define waitpid		______waitpid
 #include <sys/wait.h>
 #undef	wait
 #undef	waitpid
-#endif
 
-#ifndef WNOHANG
-#define WNOHANG		1
-#endif
-
-#ifndef WUNTRACED
-#define WUNTRACED	2
-#endif
-
-#if !_ok_wif
-#undef	WIFEXITED
-#undef	WEXITSTATUS
-#undef	WIFSIGNALED
-#undef	WTERMSIG
-#undef	WIFSTOPPED
-#undef	WSTOPSIG
-#undef	WTERMCORE
-#endif
-
-#ifndef WIFEXITED
-#define WIFEXITED(x)	(!((x) & EXIT_NOTFOUND))
-#endif
-
-#ifndef WEXITSTATUS
-#define WEXITSTATUS(x)	(((x) >> 8) & EXIT_QUIT)
-#endif
-
-#ifndef WIFSIGNALED
-#define WIFSIGNALED(x)	(((x) & EXIT_NOTFOUND) != 0)
-#endif
-
-#ifndef WTERMSIG
-#define WTERMSIG(x)	((x) & EXIT_NOTFOUND)
-#endif
-
-#ifndef WIFSTOPPED
-#define WIFSTOPPED(x)	(((x) & EXIT_QUIT) == EXIT_NOTFOUND)
-#endif
-
-#ifndef WSTOPSIG
-#define WSTOPSIG(x)	WEXITSTATUS(x)
-#endif
-
+/*
+ * WCOREDUMP was added in POSIX Issue 8 (2024); AST always had WTERMCORE instead.
+ */
 #ifndef WTERMCORE
-#define WTERMCORE(x)	((x) & 128)
+#  ifdef WCOREDUMP
+#    define WTERMCORE(x)	WCOREDUMP(x)
+#  else
+#    define WTERMCORE(x)	((x) & 128)
+#  endif
 #endif
 
 extern pid_t		wait(int*);

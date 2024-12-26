@@ -1,8 +1,7 @@
 /***********************************************************************
 *                                                                      *
-*               This software is part of the ast package               *
-*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*              This file is part of the ksh 93u+m package              *
+*             Copyright (c) 2024 Contributors to ksh 93u+m             *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -10,24 +9,20 @@
 *      https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.html      *
 *         (with md5 checksum 84283fa8859daf213bdda5a9f8d1be1d)         *
 *                                                                      *
-*                 Glenn Fowler <gsf@research.att.com>                  *
-*                  David Korn <dgk@research.att.com>                   *
-*                   Phong Vo <kpv@research.att.com>                    *
 *                  Martijn Dekker <martijn@inlv.org>                   *
 *                                                                      *
 ***********************************************************************/
-/* OBSOLETE 19961031 -- for shared library compatibility */
 
-#include	"sfhdr.h"
+#include <ast.h>
 
-#undef	_sfgetu2
-
-extern long	_sfgetu2(Sfio_t*, long);
-
-long _sfgetu2(Sfio_t* f, long v)
+void noreturn _ast_assertfail(const char *a, const char *fun, const char *file, int line)
 {
-	if (v < 0)
-		return -1;
-	sfungetc(f, v);
-	return sfgetu(f);
+#if _has___func__ || _has___FUNCTION__
+	sfprintf(sfstderr,"\n*** assertion %s failed in %s(), %s:%d\n", a, fun, file, line);
+#else
+	NOT_USED(fun);
+	sfprintf(sfstderr,"\n*** assertion %s failed in %s:%d\n", a, file, line);
+#endif
+	sfsync(NULL);
+	abort();
 }

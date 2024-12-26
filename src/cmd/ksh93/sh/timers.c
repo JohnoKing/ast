@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -22,7 +22,6 @@
 #include	<error.h>
 #include	"fault.h"
 #include	"defs.h"
-#include	"FEATURE/sigfeatures"
 #include	"FEATURE/time"
 
 typedef struct _timer
@@ -178,8 +177,8 @@ static void oldalrm(void *handle)
 	free(handle);
 	(*fn)(SIGALRM);
 }
-	
-void *sh_timeradd(unsigned long msec,int flags,void (*action)(void*),void *handle) 
+
+void *sh_timeradd(unsigned long msec,int flags,void (*action)(void*),void *handle)
 {
 	Timer_t *tp;
 	double t;

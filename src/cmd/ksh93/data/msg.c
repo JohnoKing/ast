@@ -39,7 +39,7 @@
 
 /* error messages */
 const char e_timewarn[]		= "\r\n\ashell will timeout in 60 seconds due to inactivity";
-const char e_runvi[]		= "\\hist -e \"${VISUAL:-${EDITOR:-vi}}\" ";
+const char e_runvi[]		= "\\command fc -Ee\"${VISUAL:-${EDITOR:-vi}}\" ";
 const char e_timeout[]		= "timed out waiting for input";
 const char e_mailmsg[]		= "you have mail in $_";
 const char e_query[]		= "no query process";
@@ -85,7 +85,7 @@ const char e_defined[]		= "%s: function not defined";
 const char e_subscript[]	= "%s: subscript out of range";
 const char e_toodeep[]		= "%s: recursion too deep";
 const char e_access[]		= "permission denied";
-#ifdef _cmd_universe
+#if _cmd_universe
     const char e_nouniverse[]	= "universe not accessible";
 #endif /* _cmd_universe */
 const char e_direct[]		= "bad directory";
@@ -142,8 +142,6 @@ const char is_talias[]		= "is a tracked alias for";
 const char is_function[]	= " is a function";
 const char is_ufunction[]	= " is an undefined function";
 const char e_autoloadfrom[]	= " (autoload from %s)";
-const char e_newtty[]		= "Switching to new tty driver...";
-const char e_oldtty[]		= "Reverting to old tty driver...";
 const char e_no_start[]		= "Cannot start job control";
 const char e_no_jctl[]		= "No job control";
 const char e_terminate[]	= "You have stopped jobs";

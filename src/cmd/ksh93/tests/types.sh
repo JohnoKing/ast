@@ -347,7 +347,7 @@ expected=$'(\n\ttypeset -l -i h=0\n\tbenchcmd_t -a m\n\ttypeset -l -E o=0\n)'
 
 expected=$'Std_file_t db.file[/etc/profile]=(action=preserve;typeset -A sum=([8242e663d6f7bb4c5427a0e58e2925f3]=1);)'
 {
-  got=$($SHELL <<- \EOF 
+  got=$($SHELL <<- \EOF
 	MAGIC='stdinstall (AT&T Research) 2009-08-25'
 	typeset -T Std_file_t=(
 		typeset action
@@ -364,15 +364,15 @@ expected=$'Std_file_t db.file[/etc/profile]=(action=preserve;typeset -A sum=([82
 [[ $got == "$expected" ]] ||  err_exit 'types with arrays of types as members fails'
 
 typeset -T x_t=(
-	integer dummy 
+	integer dummy
 	function set
 	{
 		[[ ${.sh.name} == v ]] || err_exit  "name=${.sh.name} should be v"
 		[[ ${.sh.subscript} == 4 ]] || err_exit "subscript=${.sh.subscript} should be 4"
 		[[ ${.sh.value} == hello ]] || err_exit  "value=${.sh.value} should be hello"
-	} 
+	}
 )
-x_t -a v 
+x_t -a v
 v[4]="hello"
 
 typeset -T oset=(
@@ -400,23 +400,23 @@ bar.foo[a]=b
 
 { x=$( $SHELL 2> /dev/null << \++EOF++
     typeset -T ab_t=(
-        integer a=1 b=2
-        function increment
-        {
-                (( _.a++, _.b++ ))
-        }
+	integer a=1 b=2
+	function increment
+	{
+		(( _.a++, _.b++ ))
+	}
     )
     function ar_n
     {
-        nameref sn=$2
-        sn.increment
-        $1 && printf "a=%d, b=%d\n" sn.a sn.b
+	nameref sn=$2
+	sn.increment
+	$1 && printf "a=%d, b=%d\n" sn.a sn.b
     }
     function ar
     {
-        ab_t -S -a s
-        [[ -v s[5] ]] || s[5]=( )
-        ar_n $1 s[5]
+	ab_t -S -a s
+	[[ -v s[5] ]] || s[5]=( )
+	ar_n $1 s[5]
     }
     x=$(ar false ; ar false ; ar true ; printf ";")
     y=$(ar false ; ar false ; ar true ; printf ";")
@@ -495,7 +495,7 @@ else
 	err_exit 'typeset -T not supported'
 fi
 
-[[ $($SHELL -c 'typeset -T x=( typeset -a h ) ; x j; print -v j.h') ]] && err_exit 'type with indexed array without elements inserts element 0' 
+[[ $($SHELL -c 'typeset -T x=( typeset -a h ) ; x j; print -v j.h') ]] && err_exit 'type with indexed array without elements inserts element 0'
 
 [[ $($SHELL  -c 'typeset -T x=( integer -a s ) ; compound c ; x c.i ; c.i.s[4]=666 ; print -v c') == *'[0]'* ]] &&  err_exit 'type with indexed array with non-zero element inserts element 0'
 
@@ -545,7 +545,7 @@ typeset -T b_t=(
 	a_t b
 )
 compound b
-compound -a b.ca 
+compound -a b.ca
 b_t b.ca[4].b
 exp='typeset -C b=(typeset -C -a ca=( [4]=(b_t b=(a_t b=(a=hello))));)'
 got=$(typeset -p b)
@@ -553,7 +553,7 @@ got=$(typeset -p b)
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 typeset -T u_t=(
-	integer dummy 
+	integer dummy
 	unset()
 	{
 		print unset
@@ -673,7 +673,7 @@ exp=': trap: is a special shell builtin'
 
 # ======
 # Bugs involving scripts without a #! path
-# Hashbangless scripts are executed in a reinitialised fork of ksh, which is very bug-prone.
+# Hashbangless scripts are executed in a reinitialised fork of ksh.
 # https://github.com/ksh93/ksh/issues/350
 # Some of these fixed bugs don't involve types at all, but the tests need to go somewhere.
 # Plus, invoking these from an environment with a bunch of types defined is an additional test.
@@ -876,6 +876,39 @@ got=$(f 2>&1)
 	err_exit "issue 704: expected '-' lines, got '+' lines:"
 	diff -U1 <(print "$exp") <(print "$got") | sed $'1,3 d; s,^,\t,' >&2
 }
+
+# ======
+got=$("$SHELL" -c '(typeset -T echo=(typeset TYPEVAR); echo V; print $V); echo OK' 2>&1)
+exp=$'( typeset TYPEVAR )\nOK'
+[[ $got == "$exp" ]] || err_exit 'type definition overriding regular built-in' \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# As of 93u+m/1.1, _ in types always refers to the type variable, even within a member discipline function.
+# Change backported from ksh 93v- 2013-07-27 and 2013-08-29.
+case ${.sh.version} in
+Version*93u+m/1.0* | Version*93??\ * | Version*93?\ *)
+	;;
+*)
+	typeset -T argnod_discfunc_test_t=(
+		typeset x
+		integer y=5
+		function x.getn
+		{
+			((.sh.value = ++_.y))
+			typeset -p _
+		}
+	)
+	argnod_discfunc_test_t argnod_discfunc_obj
+	exp=$'typeset -n _=argnod_discfunc_obj\n6'
+	got=$(set +x; redirect 2>&1; print -r -- "${argnod_discfunc_obj.x}")
+	[[ $got == "$exp" ]] || err_exit "_ does not refer to the type variable in a member discipline function" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+	got=$(set +x; redirect 2>&1; print -r -- "$((argnod_discfunc_obj.x))")
+	[[ $got == "$exp" ]] || err_exit "_ does not refer to the type variable in a member discipline function" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+	;;
+esac
 
 # ======
 exit $((Errors<125?Errors:125))

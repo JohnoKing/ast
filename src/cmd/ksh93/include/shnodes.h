@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -46,7 +46,6 @@
 #define TTEST		(010<<COMBITS)
 #define TPAREN		(TBINARY|TUNARY)
 #define TSHIFT		(COMBITS+4)
-#define TNSPACE		(TFUN|COMSCAN)
 
 #define TCOM	0
 #define TPAR	1
@@ -63,9 +62,12 @@
 #define TFOR	11
 #define TSELECT	(TFOR|COMSCAN)
 #define TARITH	12
-#define	TTIME	13
+#define TTIME	13
 #define TSETIO	14
 #define TFUN	15
+#if SHOPT_NAMESPACE
+#define TNSPACE	(TFUN|COMSCAN)
+#endif
 
 /* this node is a proforma for those that follow */
 
@@ -144,7 +146,7 @@ struct lstnod
 struct tstnod
 {
 	struct lstnod	tstlst;
-	int		tstline;	
+	int		tstline;
 };
 
 struct functnod

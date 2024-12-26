@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -39,18 +39,17 @@
  *	S2I_multiplier	1 for optional multiplier suffix, 0 otherwise
  *	S2I_size	the second argument is the input string size
  *
- * convert string to number
- * errno=ERANGE on overflow (LONG_MAX) or underflow (LONG_MIN)
- * if non-null e will point to first unrecognized char in s
- * if basep!=0 it points to the default base on input and
- * will point to the explicit base on return
- * a default base of 0 will determine the base from the input
- * a default base of 1 will determine the base from the input using bb#*
- * a base prefix in the string overrides *b
- * *b will not be set if the string has no base prefix
- * if m>1 and no multiplier was specified then the result is multiplied by m
- * if m<0 then multipliers are not consumed
- * if a base arg or prefix is specified then multiplier is not consumed
+ * Convert string to number.
+ * errno is set to ERANGE on overflow (LONG_MAX) or underflow (LONG_MIN).
+ * If non-NULL, e will point to first unrecognized char in s.
+ * If basep is non-NULL, it points to the default base on input and
+ * will point to the explicit base on return.
+ * A default base of 0 will determine the base from the input.
+ * If *basep > 0, a base prefix in the string is an error.
+ * *basep will not be set if the string has no base prefix.
+ * If m>1 and no multiplier was specified, then the result is multiplied by m.
+ * If m<0, then multipliers are not consumed.
+ * If a base prefix is specified or *basep > 0, then a multiplier suffix is an error.
  *
  * integer numbers are of the form:
  *
@@ -59,26 +58,33 @@
  *	base:		nnn#		base nnn
  *			0[xX]		hex
  *			0		octal
- *			[1-9]		decimal
+ *			(omitted)	decimal
  *
- *	number:		[0-9a-zA-Z]*
+ *	digit:		[0-9a-zA-Z@_]
+ *	number:		digit [ digit ... ]
  *
  *	qualifier:	[lL]
  *			[uU]
- *			[uU][lL] 
+ *			[uU][lL]
  *			[lL][uU]
  *			[lL][lL][uU]
  *			[uU][lL][lL]
  *
- *	multiplier:	.		pseudo-float if m>1
- *			[bB]		block (512)
- *			[cC]		char (1)
- *			[gG]		giga (1000*1000*1000)
- *			[gG]i		gibi (1024*1024*1024)
- *			[kK]		kilo (1000)
- *			[kK]i		kibi (1024)
- *			[mM]		mega (1000*1000)
- *			[mM]i		mibi (1024*1024)
+ *	multiplier (case-insensitive):
+ *			.	pseudo-float if m>1
+ *			b	block (512)
+ *			E	exa  (1000*1000*1000*1000*1000*1000)
+ *			Ei	exbi (1024*1024*1024*1024*1024*1024)
+ *			G	giga (1000*1000*1000)
+ *			Gi	gibi (1024*1024*1024)
+ *			k	kilo (1000)
+ *			Ki	kibi (1024)
+ *			M	mega (1000*1000)
+ *			Mi	mibi (1024*1024)
+ *			P	peta (1000*1000*1000*1000*1000)
+ *			Pi	pebi (1024*1024*1024*1024*1024)
+ *			T	tera (1000*1000*1000*1000)
+ *			Ti	tebi (1024*1024*1024*1024)
  */
 
 #include <ast.h>
@@ -222,7 +228,7 @@ S2I_function(const char* a, char** e, int base)
 #if S2I_multiplier
 	base = basep ? *((unsigned char*)basep) : 0;
 #else
-	if (base > 36 && base <= SF_RADIX)
+	if (base > 36 && base <= SFIO_RADIX)
 	{
 		static int	conformance = -1;
 
@@ -232,8 +238,10 @@ S2I_function(const char* a, char** e, int base)
 			base = 1;
 	}
 #endif
-	if (base && (base < 2 || base > SF_RADIX))
+	if (base && (base < 2 || base > SFIO_RADIX))
 	{
+		if (e)
+			*e = (char*)a;
 		errno = EINVAL;
 		return 0;
 	}
@@ -271,7 +279,9 @@ S2I_function(const char* a, char** e, int base)
 					k = s += 2;
 					base = 16;
 				}
-				else if (c >= '0' && c <= '7')
+				/* a single 0 is not an octal base prefix if followed by a non-digit suffix --
+				 * but do set octal for '8' and '9' to catch invalid 0-prefixed octal numbers */
+				else if (isdigit(c))
 				{
 					s++;
 					base = 8;
@@ -280,8 +290,10 @@ S2I_function(const char* a, char** e, int base)
 		}
 		if (!base)
 			base = 10;
-		else if (base < 2 || base > SF_RADIX)
+		else if (base < 2 || base > SFIO_RADIX)
 		{
+			if (e)
+				*e = (char*)a;
 			errno = EINVAL;
 			return 0;
 		}
@@ -361,7 +373,7 @@ S2I_function(const char* a, char** e, int base)
 		SFCVINIT();
 		cv = base <= 36 ? _Sfcv36 : _Sfcv64;
 		if ((base & ~(base - 1)) == base)
-		{	
+		{
 #if !S2I_unsigned
 			qualifier |= QU;
 #endif
@@ -487,6 +499,7 @@ S2I_function(const char* a, char** e, int base)
 					v = 0;
 				else if (c == decimal && S2I_valid(s))
 				{
+					/* pseudo-float */
 					if (MPYOVER(n, m))
 						overflow = 1;
 					n *= m;

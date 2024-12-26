@@ -25,6 +25,41 @@
 bincat=$(whence -p cat)
 
 # ======
+# The following tests are run in parallel because they are slow; they are checked at the end
+
+# ALRM signal causes sleep to terminate prematurely
+(
+	float sec=$SECONDS del=4
+	redirect 3>&2 2>/dev/null
+	"$SHELL" -c "( sleep 1; kill -ALRM \$\$ ) & sleep $del" 2> /dev/null
+	exitval=$?
+	(( sec = SECONDS - sec ))
+	redirect 2>&3-
+	if	(( exitval ))
+	then	exit 14   # sleep doesn't exit 0 with ALRM interrupt
+	elif	(( sec <= (del - 1) ))
+	then	exit 15   # ALRM signal causes sleep to terminate prematurely
+	fi
+) &
+parallel_1=$!
+
+(
+	typeset -F3 start_x=SECONDS total_t delay=0.02
+	typeset reps=50 leeway=5
+	sleep $(( 2 * leeway * reps * delay )) |
+	for (( i=0 ; i < reps ; i++ ))
+	do	read -N1 -t $delay
+	done
+	(( total_t = SECONDS - start_x ))
+	if	(( total_t > leeway * reps * delay ))
+	then	exit 14   # read -t in pipe taking too long
+	elif	(( total_t < reps * delay ))
+	then	exit 15   # err_exit "read -t in pipe not taking long enough"
+	fi
+) &
+parallel_2=$!
+
+# ======
 # Test shell builtin commands
 : ${foo=bar} || err_exit ": failed"
 [[ $foo == bar ]] || err_exit ": side effects failed"
@@ -51,9 +86,9 @@ done
 
 USAGE=$'[-][S:server?Operate on the specified \asubservice\a:]:[subservice:=pmserver]
     {
-        [p:pmserver]
-        [r:repserver]
-        [11:notifyd]
+	[p:pmserver]
+	[r:repserver]
+	[11:notifyd]
     }'
 set pmser p rep r notifyd -11
 while	(( $# > 1 ))
@@ -384,7 +419,7 @@ wait $pid1
 (( $? == 1 )) || err_exit "wait not saving exit value"
 wait $pid2
 (( $? == 127 )) || err_exit "subshell job known to parent"
-env=
+env='LD_LIBRARY_PATH=$LD_LIBRARY_PATH LIBPATH=$LIBPATH SHLIB_PATH=$SHLIB_PATH DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH'
 if builtin getconf 2> /dev/null; then
 	v=$(getconf LIBPATH)
 	for v in ${v//,/ }
@@ -559,21 +594,9 @@ fi
 	while (( i <2))
 	do	(( i++))
 	done) == $'0\n0\n1\n1\n2' ]]  || err_exit  "DEBUG trap not working"
-if builtin getconf 2> /dev/null; then
+if ((!SHOPT_ECHOPRINT)) && builtin getconf 2> /dev/null; then
 	getconf UNIVERSE - ucb
 	[[ $($SHELL -c 'echo -3') == -3 ]] || err_exit "echo -3 not working in ucb universe"
-fi
-typeset -F3 start_x=SECONDS total_t delay=0.02
-typeset reps=50 leeway=5
-sleep $(( 2 * leeway * reps * delay )) |
-for (( i=0 ; i < reps ; i++ ))
-do	read -N1 -t $delay
-done
-(( total_t = SECONDS - start_x ))
-if	(( total_t > leeway * reps * delay ))
-then	err_exit "read -t in pipe taking $total_t secs - $(( reps * delay )) minimum - too long"
-elif	(( total_t < reps * delay ))
-then	err_exit "read -t in pipe taking $total_t secs - $(( reps * delay )) minimum - too fast"
 fi
 $SHELL -c 'sleep $(printf "%a" .95)' 2> /dev/null || err_exit "sleep doesn't accept %a format constants"
 $SHELL -c 'test \( ! -e \)' 2> /dev/null ; [[ $? == 1 ]] || err_exit 'test \( ! -e \) not working'
@@ -584,14 +607,6 @@ print $'\nprint -r -- "${.sh.file} ${LINENO} ${.sh.lineno}"' > $tmpfile
 print -r -- "'xxx" > $tmpfile
 [[ $($SHELL -c ". $tmpfile"$'\n print ok' 2> /dev/null) == ok ]] || err_exit 'syntax error in dot command affects next command'
 
-float sec=$SECONDS del=4
-exec 3>&2 2>/dev/null
-$SHELL -c "( sleep 1; kill -ALRM \$\$ ) & sleep $del" 2> /dev/null
-exitval=$?
-(( sec = SECONDS - sec ))
-exec 2>&3-
-(( exitval )) && err_exit "sleep doesn't exit 0 with ALRM interrupt"
-(( sec > (del - 1) )) || err_exit "ALRM signal causes sleep to terminate prematurely -- expected 3 sec, got $sec"
 typeset -r z=3
 y=5
 for i in 123 z  %x a.b.c
@@ -710,15 +725,15 @@ read baz <<< 'foo\\\\bar'
 actual=$(
     set +x
     {
-        (
-            trap "" PIPE
-            for ((i = SECONDS + 1; SECONDS < i; )); do
-                print hi || {
-                    print $? >&2
-                    exit
-                }
-            done
-        ) | true
+	(
+	    trap "" PIPE
+	    for ((i = SECONDS + 1; SECONDS < i; )); do
+		print hi || {
+		    print $? >&2
+		    exit
+		}
+	    done
+	) | true
     } 2>&1
 )
 expect='1'
@@ -1134,23 +1149,23 @@ fi # !SHOPT_SCRIPTONLY
 # floating point
 # The number of seconds to sleep. The got granularity depends on the
 # underlying system, normally around 1 millisecond.
-SECONDS=0
+float got=0 exp=0.1 s=SECONDS
 sleep 0.1
-got=$SECONDS
-exp=0.1
-(( got >= exp )) ||
-	err_exit "sleep 0.1 should sleep for at least 0.1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=SECONDS
+(( got >= s + exp )) ||
+	err_exit "sleep 0.1 should sleep for at least 0.1 second (expected $exp, got $((got - s)))"
+unset s got exp
 
 # ======
 # PnYnMnDTnHnMnS
 # An ISO 8601 duration where at least one of the duration parts must be
 # specified.
-SECONDS=0
+float got=0 exp=0.1 s=SECONDS
 sleep 'P0Y0M0DT0H0M0.1S'
-got=$SECONDS
-exp=0.1
-(( got >= exp )) ||
-    err_exit "sleep 'P0Y0M0DT0H0M1S' should sleep for at least 1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=SECONDS
+(( got >= s + exp )) ||
+    err_exit "sleep 'P0Y0M0DT0H0M0.1S' should sleep for at least 0.1 second (expected $exp, got $((got - s)))"
+unset s got exp
 
 # ======
 # PnW   An ISO 8601 duration specifying n weeks.
@@ -1162,12 +1177,12 @@ sleep P0W || err_exit "sleep does not recocgnize PnW"
 # A case insensitive ISO 8601 duration except that M specifies months,
 # m before s or S specifies minutes and after specifies milliseconds, u
 # or U specifies microseconds, and n specifies nanoseconds.
-SECONDS=0
+float got=0 exp=0.1 s=SECONDS
 sleep 'p0Y0M0DT0H0M0.1S'
-got=$SECONDS
-exp=0.1
-(( got >= exp )) ||
-    err_exit "sleep 'p0Y0M0DT0H0M1S' should sleep for at least 1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=SECONDS
+(( got >= s + exp )) ||
+    err_exit "sleep 'p0Y0M0DT0H0M1S' should sleep for at least 1 second (expected $exp, got $((got - s)))"
+unset s got exp
 
 # ======
 # date/time
@@ -1179,12 +1194,12 @@ sleep "$today" || err_exit "sleep does not recognize date parameter"
 # ======
 # -s Sleep until a signal or a timeout is received. If duration is
 #    omitted or 0 then no timeout will be used.
-SECONDS=0
+float got=0 exp=0.1 s=SECONDS
 sleep -s 0.1
-got=$SECONDS
-exp=0.1
-(( got >= exp )) ||
-    err_exit "sleep -s 1 should sleep for at least 1 second (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=SECONDS
+(( got >= s + exp )) ||
+    err_exit "sleep -s 1 should sleep for at least 1 second (expected $exp, got $((got - s)))"
+unset s got exp
 
 # ======
 # Verify unexpected arguments result in an error.
@@ -1312,10 +1327,10 @@ got=$(OLDPWD=$tmp/oldpwd cd -)
 
 function fn
 {
-	typeset OLDPWD=/tmp
+	typeset OLDPWD=/dev
 	cd -
 }
-exp='/tmp'
+exp='/dev'
 got=$(OLDPWD=/bin fn)
 [[ $got == "$exp" ]] ||
 	err_exit "cd - doesn't recognize overridden OLDPWD variable if it is overridden in function scope" \
@@ -1324,10 +1339,10 @@ got=$(OLDPWD=/bin fn)
 function fn
 {
 	typeset PWD=bug
-	cd /tmp
+	cd /dev
 	echo "$PWD"
 }
-exp='/tmp'
+exp='/dev'
 got=$(fn)
 [[ $got == "$exp" ]] ||
 	err_exit "PWD isn't set after cd if already set in function scope" \
@@ -1336,7 +1351,7 @@ got=$(fn)
 # $PWD should be set correctly after cd
 exp="$PWD
 $PWD"
-got=$(echo $PWD; PWD=/tmp cd /dev; echo $PWD)
+got=$(echo $PWD; PWD=/bin cd /dev; echo $PWD)
 [[ $got == "$exp" ]] ||
 	err_exit "PWD is incorrect after cd" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
@@ -1611,13 +1626,13 @@ do	case $bltin in
 	fc | hist )
 		((SHOPT_SCRIPTONLY)) && continue ;;
 	esac
-	got=$({ "$bltin" --\?-version; } 2>&1)  # the extra { } are needed for 'redirect'
+	got=$(set +x; { "$bltin" --\?-version; } 2>&1)  # the extra { } are needed for 'redirect'
 	[[ $got == "  version  "* ]] || err_exit "$bltin does not support --\\?-version (got $(printf %q "$got"))"
 	case $bltin in
 	uname | */uname )
 		continue ;;
 	esac
-	got=$({ "$bltin" --version; } 2>&1)  # the extra { } are needed for 'redirect'
+	got=$(set +x; { "$bltin" --version; } 2>&1)  # the extra { } are needed for 'redirect'
 	[[ $got == "  version  "* ]] || err_exit "$bltin does not support --version (got $(printf %q "$got"))"
 done 3< <(builtin)
 
@@ -1633,12 +1648,12 @@ HOME=/dev cd
 
 function fn
 {
-	typeset HOME=/tmp
+	typeset HOME=/dev
 	cd
 }
 fn
 unset -f fn
-[[ $PWD == /tmp ]] || err_exit "'cd' does not chdir to \$HOME (local assignment)"
+[[ $PWD == /dev ]] || err_exit "'cd' does not chdir to \$HOME (local assignment)"
 
 # ======
 # Double evaluation of arithmetic expression passed to float conversion operators in printf
@@ -1691,6 +1706,47 @@ got=${ printf '%b %1$s\n' '\\\\'; }
 exp='\\ \\\\'
 [[ $got == "$exp" ]] || err_exit "printf '%b %1$s'" \
 	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+case $(PATH=/opt/ast/bin:$PATH; exec cat '--???SECTION' </dev/null 2>&1) in
+1)	err_exit "'exec' runs non-external command" ;;
+esac
+
+# ======
+# checks for tests run in parallel (see top)
+wait "$parallel_1"
+case $? in
+0)	;;
+14)	err_exit "sleep doesn't exit 0 with ALRM interrupt" ;;
+15)	err_exit "ALRM signal causes sleep to terminate prematurely" ;;
+*)	err_exit "broken test" ;;
+esac
+wait "$parallel_2"
+case $? in
+0)	;;
+14)	err_exit "read -t in pipe taking too long" ;;
+15)	err_exit "read -t in pipe not taking long enough" ;;
+*)	err_exit "broken test" ;;
+esac
+
+# ======
+# https://github.com/ksh93/ksh/issues/794
+
+exp=$'issue794: --file: value not expected\n?: '
+got=$(set +x; { "$SHELL" -c '
+	optstring="f(file)"
+	while getopts "$optstring" opt
+	do
+	    print -- "$opt: $OPTARG"
+	done
+' issue794 --file=foo; } 2>&1)
+[[ e=$? -eq 0 && $got == "$exp" ]] || err_exit "crash on unexpected option value" \
+	"(expected status 0, $(printf %q "$exp");" \
+	"got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
+
+got=$(set +x; { (ulimit -c 0; set --state=foo); } 2>&1)
+let "(e=$?) == 2" || err_exit "crash on unexpected option value" \
+	"(got status $e$( ((e>128)) && print -n /SIG && kill -l "$e"), $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

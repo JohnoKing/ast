@@ -38,7 +38,6 @@
 #define _BLD_aso	1
 #define _BLD_cdt	1
 #define _BLD_sfio	1
-#define _BLD_vmalloc	1
 #endif
 
 #ifdef	_SFSTDIO_H
@@ -64,10 +63,8 @@ struct _sfio_s;
 #error In 2022, libast joined the 21st century and started requiring fork(2).
 #endif
 #include <ast_sys.h>
-#include <ast_getopt.h>	/* <stdlib.h> does this */
 #include <ast_fcntl.h>
 #include <ast_limits.h>
-#include <ast_botch.h>
 
 #ifdef	_SKIP_SFSTDIO_H
 #undef	_SKIP_SFSTDIO_H
@@ -152,6 +149,9 @@ extern char*		strerror(int);
 
 /*
  * maintain this order when adding categories
+ * AST_LC_COUNT is the number of categories
+ * The numbering must be consecutive and correspond to the order of lc_categories[] in comp/setlocale.c
+ * The initializers in port/lc.c must also be kept in sync with this
  */
 
 #define AST_LC_ALL		0
@@ -165,10 +165,9 @@ extern char*		strerror(int);
 #define AST_LC_ADDRESS		8
 #define AST_LC_NAME		9
 #define AST_LC_TELEPHONE	10
-#define AST_LC_XLITERATE	11
-#define AST_LC_MEASUREMENT	12
-#define AST_LC_PAPER		13
-#define AST_LC_COUNT		14
+#define AST_LC_MEASUREMENT	11
+#define AST_LC_PAPER		12
+#define AST_LC_COUNT		13	/* number of preceding AST_LC_* defines */
 #define AST_LC_LANG		255
 
 #define AST_LC_internal		1
@@ -211,9 +210,6 @@ extern char*		strerror(int);
 #endif
 #ifndef LC_TELEPHONE
 #define LC_TELEPHONE		(-AST_LC_TELEPHONE)
-#endif
-#ifndef LC_XLITERATE
-#define LC_XLITERATE		(-AST_LC_XLITERATE)
 #endif
 #ifndef LC_MEASUREMENT
 #define LC_MEASUREMENT		(-AST_LC_MEASUREMENT)
@@ -275,16 +271,8 @@ extern _Ast_info_t	_ast_info;
 
 /* direct macro access for bsd crossover */
 
-#if !defined(memcpy) && !defined(_lib_memcpy) && defined(_lib_bcopy)
-#define memcpy(t,f,n)	(bcopy(f,t,n),(t))
-#endif
-
 #if !defined(memzero) && !defined(_lib_memzero)
-#if defined(_lib_memset) || !defined(_lib_bzero)
 #define memzero(b,n)	memset(b,0,n)
-#else
-#define memzero(b,n)	(bzero(b,n),(b))
-#endif
 #endif
 
 #if !defined(remove)
@@ -295,12 +283,6 @@ extern int		remove(const char*);
 extern int		rename(const char*, const char*);
 #endif
 
-/* and now introducing prototypes botched by the standard(s) */
-
-#undef	getpgrp
-#define	getpgrp()	_ast_getpgrp()
-extern int		_ast_getpgrp(void);
-
 /*
  * and finally, standard interfaces hijacked by AST
  * _AST_STD_I delays headers that require <ast_map.h>
@@ -309,16 +291,6 @@ extern int		_ast_getpgrp(void);
 #include <ast_map.h>
 
 #undef	_AST_STD_I
-
-#if _AST_GETOPT_H < 0
-#undef	_AST_GETOPT_H
-#include <ast_getopt.h>
-#endif
-
-#if _GETOPT_H < 0
-#undef	_GETOPT_H
-#include <getopt.h>
-#endif
 
 #if _REGEX_H < 0
 #undef	_REGEX_H

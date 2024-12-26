@@ -57,7 +57,7 @@ static int infof(Opt_t* op, Sfio_t* sp, const char* s, Optdisc_t* dp)
 			sfprintf(sp, " in %ss", e_units[tp->type]);
 		sfprintf(sp, ".]");
 	}
-        return 1;
+	return 1;
 }
 
 #define HARD	2
@@ -68,7 +68,7 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 	char *limit;
 	int mode=0, n;
 	unsigned long hit = 0;
-#ifdef _lib_getrlimit
+#if _lib_getrlimit
 	struct rlimit rlp;
 #endif /* _lib_getrlimit */
 	const Limit_t* tp;
@@ -76,11 +76,11 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 	int label, unit, nosupport, ret=0;
 	rlim_t i=0;
 	char tmp[41];
-        Optdisc_t disc;
-        NOT_USED(context);
-        memset(&disc, 0, sizeof(disc));
-        disc.version = OPT_VERSION;
-        disc.infof = infof;
+	Optdisc_t disc;
+	NOT_USED(context);
+	memset(&disc, 0, sizeof(disc));
+	disc.version = OPT_VERSION;
+	disc.infof = infof;
 	opt_info.disc = &disc;
 	while((n = optget(argv,sh_optulimit))) switch(n)
 	{
@@ -136,16 +136,16 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 			if(sh.subshell && !sh.subshare)
 				sh_subfork();
 			if(strcmp(limit,e_unlimited)==0)
-				i = INFINITY;
+				i = ULIMIT_INFINITY;
 			else
 			{
 				char *last;
 				/* an explicit suffix unit overrides the default */
-				if((i=strtol(limit,&last,0))!=INFINITY && !*last)
+				if((i=strtol(limit,&last,0))!=ULIMIT_INFINITY && !*last)
 					i *= unit;
-				else if((i=strton(limit,&last,NULL,0))==INFINITY || *last)
+				else if((i=strton(limit,&last,NULL,0))==ULIMIT_INFINITY || *last)
 				{
-					if((i=sh_strnum(limit,&last,2))==INFINITY || *last)
+					if((i=sh_strnum(limit,&last,2))==ULIMIT_INFINITY || *last)
 					{
 						errormsg(SH_DICT,ERROR_system(1),e_number,limit);
 						UNREACHABLE();
@@ -160,7 +160,7 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 			}
 			else
 			{
-#ifdef _lib_getrlimit
+#if _lib_getrlimit
 				if(getrlimit(n,&rlp) <0)
 				{
 					errormsg(SH_DICT,ERROR_system(1),e_number,limit);
@@ -188,7 +188,7 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 		{
 			if(!nosupport)
 			{
-#ifdef  _lib_getrlimit
+#if _lib_getrlimit
 				if(getrlimit(n,&rlp)<0)
 				{
 					errormsg(SH_DICT,ERROR_system(0),e_limit,tp->description);
@@ -200,7 +200,7 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 				if(mode&SOFT)
 					i = rlp.rlim_cur;
 #else
-#   ifdef _lib_ulimit
+#   if _lib_ulimit
 				n--;
 #   endif /* _lib_ulimit */
 				i = -1;
@@ -226,7 +226,7 @@ int	b_ulimit(int argc,char *argv[],Shbltin_t *context)
 					conf = (char*)e_nosupport;
 				sfputr(sfstdout,conf,'\n');
 			}
-			else if(i!=INFINITY)
+			else if(i!=ULIMIT_INFINITY)
 			{
 				i += (unit-1);
 				sfprintf(sfstdout,"%I*d\n",sizeof(i),i/unit);

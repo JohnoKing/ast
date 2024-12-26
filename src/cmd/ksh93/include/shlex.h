@@ -52,7 +52,7 @@ struct _shlex_pvt_lexdata_
 	char		docword;
 	char		nested_tilde;
 	char 		*docend;
-	char		noarg;
+	char		inlexskip;	/* set when sh_lex() is called from sh_lexskip() */
 	char		warn;
 	char		message;
 	char		arith;
@@ -61,9 +61,6 @@ struct _shlex_pvt_lexdata_
 	int		lastc;
 	int		lex_state;
 	int		docextra;
-#if SHOPT_KIA
-	off_t		kiaoff;
-#endif
 };
 
 /*
@@ -88,17 +85,6 @@ typedef struct  _shlex_
 	int		inlineno;	/* saved value of sh.inlineno */
 	int		firstline;	/* saved value of sh.st.firstline */
 	int		assignlevel;	/* nesting level for assignment */
-#if SHOPT_KIA
-	Sfio_t		*kiafile;	/* kia output file */
-	Sfio_t		*kiatmp;	/* kia reference file */
-	unsigned long	script;		/* script entity number */
-	unsigned long	fscript;	/* script file entity number */
-	unsigned long	current;	/* current entity number */
-	unsigned long	unknown;	/* <unknown> entity number */
-	off_t		kiabegin;	/* offset of first entry */
-	char		*scriptname;	/* name of script file */
-	Dt_t		*entity_tree;	/* for entity IDs */
-#endif /* SHOPT_KIA */
 	/* The following two struct members are considered private to lex.c */
 	struct _shlex_pvt_lexdata_  lexd;
 	struct _shlex_pvt_lexstate_  lex;
@@ -161,17 +147,12 @@ typedef struct  _shlex_
 /* additional parser flag, others in <shell.h> */
 #define SH_EMPTY	04
 #define SH_NOIO		010
-#define	SH_ASSIGN	020
-#define	SH_FUNDEF	040
+#define SH_ASSIGN	020
+#define SH_FUNDEF	040
 #define SH_ARRAY	0100
 #define SH_SEMI		0200	/* semicolon after NL ok */
 
 #define SH_COMPASSIGN	010	/* allow compound assignments only */
-
-extern const char		e_unexpected[];
-extern const char		e_unmatched[];
-extern const char		e_endoffile[];
-extern const char		e_newline[];
 
 /* odd chars */
 #define LBRACE	'{'
@@ -185,8 +166,25 @@ extern int		sh_lex(Lex_t*);
 extern Shnode_t		*sh_dolparen(Lex_t*);
 extern Lex_t		*sh_lexopen(Lex_t*, int);
 extern void 		sh_lexskip(Lex_t*,int,int,int);
-extern noreturn void 	sh_syntax(Lex_t*);
+extern noreturn void 	sh_syntax(Lex_t*, int);
+
 #if SHOPT_KIA
+    typedef struct
+    {
+	off_t		offset;
+	Sfio_t		*file;		/* kia output file */
+	Sfio_t		*tmp;		/* kia reference file */
+	unsigned long	script;		/* script entity number */
+	unsigned long	fscript;	/* script file entity number */
+	unsigned long	current;	/* current entity number */
+	unsigned long	unknown;	/* <unknown> entity number */
+	off_t		begin;		/* offset of first entry */
+	char		*scriptname;	/* name of script file */
+	Dt_t		*entity_tree;	/* for entity IDs */
+    } Kia_t;
+
+    extern Kia_t		kia;
+
     extern int                  kiaclose(Lex_t *);
     extern unsigned long        kiaentity(Lex_t*, const char*,int,int,int,int,unsigned long,int,int,const char*);
 #endif /* SHOPT_KIA */

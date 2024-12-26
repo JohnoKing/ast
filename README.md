@@ -2,8 +2,11 @@
 
 # KornShell 93u+m
 
-This repository is used to develop bugfixes
-to the last stable release (93u+ 2012-08-01) of
+Welcome to the repository where the KornShell is under active development.
+This is where we develop bugfixes and new features for the shell, and where
+users can download the latest releases or the current development version in
+source code form.
+The project started off from last stable release (93u+ 2012-08-01) of
 [ksh93](http://www.kornshell.com/),
 formerly developed by AT&T Software Technology (AST).
 The sources in this repository were forked from the
@@ -15,11 +18,26 @@ and click on commit messages for full details.
 For all fixes, see [the commit log](https://github.com/ksh93/ksh/commits/).
 To see what's left to fix, see [the issue tracker](https://github.com/ksh93/ksh/issues).
 
+## Table of contents ##
+
+* [Policy](#user-content-policy)
+* [Why?](#user-content-why)
+* [Installing from source](#user-content-installing-from-source)
+    * [Supported systems](#user-content-supported-systems)
+    * [Prepare](#user-content-prepare)
+    * [Build](#user-content-build)
+    * [Test](#user-content-test)
+    * [Install](#user-content-install)
+* [What is ksh93?](#user-content-what-is-ksh93)
+
 ## Policy
 
-1. Fixing bugs is main focus of the 1.0 series.
-   Major feature development is for future versions (1.1 and up).
+1. Feature development for future releases happens on the dev branch.
+   The numbered release branch(es) are feature-frozen and get bugfixes
+   and maintenance only, usually cherry-picked from the dev branch.
 2. No major rewrites. No refactoring code that is not fully understood.
+   Even gradual and careful development may culminate in profound changes.
+   Bit rot is prevented by cleaning up unused and obsolete code.
 3. Maintain documented behaviour. Changes required for compliance with the
    [POSIX shell language standard](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/contents.html)
    are implemented for the `posix` mode only to avoid breaking legacy scripts.
@@ -28,6 +46,9 @@ To see what's left to fix, see [the issue tracker](https://github.com/ksh93/ksh/
    send pull requests. Every interested party is invited to contribute.
 6. To help increase everyone's understanding of this code base, fixes and
    significant changes should be fully documented in commit messages.
+   Each commit should be a complete, self-contained and self-documenting
+   change, including updates to documentation and regression tests where
+   applicable. Pull requests are therefore squashed into a single commit.
 7. Code style varies somewhat in this historic code base.
    Your changes should match the style of the code surrounding them.
    Indent with tabs, assuming an 8-space tab width.
@@ -62,21 +83,91 @@ of ksh93 ever released.
 As of late 2021, distributions such as Debian and Slackware have begun
 to package it as their default version of ksh93.
 
-## Build
+## Installing from source
+
+You can download a [release](releases) tarball,
+or clone the current code from your preferred branch.
+New features for the future release series are developed on the `dev` branch.
+Stable releases are currently based on the `1.0` branch.
+
+### Supported systems
+
+KornShell 93u+m is currently known to build and run on:
+* Android/Termux
+* Cygwin
+* DragonFly BSD
+* FreeBSD
+* Haiku
+* illumos distributions (e.g., OmniOS)
+* Linux: all distributions with glibc or musl libc
+* macOS
+* NetBSD
+* OpenBSD
+* QNX Neutrino (6.5.0)
+* Solaris
+
+Systems that may work, but that we have not been able to test lately, include:
+* AIX
+* HP-UX
+* UnixWare
+
+KornShell 93u+m supports systems that use the ASCII character set as the
+lowest common denominator. This includes Linux on IBM zSeries, but not z/OS.
+Support for the EBCDIC character set has been removed, as we do not have
+access to a mainframe with z/OS to test and maintain it.
+
+### Prepare
+
+The build system requires only a basic POSIX-compatible shell, utilities and
+compiler environment. The `cc`, `ar` and `getconf` commands are needed at
+build time. The `tput` and `getconf` commands are used at runtime if
+available (for multiline editing and to complete the `getconf` built-in,
+respectively). Not all systems come with all of these preinstalled. Here are
+system-specific instructions for making them available:
+
+* **Android/[Termux](https://termux.dev/):**
+  install dependencies using `pkg install`.
+    * Build dependencies: `clang`, `binutils`, `getconf`
+    * Runtime dependencies (optional): `ncurses-utils`, `getconf`
+* **macOS:**
+  install the Xcode Command Line Tools:    
+  `xcode-select --install`
+* (to be completed)
+
+### Build
 
 To build ksh with a custom configuration of features, edit
 [`src/cmd/ksh93/SHOPT.sh`](https://github.com/ksh93/ksh/blob/dev/src/cmd/ksh93/SHOPT.sh).
 
+On systems such as NetBSD and OpenBSD, where `/bin/ksh` is not ksh93 and the
+preinstalled `/etc/ksh.kshrc` profile script is incompatible with ksh93, you'll
+want to disable `SHOPT_SYSRC` to avoid loading it on startup -- unless you can
+edit it to make it compatible with ksh93. This generally involves differences
+in the declaration and usage of local variables in functions.
+
 Then `cd` to the top directory and run:
-```sh
+
+```
 bin/package make
 ```
+
 To suppress compiler output, use `quiet make` instead of `make`.
+
 In some non-POSIX shells you might need to prepend `sh` to all calls to `bin/package`.
+
+Parallel building is supported by appending `-j` followed by the
+desired maximum number of concurrent jobs, e.g., `bin/package make -j4`.
+This speeds up building on systems with more than one CPU core.
+(Type `bin/package host cpu` to find out how many CPU cores your system has.)
 
 The compiled binaries are stored in the `arch` directory, in a subdirectory
 that corresponds to your architecture. The command `bin/package host type`
 outputs the name of this subdirectory.
+
+Dynamically linked binaries, if supported for your system, are stored in
+`dyn/bin` and `dyn/lib` subdirectories of your architecture directory.
+If built, they are built in addition to the statically linked versions.
+Export `AST_NO_DYLIB` to deactivate building dynamically linked versions.
 
 If you have trouble or want to tune the binaries, you may pass additional
 compiler and linker flags. It is usually best to export these as environment
@@ -85,14 +176,17 @@ the build subdirectory of the `arch` directory, so exporting them is a
 convenient way to keep them consistent between build and test commands.
 **Note that this system uses `CCFLAGS` instead of the usual `CFLAGS`.**
 An example that makes Solaris Studio cc produce a 64-bit binary:
-```sh
+
+```
 export CCFLAGS="-m64 -O" LDFLAGS="-m64"
 bin/package make
 ```
+
 Alternatively you can append these to the command, and they will only be
 used for that command. You can also specify an alternative shell in which
 to run the build scripts this way. For example:
-```sh
+
+```
 bin/package make SHELL=/bin/bash CCFLAGS="-O2 -I/opt/local/include" LDFLAGS="-L/opt/local/lib"
 ```
 
@@ -103,9 +197,11 @@ do not add the `-ffast-math` compiler flag; arithmetic bugs will occur when
 using that flag.
 
 For more information run
-```sh
+
+```
 bin/package help
 ```
+
 Many other commands in this repo self-document via the `--help`, `--man` and
 `--html` options; those that do have no separate manual page.
 
@@ -113,17 +209,22 @@ Many other commands in this repo self-document via the `--help`, `--man` and
 
 After compiling, you can run the regression tests.
 To run the default test sets for ksh and the build system, use:
-```sh
+
+```
 bin/package test
 ```
+
 For ksh, use the `shtests` command directly to control the regression test runs.
 Start by reading the information printed by:
-```sh
+
+```
 bin/shtests --man
 ```
+
 To hand-test ksh (as well as the utilities and the autoloadable functions
 that come with it) without installing, run:
-```sh
+
+```
 bin/package use
 ```
 
@@ -140,6 +241,13 @@ available, is installed in `share/man`.
 
 Destination directories with whitespace or shell pattern characters in their
 pathnames are not yet supported.
+
+If a dynamically linked version of ksh and associated commands has been
+built, then the `install` subcommand will prefer that: commands, dynamic
+libraries and associated header files will be installed then. To install the
+statically linked version instead (and skip the header files), either delete
+the `dyn` subdirectory, or export `AST_NO_DYLIB=y` before building to prevent
+it from being created in the first place.
 
 ## What is ksh93?
 
@@ -185,13 +293,13 @@ KSH-88:
   can capture keystrokes and rebind keys to customize the editing interface.
 * Extended I/O Capabilities: KSH-93 provides several I/O capabilities not
   available in "sh", including the ability to:
-  * specify a file descriptor for input and output
-  * start up and run co-processes
-  * produce a prompt at the terminal before a read
-  * easily format and interpret responses to a menu
-  * echo lines exactly as output without escape processing
-  * format output using printf formats.
-  * read and echo lines ending in "\\". 
+    * specify a file descriptor for input and output
+    * start up and run co-processes
+    * produce a prompt at the terminal before a read
+    * easily format and interpret responses to a menu
+    * echo lines exactly as output without escape processing
+    * format output using printf formats.
+    * read and echo lines ending in "\\". 
 * Improved performance: KSH-93 executes many scripts faster than the System
   V Bourne shell. A major reason for this is that many of the standard
   utilities are built-in. To reduce the time to initiate a command, KSH-93

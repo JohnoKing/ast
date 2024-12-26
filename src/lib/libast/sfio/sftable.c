@@ -27,7 +27,7 @@
 */
 
 static char* sffmtint(const char* str, int* v)
-{	
+{
 	for(*v = 0; isdigit(*str); ++str)
 		*v = *v * 10 + (*str - '0');
 	*v -= 1;
@@ -263,7 +263,7 @@ static Fmtpos_t* sffmtpos(Sfio_t* f,const char* form,va_list args,Sffmt_t* ft,in
 					size = sizeof(char);
 				else if(flags&SFFMT_TFLAG)
 					size = sizeof(ptrdiff_t);
-				else if(flags&SFFMT_ZFLAG) 
+				else if(flags&SFFMT_ZFLAG)
 					size = sizeof(size_t);
 				else if(flags&(SFFMT_LLONG|SFFMT_JFLAG) )
 					size = sizeof(Sflong_t);
@@ -482,9 +482,9 @@ static const unsigned char	ldbl_inf[] = { _ast_ldbl_inf_init };
 static int sfcvinit(void)
 {	int		d, l;
 
-	for(d = 0; d <= SF_MAXCHAR; ++d)
-	{	_Sfcv36[d] = SF_RADIX;
-		_Sfcv64[d] = SF_RADIX;
+	for(d = 0; d <= SFIO_MAXCHAR; ++d)
+	{	_Sfcv36[d] = SFIO_RADIX;
+		_Sfcv64[d] = SFIO_RADIX;
 	}
 
 	/* [0-9] */
@@ -506,7 +506,7 @@ static int sfcvinit(void)
 	}
 
 	/* remaining digits */
-	for(; d < SF_RADIX; ++d)
+	for(; d < SFIO_RADIX; ++d)
 	{	_Sfcv36[(uchar)_Sfdigits[d]] = d;
 		_Sfcv64[(uchar)_Sfdigits[d]] = d;
 	}

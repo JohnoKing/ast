@@ -24,7 +24,7 @@
 .de EX		\" start example
 .ta 1i 2i 3i 4i 5i 6i
 .PP
-.RS 
+.RS
 .PD 0
 .ft 5
 .nf
@@ -38,60 +38,224 @@
 ..
 .TH STRTON 3
 .SH NAME
-strton \- convert string to long integer
+.BR strton ,
+.B strtonll
+\- convert string to integer with optional pseudo-float support
 .SH SYNOPSIS
 .L "long strton(const char* s, char** e, char *basep, int m)"
+.PP
+.L "intmax_t strtonll(const char* s, char** e, char *basep, int m)"
 .SH DESCRIPTION
-.I strton
-converts the null-terminated string
+The
+.B strton
+and
+.B strtonll
+functions convert the zero-terminated string
 .I s
-to a long integer.
+to a
+.B long
+integer or an
+.B intmax_t
+integer, respectively.
 If
 .I e
-not 0 then
+is not
+.LR NULL ,
+then
 .I *e
 is set to point to the first unrecognized character in
-.IR s .
-Leading spaces in
+.IR s ,
+or to its terminating zero byte if the conversion was fully successful.
+Leading
+.IR isspace (3)
+characters in
 .I s
-are ignored.
+are skipped over and ignored.
 .PP
 A number is composed of
-.IR sign-base-number-suffix .
+.IR sign \- base \- number \- suffix .
 All but
 .I number
-are optional.
+are optional. The
 .I sign
-may be \+ or \-.
+may be
+.L +
+or
+.LR - .
+The
 .I base
-may be:
-.TP
+may be
 .B 0x
-for hexadecimal;
-.TP
+for hexadecimal,
 .B 0
 for octal, or
-.TP
-.IR nn #
+\f2nn\fP\f3#\fP
 for base
-2 \(le
+2 \[<=]
 .I nn
-\(le 36.
+\[<=] 64.
 .PP
-For bases greater than 10 the additional digits are take from the set
-.BR [a-zA-Z] .
-The suffix multiplies the converted number and may be:
-.TP
+For bases greater than 10, the digits above 9 are represented
+by the lower case letters, the upper case letters,
+.RL \[lq] @ \[rq],
+and
+.RL \[lq] _ \[rq],
+respectively.
+For bases less than or equal to 36, upper and lower case
+letters can be used interchangeably.
+.PP
+If the string
+.I s
+has a
+.I base
+prefix. then the numeric value of the base detected is stored in
+.IR *basep ,
+which may affect subsequent calls.
+If, on entry,
+.I basep
+is not
+.L NULL
+and the numeric value of
+.I *basep
+is not zero,
+then the conversion is done
+from the base specified in
+.IR basep ,
+and the
+.I base
+prefix is not recognized.
+.PP
+A case-insensitive
+.IR suffix
+may be specified in
+.I s
+if the base prefix is omitted.
+It multiplies the converted number and may be
 .B b
-block (512)
-.TP
-.B g
-giga (1024 * 1024 * 1024)
-.TP
+for block (512),
+or one of the SI unit prefixes
 .B k
-kilo (1024)
-.TP
-.B m
-mega (1024 * 1024)
+for kilo (1000),
+.B M
+for mega (1000 \(mu 1000),
+.B G
+for giga (1000 \(mu 1000 \(mu 1000),
+and so on for
+.B T
+(tera),
+.B P
+(peta), and
+.B E
+(exa),
+or one of the IEC power-of-two prefixes
+.B Ki
+for kibi (1024),
+.B Mi
+for mebi (1024 \(mu 1024),
+.B Gi
+for gibi (1024 \(mu 1024 \(mu 1024),
+and so on for
+.B Ti
+(tebi),
+.B Pi
+(pebi), and
+.B Ei
+(exbi).
+The SI and IEC suffixes may optionally have a final
+.B B
+(i.e., bytes) added, which is accepted and ignored.
+.PP
+The
+.I m
+parameter may also be used to specify a multiplier.
+If neither a
+.I base
+prefix nor a multiplier
+.I suffix
+is supplied in
+.IR s ,
+and
+.I *basep
+is 0,
+and a value greater than 1 is specified in the
+.I m
+parameter, then the converted value will be multiplied by
+.IR m .
+.PP
+Additionally, the
+.I m
+parameter may be used to support pseudo-floating point numbers. If
+.I m
+is greater than 1,
+and the
+.I suffix
+consists of the currently set locale's radix point (by default,
+.RL \[lq] . \[rq]),
+followed by decimal digits, then
+.I s
+is treated as if it were a floating point number
+which is multiplied by
+.IR m .
+For example, an
+.I s
+string value of
+.L \[dq]12.34\[dq]
+combined with an
+.I m
+value of 1000 yields an integer result of 12340.
+.PP
+A negative
+.I m
+disables the recognition of any
+.IR suffix .
+Otherwise, if neither case above applies,
+.I m
+is ignored.
+.SH "RETURN VALUES"
+The
+.B strton
+and
+.B strtonll
+functions return the value that represents the conversion of
+zero or more recognized characters in the string
+.I s
+up to the first unrecognized character or the terminating zero byte.
+The address of the first unrecognized character,
+or the terminating zero byte,
+is stored in
+.I *e
+if
+.I e
+is not
+.LR NULL .
+Note that
+.I errno
+is not changed in this case.
+.PP
+If the specified base is less than 2 or greater than 64, then
+.I *e
+is set to
+.I s
+(if
+.I e
+is not
+.LR NULL ),
+the global variable
+.I errno
+is set to
+.LR EINVAL ,
+and 0 is returned.
+.PP
+If an overflow or underflow occurs, then
+.I errno
+is set to
+.L ERANGE
+and the return value is the function's integer type's
+maximum possible or minimum possible value, respectively.
 .SH "SEE ALSO"
-atoi(3), scanf(3), strtod(3)
+.IR atoi (3),
+.IR scanf (3),
+.IR setlocale (3),
+.IR strtol (3),
+.IR strtoul (3),
+.IR strtod (3)

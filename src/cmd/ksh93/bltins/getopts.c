@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -41,14 +41,14 @@ static int infof(Opt_t* op, Sfio_t* sp, const char* s, Optdisc_t* dp)
 #endif /* SHOPT_NAMESPACE */
 	{
 		int savtop = stktell(stkp);
-		char *savptr = stkfreeze(stkp,0);
+		void *savptr = stkfreeze(stkp,0);
 		sfputc(stkp,'$');
 		sfputc(stkp,'(');
 		sfputr(stkp,s,')');
 		sfputr(sp,sh_mactry(stkfreeze(stkp,1)),-1);
 		stkset(stkp,savptr,savtop);
 	}
-        return 1;
+	return 1;
 }
 
 int	b_getopts(int argc,char *argv[],Shbltin_t *context)
@@ -61,7 +61,7 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	volatile int extended, r= -1;
 	struct checkpt buff, *pp;
 	Optdisc_t disc;
-        memset(&disc, 0, sizeof(disc));
+	memset(&disc, 0, sizeof(disc));
 	disc.version = OPT_VERSION;
 	disc.infof = infof;
 	value[1] = 0;
@@ -178,7 +178,7 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	sh.st.optindex = opt_info.index;
 	sh.st.optchar = opt_info.offset;
 	nv_putval(np, options, 0);
-	np = nv_open(nv_name(OPTARGNOD),sh.var_tree,0);
+	np = sh_scoped(OPTARGNOD);
 	if(opt_info.num == LONG_MIN)
 		nv_putval(np, opt_info.arg, NV_RDONLY);
 	else if (opt_info.arg && opt_info.num > 0 && isalpha((char)opt_info.num) && !isdigit(opt_info.arg[0]) && opt_info.arg[0] != '-' && opt_info.arg[0] != '+')
@@ -196,6 +196,6 @@ int	b_getopts(int argc,char *argv[],Shbltin_t *context)
 	else
 		nv_putval(np, opt_info.arg, NV_RDONLY);
 	sh_popcontext(&buff);
-        opt_info.disc = 0;
+	opt_info.disc = 0;
 	return r;
 }

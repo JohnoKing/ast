@@ -2,55 +2,69 @@ set	nooptimize
 set	stdio FEATURE/standards
 hdr	float,limits,math,values
 lib,npt	frexp,ldexp,finite,finitel,isinfl,isnanl,copysign,copysignl,powf,pow,powl FEATURE/standards math.h -lm
-lib	frexpl -lm note{ frexpl present and works }end link{
+#
+# The "does foo(3) compile and link" tests below are compiled and linked, but
+# never actually run. They are only used to check if linking succeeds.
+#
+# For those tests to work correctly, we must work around compiler optimization.
+# The rand() calls are to stop the result from being considered known at
+# compile time, which would cause modern compilers to optimize out the probe
+# calls, which would in turn cause linking to succeed where it shouldn't.
+#
+# Note: on gcc, this would happen even at -O0, so the 'set nooptimize' above
+# is ineffective for that purpose.
+#
+lib	frexpl -lm note{ does frexpl(3) compile and link }end link{
+		#include <stdlib.h>
 		#include <math.h>
 		int main(void)
 		{
 			int e;
-			long double f = frexpl(123.456789,&e);
-			return !(e==7 && f>0.964506 && f<0.964507);
+			long double f = frexpl(123.456789 + (long double)(rand()), &e);
+			return !(e > 0.0);
 		}
 	}end
-lib	ldexpl -lm note{ ldexpl present and works }end link{
+lib	ldexpl -lm note{ does ldexpl(3) compile and link }end link{
+		#include <stdlib.h>
 		#include <math.h>
 		int main(void)
 		{
-			long double f = ldexpl(0.96450616406250000434141611549421213567256927490234375, 7);
-			return !(f>=123.4567890 && f<123.4567891);
+			long double f = ldexpl(0.96450616406250000434141611549421213567256927490234375 + (long double)(rand()), 7);
+			return !(f > 0.0);
 		}
 	}end
 npt	frexpl,ldexpl
-lib	fpclassify -lm note{ fpclassify present and works }end link{
+lib	fpclassify -lm note{ does fpclassify(3) compile and link }end link{
 		#include <sys/types.h>
 		#include <sys/stat.h>
 		#include <stdlib.h>
 		#include <unistd.h>
 		#include <math.h>
-		int main(void) { return fpclassify(-0.0); }
+		int main(void) { return !(fpclassify((double)(rand()))==FP_ZERO); }
 	}end
-lib	isinf -lm note{ isinf present and works }end link{
+lib	isinf -lm note{ does isinf(3) compile and link }end link{
 		#include <sys/types.h>
 		#include <sys/stat.h>
 		#include <stdlib.h>
 		#include <unistd.h>
 		#include <math.h>
-		int main(void) { return isinf(-0.0); }
+		int main(void) { return isinf(2.0 * ((double)(rand()))); }
 	}end
-lib	isnan -lm note{ isnan present and works }end link{
+lib	isnan -lm note{ does isnan(3) compile and link }end link{
 		#include <sys/types.h>
 		#include <sys/stat.h>
 		#include <stdlib.h>
 		#include <unistd.h>
 		#include <math.h>
-		int main(void) { return isnan(-0.0); }
+		int main(void) { return isnan(2.0 * ((double)(rand()))); }
 	}end
-lib	signbit -lm note{ signbit present and works }end link{
+lib	signbit -lm note{ does signbit(3) compile and link }end link{
 		#include <sys/types.h>
 		#include <sys/stat.h>
 		#include <stdlib.h>
 		#include <unistd.h>
 		#include <math.h>
-		int main(void) { return signbit(-0.0); }
+		int main(void) { return signbit(2.0 * ((double)(rand()))); }
 	}end
 
 tst	ast_no_um2fm note{ no unsigned intmax => floatmax cast }end nolink{
@@ -316,7 +330,7 @@ tst	- note{ missing floating point limits }end output{
 		unsigned int		ui;
 		unsigned long		ul;
 		unsigned _ast_intmax_t	uq;
-	
+
 	#ifdef SIGFPE
 		signal(SIGFPE, catch);
 	#endif
@@ -1028,7 +1042,7 @@ tst	- -DSCAN=1 - -lm -DSTRTO=1 - -DMAC=1 - -DDIV=1 - -DEXP=1 - -DADD=1 - -DMPY=1
 	#if _hdr_values
 	#include <values.h>
 	#endif
-	#if STRTO && _hdr_stdlib
+	#if STRTO
 	#include <stdlib.h>
 	#endif
 	#if !defined(FLT_MAX) && defined(MAXFLOAT)
@@ -1045,7 +1059,7 @@ tst	- -DSCAN=1 - -lm -DSTRTO=1 - -DMAC=1 - -DDIV=1 - -DEXP=1 - -DADD=1 - -DMPY=1
 	{
 		unsigned char*	u = (unsigned char*)val;
 		unsigned char*	e = u + siz;
-	
+
 		printf("#define _ast_%s_%s_init\t0x%02x", typ, var, *u);
 		while (++u < e)
 			printf(",0x%02x", *u);
@@ -1247,9 +1261,15 @@ if	need_ast_pow_macros -lm note{ are IEEE pow macro replacements needed }end exe
 	#include <math.h>
 	int main(void) { return pow(1.0, 1.0 / 0.0) == 1.0; }
 }end {
+	#if _lib_powf
 	#define powf(x,y)	(((x)==1.0)?1.0:powf((x),(y)))
+	#endif
+	#if _lib_pow
 	#define pow(x,y)	(((x)==1.0)?1.0:pow((x),(y)))
+	#endif
+	#if _lib_powl
 	#define powl(x,y)	(((x)==1.0)?1.0:powl((x),(y)))
+	#endif
 }
 elif	tst need_ast_pow_funs -lm note{ are IEEE pow function replacements needed }end execute{
 	#include <sys/types.h>
@@ -1261,11 +1281,17 @@ elif	tst need_ast_pow_funs -lm note{ are IEEE pow function replacements needed }
 	double (*volatile _ast_ppow)(double,double);
 	int main (void) { _ast_ppow = &pow; return (*_ast_ppow)(1.0, 1.0 / 0.0) == 1.0; }
 }end {
+	#if _lib_powf
 	float			_ast_powf(float x, float y);
-	double			_ast_pow(double x, double y);
-	long double		_ast_powl(long double x, long double y);
 	#define powf(x,y)	(_ast_powf((x),(y)))
+	#endif
+	#if _lib_pow
+	double                  _ast_pow(double x, double y);
 	#define pow(x,y)	(_ast_pow((x),(y)))
+	#endif
+	#if _lib_powl
+	long double             _ast_powl(long double x, long double y);
 	#define powl(x,y)	(_ast_powl((x),(y)))
+	#endif
 }
 endif

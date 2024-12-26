@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2013 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -147,9 +147,7 @@ regrexec_20120528(const regex_t* p, const char* s, size_t len, size_t nmatch, re
  */
 
 #undef	regrexec
-#if _map_libc
 #define regrexec	_ast_regrexec
-#endif
 
 extern int
 regrexec(const regex_t* p, const char* s, size_t len, size_t nmatch, oldregmatch_t* oldmatch, regflags_t flags, int sep, void* handle, regrecord_t record)

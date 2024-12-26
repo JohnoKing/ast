@@ -33,10 +33,6 @@ set define
 #
 
 if tst note{ BSD (Free, Net, Open, et al) }end compile{
-		/*
-		 * On BSD systems, _POSIX_SOURCE and such are used to *limit* functionality to a known API;
-		 * they don't enable anything. The general intent in BSD is to enable everything by default.
-		 */
 		#include <limits.h>
 		#include <unistd.h>
 		#include <sys/param.h>
@@ -56,7 +52,11 @@ if tst note{ BSD (Free, Net, Open, et al) }end compile{
 			return 0;
 		}
 	}end {
-		/* No standards or features macro here. On BSD, everything is enabled by default */
+		#define _XOPEN_SOURCE	9900
+		#define _POSIX_C_SOURCE 21000101L
+		#define _BSD_SOURCE	1	/* OpenBSD needs this */
+		#define _NETBSD_SOURCE	1	/* NetBSD needs this */
+		#define __BSD_VISIBLE	1	/* FreeBSD needs this */
 	}
 elif tst note{ Darwin (macOS, Mac OS X) }end compile{
 		/*
@@ -148,7 +148,7 @@ elif tst note{ SunOS (Solaris, illumos) }end compile{
 		#define	NULL	0
 		#endif /* __SUNPRO_C */
 	}
-elif tst note{ GNU (glibc) or Cygwin }end compile{
+elif tst note{ GNU (glibc), Cygwin, or Android }end compile{
 		/*
 		 * On GNU (GNU's Not UNIX) and Cygwin, _GNU_SOURCE is the "everything and the kitchen sink" macro
 		 * (see feature_test_macros(7)), but on GNU we also need to define _FILE_OFFSET_BITS to get large
@@ -163,8 +163,8 @@ elif tst note{ GNU (glibc) or Cygwin }end compile{
 		#include <features.h>
 		#include <sys/types.h>
 		#include <wchar.h>
-		#if !__GLIBC__ && !__CYGWIN__
-		#error not GNU or Cygwin
+		#if !__GLIBC__ && !__CYGWIN__ && !__ANDROID_API__
+		#error not GNU, Cygwin, or Android
 		#endif
 		int _do_these_compile_ = _POSIX_PATH_MAX & _SC_PAGESIZE;
 		#if _typ_u_long

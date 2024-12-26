@@ -1,8 +1,8 @@
 /***********************************************************************
 *                                                                      *
 *               This software is part of the ast package               *
-*          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2022 Contributors to ksh 93u+m           *
+*          Copyright (c) 1985-2013 AT&T Intellectual Property          *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -28,11 +28,11 @@ uint dtstrhash(uint h, void* args, ssize_t n)
 	unsigned char	*s = (unsigned char*)args;
 
 #if _ast_sizeof_int == 8 /* 64-bit hash */
-#define	FNV_PRIME	((1<<40) + (1<<8) + 0xb3)
-#define FNV_OFFSET	14695981039346656037
+#define FNV_PRIME	((1<<40) + (1<<8) + 0xb3)
+#define FNV_OFFSET	14695981039346656037U
 #else /* 32-bit hash */
-#define	FNV_PRIME	((1<<24) + (1<<8) + 0x93)
-#define FNV_OFFSET	2166136261
+#define FNV_PRIME	((1<<24) + (1<<8) + 0x93)
+#define FNV_OFFSET	2166136261U
 #endif
 	h = (h == 0 || h == ~0) ? FNV_OFFSET : h;
 	if(n <= 0) /* see discipline key definition for == 0 */

@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -31,6 +31,114 @@ sleep "\$@"
 EOF
 chmod +x "$binsleep"
 
+# ======
+# Test moved to top because it needs there to be no other jobs running
+wait # not running --pipefail which would interfere with subsequent tests
+: $(jobs -p) # required to clear jobs for next jobs -p (interactive side effect)
+sleep 2 &
+pids=$!
+if	[[ $(jobs -p) != $! ]]
+then	err_exit 'jobs -p not reporting a background job'
+fi
+sleep 2 &
+pids="$pids $!"
+foo()
+{
+	set -- $(jobs -p)
+	(( $# == 2 )) || err_exit "$# jobs not reported -- 2 expected"
+}
+foo
+kill $pids
+unset -f foo
+
+# Test moved to top because it needs there to be no other files in the temp dir
+mkdir dir
+if	[[ $(print */) != dir/ ]]
+then	err_exit 'file expansion with trailing / not working'
+fi
+if	[[ $(print *) != dir ]]
+then	err_exit 'file expansion with single file not working'
+fi
+print hi > .foo
+if	[[ $(print *) != dir ]]
+then	err_exit 'file expansion leading . not working'
+fi
+
+# ======
+# The following tests are run in parallel because they are slow; they are checked at the end
+
+# $( < $tmp/parallel_1) is not foobar
+{
+	( sleep .2; cat <<-!
+	foobar
+	!
+	) | cat > $tmp/parallel_1 &
+	wait $!
+	[[ $( < $tmp/parallel_1) == foobar ]]
+} &
+parallel_1=$!
+
+# ALRM signal not working
+[[ $( (trap 'print alarm' ALRM; sleep .4) & sleep .2; kill -ALRM $!; sleep .2; wait) == alarm ]] &
+parallel_2=$!
+
+# ignored traps not being ignored
+[[ $("$SHELL" -c 'trap "" HUP; "$SHELL" -c "(sleep .2; kill -HUP $$) & sleep .4; print done"') == done ]] &
+parallel_3=$!
+
+# output from pipe is lost with pipe to builtin
+if builtin cat 2> /dev/null; then
+	typeset -i n
+	file=$tmp/parallel_4
+	: not tracing 1000 loop iterations :
+	set +x
+	for ((n=0; n < 1000; n++))
+	do
+		> $file
+		{ sleep .001;echo $? >$file;} | cat > /dev/null
+		[[ -s $file ]] || exit
+	done
+fi &
+parallel_4=$!
+
+# command substitution causes pipefail option to hang
+{
+	exec 3> /dev/null
+	file=$tmp/parallel_5
+	cat > $file <<- \EOF
+		myfilter() { x=$(print ok | cat); print  -r -- "$SECONDS"; }
+		set -o pipefail
+		sleep .3 | myfilter
+	EOF
+	(( $("$SHELL" $file) <= .2 ))
+} &
+parallel_5=$!
+
+# command | while read...done" finishing too fast
+{
+	"$binsleep" 0  # avoid OS caching delay on first launch
+	float s=SECONDS
+	for i in .1 .2
+	do      print $i
+	done | while read sec; do ( "$binsleep" "$sec"; "$binsleep" "$sec") done
+	(( (SECONDS - s) >= .4 ))
+} &
+parallel_6=$!
+
+# early termination not causing broken pipe
+{
+	"$binsleep" 0  # avoid OS caching delay on first launch
+	float s=SECONDS
+	set -o pipefail
+	for ((i=0; i < 30; i++))
+	do	print hello
+		sleep .02
+	done | "$binsleep" .2
+	(( (SECONDS - s) < .4 ))
+} &
+parallel_7=$!
+
+# ======
 # test basic file operations like redirection, pipes, file expansion
 set -- \
 	go+r	0000	\
@@ -68,22 +176,10 @@ rm -f foobar
 > foobar
 for i in 1 2
 do      print foobar*
-        rm -f foobar
+	rm -f foobar
 done > out
 if      [[ "$(<out)"  != "foobar"$'\n'"foobar*" ]]
 then    print -u2 "optimizer bug with file expansion"
-fi
-rm -f out foobar
-mkdir dir
-if	[[ $(print */) != dir/ ]]
-then	err_exit 'file expansion with trailing / not working'
-fi
-if	[[ $(print *) != dir ]]
-then	err_exit 'file expansion with single file not working'
-fi
-print hi > .foo
-if	[[ $(print *) != dir ]]
-then	err_exit 'file expansion leading . not working'
 fi
 date > dat1 || err_exit "date > dat1 failed"
 test -r dat1 || err_exit "dat1 is not readable"
@@ -133,20 +229,12 @@ eval $bar
 if	[[ $foo != 'foo bar' ]]
 then	err_exit 'eval foo=\$bar, with bar="foo\ bar" not working'
 fi
-cd /tmp
-cd ../../tmp || err_exit "cd ../../tmp failed"
-if	[[ $PWD != /tmp ]]
-then	err_exit 'cd ../../tmp is not /tmp'
+cd /dev
+cd ../../dev || err_exit "cd ../../dev failed"
+if	[[ $PWD != /dev ]]
+then	err_exit 'cd ../../dev is not /dev'
 fi
-( sleep .2; cat <<!
-foobar
-!
-) | cat > $tmp/foobar &
-wait $!
-foobar=$( < $tmp/foobar)
-if	[[ $foobar != foobar ]]
-then	err_exit "$foobar is not foobar"
-fi
+
 {
 	print foo
 	"$binecho" bar
@@ -302,25 +390,8 @@ function optbug
 	return 1
 }
 optbug ||  err_exit 'array size optimization bug'
-wait # not running --pipefail which would interfere with subsequent tests
-: $(jobs -p) # required to clear jobs for next jobs -p (interactive side effect)
-sleep 2 &
-pids=$!
-if	[[ $(jobs -p) != $! ]]
-then	err_exit 'jobs -p not reporting a background job'
-fi
-sleep 2 &
-pids="$pids $!"
-foo()
-{
-	set -- $(jobs -p)
-	(( $# == 2 )) || err_exit "$# jobs not reported -- 2 expected"
-}
-foo
-kill $pids
+unset -f optbug
 
-[[ $( (trap 'print alarm' ALRM; sleep .4) & sleep .2; kill -ALRM $!; sleep .2; wait) == alarm ]] || err_exit 'ALRM signal not working'
-[[ $($SHELL -c 'trap "" HUP; $SHELL -c "(sleep .2;kill -HUP $$)& sleep .4;print done"') != done ]] && err_exit 'ignored traps not being ignored'
 [[ $($SHELL -c 'o=foobar; for x in foo bar; do (o=save);print $o;done' 2> /dev/null ) == $'foobar\nfoobar' ]] || err_exit 'for loop optimization subshell bug'
 command exec 3<> /dev/null
 if	cat /dev/fd/3 >/dev/null 2>&1  || whence mkfifo > /dev/null
@@ -363,12 +434,6 @@ print "#! $SHELL" > $tmp/scriptx
 print 'print  -- $0' >> $tmp/scriptx
 chmod +x $tmp/scriptx
 [[ $($tmp/scriptx) == $tmp/scriptx ]] || err_exit  "\$0 is $0 instead of $tmp/scriptx"
-cat > $tmp/scriptx <<- \EOF
-	myfilter() { x=$(print ok | cat); print  -r -- $SECONDS;}
-	set -o pipefail
-	sleep .3 | myfilter
-EOF
-(( $($SHELL $tmp/scriptx) > .2 )) && err_exit 'command substitution causes pipefail option to hang'
 exec 3<&-
 ( typeset -r foo=bar) 2> /dev/null || err_exit 'readonly variables set in a subshell cannot unset'
 $SHELL -c 'x=${ print hello;}; [[ $x == hello ]]' 2> /dev/null || err_exit '${ command;} not supported'
@@ -448,19 +513,6 @@ case 1 in 2) echo whoa ;; esac || err_exit "non-matching case does not reset exi
 false
 2>&1 || err_exit "lone redirection does not reset exit status"
 
-float s=SECONDS
-for i in .1 .2
-do      print $i
-done | while read sec; do ( "$binsleep" "$sec"; "$binsleep" "$sec") done
-((  (SECONDS-s) < .4)) && err_exit '"command | while read...done" finishing too fast'
-s=SECONDS
-set -o pipefail
-for ((i=0; i < 30; i++))
-do	print hello
-	sleep .02
-done |  "$binsleep" .2
-(( (SECONDS-s) < .4 )) || err_exit 'early termination not causing broken pipe'
-
 got=$({ trap 'print trap' 0; print -n | "$bincat"; } & wait "$!")
 [[ $got == trap ]] || err_exit "trap on exit not correctly triggered (expected 'trap', got $(printf %q "$got"))"
 
@@ -496,7 +548,7 @@ got=$(
 
 bintrue=$(whence -p true)
 set -o pipefail
-float start=$SECONDS end 
+float start=$SECONDS end
 for ((i=0; i < 2; i++))
 do	print foo
 	sleep .15
@@ -518,19 +570,6 @@ EOF
 float sec=SECONDS
 . $tmp/foo.sh  | cat > /dev/null
 (( (SECONDS-sec) < .07 ))  && err_exit '. script does not restore output redirection with eval'
-
-if builtin cat 2> /dev/null; then
-	file=$tmp/foobar
-	for ((n=0; n < 1000; n++))
-	do
-		> $file
-		{ sleep .001;echo $? >$file;} | cat > /dev/null
-		if	[[ !  -s $file ]]
-		then	err_exit 'output from pipe is lost with pipe to builtin'
-			break;
-		fi
-	done
-fi
 
 $SHELL -c 'kill -0 123456789123456789123456789' 2> /dev/null && err_exit 'kill not catching process ID overflows'
 
@@ -973,7 +1012,7 @@ do
 		print "${.sh.pid:-$("$SHELL" -c 'echo "$PPID"')}"  # fallback for pre-93u+m ksh without ${.sh.pid}
 		"$SHELL" -c 'print "$$"'
 	) >out &
-	wait
+	wait "$!"
 	pid1= pid2=
 	{ read pid1 && read pid2; } <out && let "pid1 != pid2" \
 	|| err_exit "last command in forked subshell exec-optimized in spite of $sig trap ($pid1 == $pid2)"
@@ -990,6 +1029,7 @@ do
 	|| err_exit "last command in forked comsub exec-optimized in spite of $sig trap ($pid1 == $pid2)"
 
 	cat >script <<-EOF
+	trap + $sig  # unignore
 	trap ":" $sig
 	echo \$\$
 	sh -c 'echo \$\$'
@@ -1003,7 +1043,6 @@ done
 # ======
 # Nested compound assignment misparsed in $(...) or ${ ...; } command substitution
 # https://github.com/ksh93/ksh/issues/269
-# TODO: one of the tests below crashes when actually executed; test lexing only by using noexec.
 for testcode in \
 	': $( typeset -a arr=((a b c) 1) )' \
 	': ${ typeset -a arr=((a b c) 1); }' \
@@ -1018,16 +1057,23 @@ for testcode in \
 	'typeset -Ca arr=((a=ah b=beh c=si))' \
 	': $( typeset -Ca arr=((a=ah b=beh c=si)) )' \
 	'r=${ typeset -Ca arr=((a=ah b=beh c=si)); }' \
-	'set --noexec; : $( typeset -a arr=((a $(( $( typeset -a barr=((a $(( 1 << 2 )) c) 1); echo 1 ) << $( typeset -a bazz=((a $(( 1 << 2 )) c) 1); echo 2 ) )) c) 1) )' \
+	': $( typeset -a arr=((a $(( $( typeset -a barr=((a $(( 1 << 2 )) c) 1); echo 1 ) << $( typeset -a bazz=((a $(( 1 << 2 )) c) 1); echo 2 ) )) c) 1) )' \
 	'r=$(typeset -C arr=( (a=ah b=beh c=si) 1 (e f g)));'
 do
-	# fork comsub with 'ulimit' on old ksh to avoid a fixed lexer bug crashing the entire test script
-	got=$(let ".sh.version >= 20211209" || ulimit -c 0
-		eval "set +x; $testcode" 2>&1) \
-	|| err_exit "comsub/arithexp lexing test $(printf %q "$testcode"):" \
-		"got status $? and $(printf %q "$got")"
+	got=$(export testcode; "$SHELL" -c 'v=$(eval "$testcode" 2>&1); e=$?; print -r -- "$v"; exit $e' 2>&1) \
+	|| { e=$?; err_exit "comsub/arithexp lexing test $(printf %q "$testcode"): got status $e and $(printf %q "$got")"; }
 done
 unset testcode
+
+# ======
+# checks for tests run in parallel (see near the top)
+wait "$parallel_1" || err_exit "$( < $tmp/parallel_1) is not foobar"
+wait "$parallel_2" || err_exit 'ALRM signal not working'
+wait "$parallel_3" || err_exit 'ignored traps not being ignored'
+wait "$parallel_4" || err_exit 'output from pipe is lost with pipe to builtin'
+wait "$parallel_5" || err_exit 'command substitution causes pipefail option to hang'
+wait "$parallel_6" || err_exit '"command | while read...done" finishing too fast'
+wait "$parallel_7" || err_exit 'early termination not causing broken pipe'
 
 # ======
 exit $((Errors<125?Errors:125))

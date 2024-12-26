@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -18,6 +18,7 @@
 #include	"shopt.h"
 #include	"defs.h"
 #include	<ls.h>
+#include	<tv.h>
 #include	<error.h>
 #include	"variables.h"
 #include	"io.h"
@@ -52,6 +53,7 @@ int	b_hist(int argc,char *argv[], Shbltin_t *context)
 #if SHOPT_HISTEXPAND
 	int pflag = 0;
 #endif
+	int checktime = 0;
 	Histloc_t location;
 	NOT_USED(argc);
 	NOT_USED(context);
@@ -63,6 +65,9 @@ int	b_hist(int argc,char *argv[], Shbltin_t *context)
 	hp = sh.hist_ptr;
 	while((flag = optget(argv,sh_opthist))) switch(flag)
 	{
+	    case 'E':
+		checktime = 1;
+		break;
 	    case 'e':
 		edit = opt_info.arg;
 		break;
@@ -213,7 +218,7 @@ int	b_hist(int argc,char *argv[], Shbltin_t *context)
 			errormsg(SH_DICT,ERROR_system(1),e_create,fname);
 			UNREACHABLE();
 		}
-		outfile= sfnew(NULL,sh.outbuff,IOBSIZE,fdo,SF_WRITE);
+		outfile= sfnew(NULL,sh.outbuff,IOBSIZE,fdo,SFIO_WRITE);
 		arg = "\n";
 		nflag++;
 	}
@@ -246,11 +251,25 @@ int	b_hist(int argc,char *argv[], Shbltin_t *context)
 	}
 	if(*arg != '-')
 	{
+		int e = 0; /* error flag */
+		struct stat statb;
+		Tv_t before, after;
 		char *com[3];
 		com[0] =  arg;
 		com[1] =  fname;
 		com[2] = 0;
-		error_info.errors = sh_eval(sh_sfeval(com),0);
+		if (checktime && !(e = stat(fname,&statb)<0))
+			tvgetmtime(&before,&statb);
+		/* invoke the editor */
+		if (!e)
+			e = sh_eval(sh_sfeval(com),0);
+		if (checktime && !e && !(e = stat(fname,&statb)<0))
+		{
+			/* if the file's timestamp hasn't changed, treat this as an error */
+			tvgetmtime(&after,&statb);
+			e = before.tv_sec==after.tv_sec && before.tv_nsec==after.tv_nsec;
+		}
+		error_info.errors = e;
 	}
 	fdo = sh_chkopen(fname);
 	unlink(fname);
@@ -279,7 +298,7 @@ int	b_hist(int argc,char *argv[], Shbltin_t *context)
 			errormsg(SH_DICT,ERROR_exit(1),e_toodeep,"history");
 			UNREACHABLE();
 		}
-		iop = sfnew(NULL,buff,IOBSIZE,fdo,SF_READ);
+		iop = sfnew(NULL,buff,IOBSIZE,fdo,SFIO_READ);
 		sh_eval(iop,1); /* this will close fdo */
 		hist_depth--;
 	}

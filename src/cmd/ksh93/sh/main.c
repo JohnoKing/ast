@@ -64,18 +64,6 @@ static struct stat lastmail;
 static time_t	mailtime;
 static char	beenhere = 0;
 
-#ifdef _lib_sigvec
-    void clearsigmask(int sig)
-    {
-	struct sigvec vec;
-	if(sigvec(sig,NULL,&vec)>=0 && vec.sv_mask)
-	{
-		vec.sv_mask = 0;
-		sigvec(sig,&vec,NULL);
-	}
-    }
-#endif /* _lib_sigvec */
-
 /*
  * search for file and exfile() it if it exists
  * 1 returned if file found, 0 otherwise
@@ -87,14 +75,10 @@ static int sh_source(Sfio_t *iop, const char *file)
 	int	fd;
 
 	if (!file || !*file || (fd = path_open(file, NULL)) < 0)
-	{
-		REGRESS(source, "sh_source", ("%s:ENOENT", file));
 		return 0;
-	}
 	oid = error_info.id;
 	nid = error_info.id = sh_strdup(file);
 	sh.st.filename = path_fullname(stkptr(sh.stk,PATH_OFFSET));
-	REGRESS(source, "sh_source", ("%s", file));
 	exfile(iop, fd);
 	error_info.id = oid;
 	free(nid);
@@ -116,12 +100,6 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 	int		i;
 	int		rshflag;	/* set for restricted shell */
 	char		*command;
-#ifdef _lib_sigvec
-	/* This is to clear mask that may be left on by rlogin */
-	clearsigmask(SIGALRM);
-	clearsigmask(SIGHUP);
-	clearsigmask(SIGCHLD);
-#endif /* _lib_sigvec */
 #ifdef	_hdr_nc
 	_NutConf(_NC_SET_SUFFIXED_SEARCHING, 1);
 #endif	/* _hdr_nc */
@@ -133,9 +111,8 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 	if(sigsetjmp(*((sigjmp_buf*)sh.jmpbuffer),0))
 	{
 		/* begin script execution here */
-		sh_reinit(NULL);
+		sh_reinit();
 	}
-	sh.fn_depth = sh.dot_depth = sh.infunction = 0;
 	command = error_info.id;
 	path_pwd();
 	iop = NULL;
@@ -165,7 +142,7 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 				Namval_t *np = sh_calloc(1,sizeof(Namval_t));
 				np->nvname = (char*)tp->sh_name;	/* alias name */
 				np->nvflag = tp->sh_number;		/* attributes (must include NV_NOFREE) */
-				np->nvalue.cp = (char*)tp->sh_value;	/* non-freeable value */
+				np->nvalue = (void*)tp->sh_value;	/* non-freeable value */
 				dtinstall(sh.alias_tree,np);
 			}
 		}
@@ -230,7 +207,7 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 		if(sh.comdiv)
 		{
 		shell_c:
-			iop = sfnew(NULL,sh.comdiv,strlen(sh.comdiv),0,SF_STRING|SF_READ);
+			iop = sfnew(NULL,sh.comdiv,strlen(sh.comdiv),0,SFIO_STRING|SFIO_READ);
 		}
 		else
 		{
@@ -370,7 +347,7 @@ int sh_main(int ac, char *av[], Shinit_f userinit)
 
 /*
  * iop is not null when the input is a string
- * fdin is the input file descriptor 
+ * fdin is the input file descriptor
  */
 static void	exfile(Sfio_t *iop,int fno)
 {
@@ -450,8 +427,22 @@ static void	exfile(Sfio_t *iop,int fno)
 		{
 			while(fcget()>0);
 			fcclose();
-			while(top=sfstack(iop,SF_POPSTACK))
+			while(top=sfstack(iop,SFIO_POPSTACK))
 				sfclose(top);
+		}
+		/*
+		 * Reset the lexer state and make sure the heredocs file is
+		 * closed and set to NULL. For now we only do this when we get
+		 * here in an interactive shell and we have a leftover heredoc.
+		 */
+		if(sh_isstate(SH_INTERACTIVE) && jmpval==SH_JMPERREXIT && sh.heredocs)
+		{
+			Lex_t *lp;
+			sfclose(sh.heredocs);
+			sh.heredocs = NULL;
+			lp = (Lex_t*)sh.lex_context;
+			lp->heredoc = NULL;
+			sh_lexopen(lp,0);
 		}
 		/* make sure that we own the terminal */
 		tcsetpgrp(job.fd,sh.pid);
@@ -595,6 +586,7 @@ static void	exfile(Sfio_t *iop,int fno)
 			{
 					execflags |= sh_state(SH_NOFORK);
 			}
+			sh.dont_optimize_builtins = 0;
 			sh.st.breakcnt = 0;
 			sh_exec(t,execflags);
 			if(sh.forked)
@@ -659,7 +651,7 @@ static void chkmail(char *files)
 				&& statb.st_atime <= statb.st_mtime)
 			{
 				/* check for directory */
-				if(!arglist && S_ISDIR(statb.st_mode)) 
+				if(!arglist && S_ISDIR(statb.st_mode))
 				{
 					/* generate list of directory entries */
 					path_complete(cp,"/*",&arglist);
@@ -790,7 +782,7 @@ static void fixargs(char **argv, int mode)
 			/* Move the environment to make space for a larger command line buffer */
 			for(i=0; environ[i]; i++)
 			{
-				buffsize += strlen(environ[i]) + 1;;
+				buffsize += strlen(environ[i]) + 1;
 				environ[i] = sh_strdup(environ[i]);
 			}
 		}

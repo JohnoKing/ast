@@ -33,7 +33,7 @@
 
 ((!SHOPT_SCRIPTONLY)) || { warning "interactive shell was compiled out -- tests skipped"; exit 0; }
 whence -q pty || { warning "pty command not found -- tests skipped"; exit 0; }
-case $(uname -s) in
+case $(uname -s; [[ $HOSTTYPE == android.* ]] && echo _no_) in
 Darwin | DragonFly | FreeBSD | Linux | MidnightBSD )
 	;;
 * )	warning "pty not confirmed to work correctly on this system -- tests skipped"
@@ -466,8 +466,8 @@ u yes-yes
 disabled
 
 # Test file name completion in vi mode
-if((SHOPT_VSH)); then
-mkdir "/tmp/fakehome_$$" && tst $LINENO <<!
+if((SHOPT_VSH)) && mkdir "/tmp/fakehome_$$" 2>/dev/null; then
+tst $LINENO <<!
 L vi mode file name completion
 
 # Completing a file name in vi mode that contains '~' and has a
@@ -1320,6 +1320,84 @@ w "$SHELL" -o vi -c 'read -s "foo?:prompt: "'
 p :prompt:
 c \Ek
 r ^:prompt: "\$SHELL" -o vi -c 'read -s "foo\?:prompt: "'$
+!
+
+tst $LINENO <<"!"
+L crash when attempting to cancel a heredoc in an interactive shell
+# https://github.com/ksh93/ksh/pull/721
+
+d 40
+p :test-1:
+w "$SHELL"
+p :test-2:
+w cat << EOS
+p :test-3:
+w \cD
+p :test-4:
+w print Exit status $?
+u ^Exit status 0\r\n$
+!
+
+tst $LINENO << "!"
+L crash when discipline functions exit with an error
+# https://github.com/ksh93/ksh/issues/346
+
+d 40
+w "$SHELL"
+w PS1.get() {; printf '$ '; trap --invalid-flag 2>/dev/null; }
+w PS2.get() {; printf '> '; trap --invalid-flag 2>/dev/null; }
+w .sh.tilde.set() {
+w case ${.sh.value} in
+w '~ret') .sh.value='Exit status is' ;;
+w esac
+w trap --invalid-flag 2>/dev/null
+w }
+w echo ~
+w echo ~ret
+w echo ~
+w echo ~ret $?
+u ^Exit status is 0\r\n$
+!
+
+((multiline && (SHOPT_VSH || SHOPT_ESH))) && TERM=vt100 tst $LINENO <<"!"
+L crash when TERM is undefined
+# https://github.com/ksh93/ksh/issues/722
+
+d 40
+p :test-1:
+w unset TERM
+p :test-2:
+w "$SHELL"
+p :test-3:
+w print Exit status $?
+u ^Exit status 0\r\n$
+!
+
+((SHOPT_VSH)) && tst $LINENO <<"!"
+L 'k' skips over history entries starting with whitespace
+# https://github.com/ksh93/ksh/issues/799
+
+d 40
+p :test-1:
+w   true
+p :test-2:
+c \Ek
+r :test-2:   true
+!
+
+((SHOPT_ESH)) && VISUAL=emacs tst $LINENO <<"!"
+L emacs: repeat count sticks after ESC commands
+# a bug introduced on 2020-09-17 and fixed on 2024-12-21
+
+d 15
+# The 'P' command sets an automatic 'p' before every 'w', delaying writing until a match is read.
+P :test-.:
+w false bad rigt wrong
+# Insert 'print '; recall 3rd word 'rigt' (ESC 3 ESC _); cursor back one position (^B); insert 'h'.
+# (With the bug, the repeat count of 3 sticks and ^B goes back 3 positions, resulting in 'rhigt'.)
+w print \E3\E_\cBh
+I print
+r right
 !
 
 # ======

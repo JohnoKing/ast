@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -27,7 +27,6 @@
 #include	<setjmp.h>
 #include	<error.h>
 #include	<sfio.h>
-#include	"FEATURE/sigfeatures"
 
 
 #ifndef SIGWINCH
@@ -111,6 +110,19 @@ struct checkpt
 	sh.jmplist = (bp)->prev, \
 	errorpop(&((bp)->err)) \
 )
+
+/* signal handling shorthands */
+#define sh_sigaction(s,action) \
+do { \
+	sigset_t ss; \
+	sigemptyset(&ss); \
+	if(s) \
+		sigaddset(&ss,(s)); \
+	sigprocmask(action,&ss,0); \
+} while(0)
+#define sigrelease(s)	sh_sigaction(s,SIG_UNBLOCK)
+#define sigblock(s)	sh_sigaction(s,SIG_BLOCK)
+#define sig_begin()	sh_sigaction(0,SIG_SETMASK)
 
 extern noreturn void 	sh_done(int);
 extern void 	sh_fault(int);

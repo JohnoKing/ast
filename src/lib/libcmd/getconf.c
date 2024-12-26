@@ -103,15 +103,15 @@ static const char usage[] =
 
 "[+ENVIRONMENT]"
     "{"
-        "[+_AST_FEATURES?Process local writable values that are "
-            "different from the default are stored in the \b_AST_FEATURES\b "
-            "environment variable. The \b_AST_FEATURES\b value is a "
-            "space-separated list of \aname\a \apath\a \avalue\a 3-tuples, "
-            "where \aname\a is the system configuration name, \apath\a is "
-            "the corresponding path, \b-\b if no path is applicable, and "
-            "\avalue\a is the system configuration value. \b_AST_FEATURES\b "
-            "is an implementation detail of process inheritance; it may "
-            "change or vanish in the future; don't rely on it.]"
+	"[+_AST_FEATURES?Process local writable values that are "
+	    "different from the default are stored in the \b_AST_FEATURES\b "
+	    "environment variable. The \b_AST_FEATURES\b value is a "
+	    "space-separated list of \aname\a \apath\a \avalue\a 3-tuples, "
+	    "where \aname\a is the system configuration name, \apath\a is "
+	    "the corresponding path, \b-\b if no path is applicable, and "
+	    "\avalue\a is the system configuration value. \b_AST_FEATURES\b "
+	    "is an implementation detail of process inheritance; it may "
+	    "change or vanish in the future; don't rely on it.]"
     "}"
 "[+SEE ALSO?\bpathchk\b(1), \bconfstr\b(3), \bpathconf\b(2),"
 "	\bsysconf\b(3), \bastgetconf\b(3)]"
@@ -139,6 +139,7 @@ b_getconf(int argc, char** argv, Shbltin_t* context)
 	int			flags;
 	int			n;
 	char**			oargv;
+	char**			new_argv;
 	static const char	empty[] = "-";
 
 	cmdinit(argc, argv, context, ERROR_CATALOG, 0);
@@ -274,8 +275,12 @@ b_getconf(int argc, char** argv, Shbltin_t* context)
 	/*
 	 * Run the external getconf command
 	 */
-	oargv[0] = native;
-	if ((n = sh_run(context, argc, oargv)) >= EXIT_NOEXEC)
+	new_argv = stkalloc(stkstd, (argc + 3) * sizeof(char*));
+	new_argv[0] = "command";
+	new_argv[1] = "-x";
+	new_argv[2] = native;
+	memcpy(new_argv + 3, oargv + 1, argc * sizeof(char*));
+	if ((n = sh_run(context, argc + 2, new_argv)) >= EXIT_NOEXEC)
 		error(ERROR_SYSTEM|2, "%s: exec error [%d]", native, n);
 	return n;
 }

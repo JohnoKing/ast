@@ -24,7 +24,7 @@
 .de EX		\" start example
 .ta 1i 2i 3i 4i 5i 6i
 .PP
-.RS 
+.RS
 .PD 0
 .ft 5
 .nf
@@ -54,7 +54,6 @@ int       pathicase(const char* \fIpath\fP);
 char*     pathkey(char* \fIkey\fP, char* \fIattr\fP, const char* \fIlang\fP, const char* \fIpath\fP);
 char*     pathnext(char* \fIpath\fP, char* \fIextra\fP, long* \fIvisits\fP);
 char*     pathpath(char* \fIpath\fP, const char* \fIp\fP, const char* \fIa\fP, int \fImode\fP);
-char*     pathprobe(char* \fIpath\fP, char* \fIattr\fP, const char* \fIlang\fP, const char* \fItool\fP, const char* \fIproc\fP, int \fIop\fP);
 char*     pathrepl(char* \fIpath\fP, const char* \fImatch\fP, const char* \fIreplace\fP);
 int       pathsetlink(const char* \fItext\fP, char* \fIname\fP);
 char*     pathshell(void);
@@ -69,7 +68,7 @@ Path buffers are assumed to be of size
 always defines
 .LR PATH_MAX ,
 even if it's indeterminate on the local system.
-Yes, this was probably a bad choice, but it was made about 10 years ago.
+Yes, this was probably a bad choice, but it was made in the 1980s.
 We will probably move to a <stk.h> based implementation.
 .PP
 .L pathaccess
@@ -304,43 +303,6 @@ also contains a
 then
 .I ../p
 is searched for.
-.PP
-.L pathprobe
-generates in
-.I path
-the full path name of the
-.I tool
-specific
-.IR probe (1)
-information file for the
-.I lang
-language processor
-.IR proc .
-If
-.I "path == 0"
-then space is allocated via
-.IR malloc (3).
-Probe attribute
-.I name=value
-pairs are copied into
-.I attr
-if
-.IR "attr != 0" .
-.I op
-may be one of:
-.TP
-.B \-1
-return the path name with no access checks or generation
-.TP
-.B 0
-message emitted information must be generated via
-.IR probe (1)
-.TP
-.B 1
-no message emitted information must be probed via
-.IR probe (1)
-.PP
-0 is returned if the information does not exist and cannot be generated.
 .PP
 .L pathrepl
 does an in-place replacement of the first occurrence of

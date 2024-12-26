@@ -8,7 +8,7 @@ valgrindflags='--xml=yes --log-file=/dev/null --track-origins=yes --read-var-inf
 
 USAGE=$'
 [-s8?
-@(#)$Id: shtests (ksh 93u+m) 2024-02-11 $
+@(#)$Id: shtests (ksh 93u+m) 2024-07-27 $
 ]
 [-author?David Korn <dgk@research.att.com>]
 [-author?Glenn Fowler <gsf@research.att.com>]
@@ -30,8 +30,6 @@ USAGE=$'
         [+unset LANG]
         [+unset LC_ALL]
         [+LC_NUMERIC=C?\b.\b radix point assumed by all test scripts.]
-        [+VMALLOC_OPTIONS=abort?\bvmalloc\b(1) arena checking enabled
-            with \babort(2)\b on error.]
     }
 [c:compile?Run test scripts using \bshcomp\b(1).]
 [d:debug?Enable \bshtests\b execution trace.]
@@ -44,10 +42,7 @@ USAGE=$'
 [t!:time?Include the current date/time in the test identification
     messages.]
 [u:utf8?Run the test scripts in the ast-specific C.UTF-8 locale.]
-[v!:vmalloc_options?Run tests with \bVMALLOC_OPTIONS=abort\b. Test
-    script names matching \b'$timesensitive$'\b are run with
-    \bVMALLOC_OPTIONS\b unset.]
-[V:valgrind?Set \b--novmalloc_options\b and run the test scripts with
+[V:valgrind?Run the test scripts with
     \bvalgrind\b(1) on \bksh\b. If \b$SHELL-g\b exists and is executable,
     then it is used instead of \b$SHELL\b.]
 [x:trace?Enable script execution trace.]
@@ -177,8 +172,6 @@ trap + $(kill -l)	# unadvertised -- set all signals to SIG_DFL
 
 integer compile=-1 posix=-1 utf8=-1
 integer debug=0 keep=0 locale=0 time=1
-typeset vmalloc_options=abort trace= valgrind=
-vmalloc_options= #XXX# until multi-region vmalloc trace fixed #XXX#
 
 while	getopts -a $command "$USAGE" OPT
 do	case $OPT in
@@ -199,13 +192,7 @@ do	case $OPT in
 		;;
 	u)	utf8=$OPTARG
 		;;
-	v)	if	(( OPTARG ))
-		then	vmalloc_options=abort
-		else	vmalloc_options=
-		fi
-		;;
 	V)	valgrind="${VALGRIND:-valgrind} ${VALGRINDFLAGS:-$valgrindflags}"
-		vmalloc_options=
 		;;
 	x)	trace=-x
 		;;
@@ -247,12 +234,8 @@ then	utf8=0
 	fi
 else	unset LANG ${!LC_*}
 fi
-if	[[ $VMALLOC_OPTIONS ]]
-then	vmalloc_options=$VMALLOC_OPTIONS
-else	VMALLOC_OPTIONS=$vmalloc_options
-fi
-[[ $VMALLOC_OPTIONS ]] || timesensitive=.
-export PATH PWD SHCOMP SHELL VMALLOC_OPTIONS
+timesensitive=.
+export PATH PWD SHCOMP SHELL
 PWD=$(pwd)
 SHELL=${SHELL-ksh}
 case $0 in
@@ -280,7 +263,7 @@ then	echo "$0: cannot continue: INSTALLROOT must be set" >&2
 	exit 1
 fi
 PATH=$INSTALLROOT/bin:$PATH
-if	[[ ${SHELL%/*} != $INSTALLROOT/bin ]]
+if	[[ ${SHELL%/*} != $INSTALLROOT/bin && ${SHELL%/*} != $INSTALLROOT/dyn/bin ]]
 then	PATH=${SHELL%/*}:$PATH
 fi
 if	[[ ! $SHCOMP ]]
@@ -292,6 +275,12 @@ then	s=${SHELL:##*sh}
 	then	SHCOMP=${s%-g}
 	else	SHCOMP=shcomp
 	fi
+fi
+
+# when testing a shell outside of INSTALLROOT, make sure libraries in INSTALLROOT are not loaded
+# The variables unset below should be the same ones that are set for 'test' or 'use' in bin/package
+if	! [[ ${SHELL%/*} -ef $INSTALLROOT/bin || ${SHELL%/*} -ef $INSTALLROOT/dyn/bin ]]
+then	unset -v LD_LIBRARY_PATH LIBPATH SHLIB_PATH DYLD_LIBRARY_PATH LIBRARY_PATH C_INCLUDE_PATH
 fi
 
 tmp=$(
@@ -332,7 +321,7 @@ else	echo "$0: cannot grep shopt.h" >&2
 	exit 1
 fi
 
-[[ -n $SHOPT_MULTIBYTE ]] || SHOPT_MULTIBYTE=$( LC_ALL=C.UTF-8; x=$'\xc3\xa9'; print $(( ${#x}==1 )) )
+SHOPT_MULTIBYTE=$( LC_ALL=C.UTF-8; x=$'\xc3\xa9'; print $(( ${#x}==1 )) )
 if	(( !SHOPT_MULTIBYTE && utf8 && !posix && !compile ))
 then	echo "-u/--utf8 is unavailable because multibyte support was not compiled in." >&2
 	exit 1
@@ -366,7 +355,7 @@ do	[[ $i == *.sh ]] || i+='.sh'
 	t=$(	case $i in
 		glob.sh)	grep -c '^[[:blank:]]*test_[a-z]\{3,\}' $i ;;
 		leaks.sh)	grep -c ^TEST $i ;;
-		printf.sh)	grep -c '^[[:blank:]]*T ' $i ;;
+		printf.sh)	grep -c -E '([[:blank:]]err_exit|^[[:blank:]]*T)[[:blank:]]' $i ;;
 		pty.sh)		grep -c 'tst ' $i ;;
 		*)		grep -c err_exit $i ;;
 		esac	)
@@ -377,9 +366,6 @@ do	[[ $i == *.sh ]] || i+='.sh'
 	fi
 	u=${i##*/}
 	u=${u%.sh}
-	if	[[ $i == $timesensitive ]]
-	then	VMALLOC_OPTIONS=
-	fi
 	if	(( posix || utf8 ))
 	then	locales=
 		(( posix )) && locales+=" ${LANG:-C}"
@@ -459,9 +445,6 @@ do	[[ $i == *.sh ]] || i+='.sh'
 		cd "$OLDPWD" || exit
 		if	(( !keep ))
 		then	rm -rf "$tmp_s" "$c"
-		fi
-		if	[[ $i == $timesensitive ]]
-		then	VMALLOC_OPTIONS=$vmalloc_options
 		fi
 	fi
 done

@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2011 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -71,7 +71,14 @@ static int Notdigit(int c) { return !iswdigit(c); }
 static int  Isgraph(int c) { return  iswgraph(c); }
 static int  Islower(int c) { return  iswlower(c); }
 static int  Isprint(int c) { return  iswprint(c); }
-static int  Ispunct(int c) { return  iswpunct(c); }
+static int  Ispunct(int c)
+{
+#if _iswpunct_broken && CC_NATIVE == CC_ASCII
+	if (c < 128)
+		return ispunct(c);
+#endif
+	return iswpunct(c);
+}
 static int  Isspace(int c) { return  iswspace(c); }
 static int Notspace(int c) { return !iswspace(c); }
 static int  Isupper(int c) { return  iswupper(c); }
@@ -172,7 +179,7 @@ static int Is_wc_16(int c) { return iswctype(c, ctype[CTYPES+15].wtype); }
  * return pointer to ctype function for :class:] in s
  * s points to the first char after the initial [
  * dynamic wctype classes are locale-specific
- * dynamic entry locale is punned in Ctype_t.next 
+ * dynamic entry locale is punned in Ctype_t.next
  * the search does a lazy (one entry at a time) flush on locale mismatch
  * if e!=0 it points to next char in s
  * 0 returned on error
@@ -221,7 +228,7 @@ regclass(const char* s, char** e)
 		cp->size = 0;
 		if (!streq(cp->name, s))
 		{
-			free((char*)cp->name);
+			free((void*)cp->name);
 			cp->name = 0;
 		}
 	}
@@ -234,7 +241,7 @@ regclass(const char* s, char** e)
 	/* mvs.390 needs the (char*) cast -- barf */
 	if (!(cp->wtype = wctype((char*)cp->name)))
 	{
-		free((char*)cp->name);
+		free((void*)cp->name);
 		cp->name = 0;
 		return NULL;
 	}

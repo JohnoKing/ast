@@ -33,7 +33,17 @@ esac
 set -o noglob
 
 command=iffe
-version=2023-04-06
+version=2024-12-23
+
+# DEFPATH should be inherited from package(1)
+case $DEFPATH in
+/*)	;;
+*)	DEFPATH=$(getconf PATH) ||
+	{
+		echo "$command: DEFPATH not set" >&2
+		exit 1
+	} ;;
+esac
 
 compile() # $cc ...
 {
@@ -106,44 +116,7 @@ pkg() # package
 {
 	case $1 in
 	'')	# Determine default system path, store in $pth.
-		pth=$(
-			PATH=/run/current-system/sw/bin:/usr/xpg7/bin:/usr/xpg6/bin:/usr/xpg4/bin:/bin:/usr/bin:$PATH
-			exec getconf PATH 2>/dev/null
-		)
-		case $pth in
-		'' | [!/]* | *:[!/]* | *: )
-			pth="/bin /usr/bin /sbin /usr/sbin" ;;
-		*:*)	pth=$(echo "$pth" | sed 's/:/ /g') ;;
-		esac
-		# Fix for NixOS. Not all POSIX standard utilities come with the default system,
-		# e.g. 'bc', 'file', 'vi'. The command that NixOS recommends to get missing
-		# utilities, e.g. 'nix-env -iA nixos.bc', installs them in a default profile
-		# directory that is not in $(getconf PATH). So add this path to the standard path.
-		# See: https://github.com/NixOS/nixpkgs/issues/65512
-		if	test -e /etc/NIXOS &&
-			nix_profile_dir=/nix/var/nix/profiles/default/bin &&
-			test -d "$nix_profile_dir"
-		then	case " $pth " in
-			*" $nix_profile_dir "* )
-				# nothing to do
-				;;
-			* )	# insert the default profile directory as the second entry
-				pth=$(
-					set $pth
-					one=$1
-					shift
-					echo "$one $nix_profile_dir${1+ }$@"
-				) ;;
-			esac
-		fi
-		# Fix for AIX. At least as of version 7.1, the system default 'find', 'diff -u' and 'patch' utilities
-		# are broken and/or non-compliant in ways that make them incompatible with POSIX 2018. However, GNU
-		# utilities are commonly installed in /opt/freeware/bin, and under standard names (no g- prefix).
-		if	test -d /opt/freeware/bin
-		then	case $(uname) in
-			AIX )	pth="/opt/freeware/bin $pth" ;;
-			esac
-		fi
+		pth=$(echo "$DEFPATH" | sed 's/:/ /g')
 		return
 		;;
 	'<')	shift
@@ -603,36 +576,7 @@ reallystatictest=
 regress=
 static=.
 statictest=
-case $COTEMP in
-"")	case $HOSTNAME in
-	""|?|??|???|????|????)
-		tmp=${HOSTNAME}
-		;;
-	*)	tmp=${HOSTNAME%${HOSTNAME#????}}
-		;;
-	esac
-	tmp=${tmp}$$
-	;;
-*)	tmp=x${COTEMP}
-	;;
-esac
-COTEMP=${tmp}
-export COTEMP
-case $tmp in
-./*)	;;
-??????????*)
-	tmp=${tmp%${tmp#?????????}}
-	;;
-?????????)
-	;;
-????????)
-	tmp=F$tmp
-	;;
-esac
-case $tmp in
-./*)	;;
-*)	tmp=./$tmp ;;
-esac
+tmp=./$command.$$
 undef=0
 verbose=0
 vers=
@@ -695,7 +639,7 @@ case $( (getopts '[-][123:xyz]' opt --xyz; echo 0$opt) 2>/dev/null ) in
 [D:define?Successful test macro definitions are emitted. This is the default.]
 [E:explicit?Disable implicit test output.]
 [F:features?Sets the feature test header to \ahdr\a.  This header typically
-        defines *_SOURCE feature test macros.]:[hdr:=NONE]
+	defines *_SOURCE feature test macros.]:[hdr:=NONE]
 [i:input?Sets the input file name to \afile\a, which
 	must contain \biffe\b statements.]:[file]
 [I:include?Adds \b-I\b\adir\a to the C compiler flags.]:[dir]
@@ -1232,8 +1176,10 @@ esac
 		{	test -f "$3" && test "$o" -nt "$3"
 		}
 	} || exit 1
-	echo "$command: test results in $o are up to date" >&$stderr
-	# update timestamp for correct dependency resolution in mamake
+	# still bump the timestamp for correct dependency resolution in mamake
+	case $verbose in
+	1)	echo "$command: test results in $o are up to date; bumping timestamp" >&$stderr ;;
+	esac
 	touch "$o" || kill "$$"
 ) && exit 0
 
@@ -1270,9 +1216,11 @@ std='/* AST backward compatibility macros */
 #define _END_EXTERNS_'
 # To ensure the environment tested is the same as that used, add standards
 # compliance macros as probed by libast as soon as they are available.
-if	test -f "${INSTALLROOT}/src/lib/libast/${dir}/standards"
-then	std=${std}${nl}$(cat "${INSTALLROOT}/src/lib/libast/${dir}/standards")
-fi
+case $INSTALLROOT in
+/*)	if	test -f "${INSTALLROOT}/src/lib/libast/${dir}/standards"
+	then	std="${std}${nl}#include \"${INSTALLROOT}/src/lib/libast/${dir}/standards\""
+	fi ;;
+esac
 tst=
 ext="#include <stdio.h>"
 
@@ -2368,7 +2316,7 @@ int x;
 	# NOTE() support
 
 	case $ext in
-	*"<stdio.h>"*)	
+	*"<stdio.h>"*)
 		case $ext in
 		*"#define NOTE("*)
 			;;
@@ -2914,18 +2862,13 @@ int x;
 									sed 's,/\*[^/]*\*/, ,g' $x > $tmp.t
 									;;
 								esac
-								if	cmp -s $tmp.c $tmp.t
-								then	rm -f $tmp.h
-									case $verbose in
-									1)	echo "$command: $x: unchanged;" \
-											"updating timestamp" >&$stderr ;;
-									esac
-									touch "$x"  # needed for mamake dependency tree integrity
-								else	case $x in
-									${dir}[\\/]$cur)	test -d $dir || mkdir $dir || exit 1 ;;
-									esac
-									mv $tmp.h $x
-								fi
+								# to ensure correct dependency resolution, always move the new file
+								# over, to bump the timestamp even if the results haven't changed
+								case $x in
+								${dir}[\\/]$cur)
+									test -d $dir || mkdir $dir || exit ;;
+								esac
+								mv -f $tmp.h $x || exit
 								;;
 							esac
 							;;
@@ -2951,13 +2894,15 @@ int x;
 						*)	cur=$out
 							;;
 						esac
+						# for privacy and brevity, strip leading $PACKAGEROOT/ from header comments
+						x=${PACKAGEROOT:-/dev/null}
 						case $in in
 						""|-|+)	case $o in
-							run)	x=" from $a" ;;
+							run)	x=" from ${a#"$x"[\\/]}" ;;
 							*)	x= ;;
 							esac
 							;;
-						*)	x=" from $in"
+						*)	x=" from ${in#"$x"[\\/]}"
 							;;
 						esac
 

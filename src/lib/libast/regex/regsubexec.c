@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -197,9 +197,7 @@ regsubexec(const regex_t* p, const char* s, size_t nmatch, regmatch_t* match)
  */
 
 #undef	regsubexec
-#if _map_libc
 #define regsubexec	_ast_regsubexec
-#endif
 
 extern int
 regsubexec(const regex_t* p, const char* s, size_t nmatch, oldregmatch_t* oldmatch)

@@ -36,27 +36,27 @@
 #include	"terminal.h"
 #include	"edit.h"
 
-#define	R_FLAG	1	/* raw mode */
+#define R_FLAG	1	/* raw mode */
 #if !SHOPT_SCRIPTONLY
-#define	S_FLAG	2	/* save in history file */
+#define S_FLAG	2	/* save in history file */
 #endif
-#define	A_FLAG	4	/* read into array */
+#define A_FLAG	4	/* read into array */
 #define N_FLAG	8	/* fixed size read at most */
 #define NN_FLAG	0x10	/* fixed size read exact */
 #define V_FLAG	0x20	/* use default value */
-#define	C_FLAG	0x40	/* read into compound variable */
+#define C_FLAG	0x40	/* read into compound variable */
 #define D_FLAG	8	/* must be number of bits for all flags */
-#define	SS_FLAG	0x80	/* read .csv format file */
+#define SS_FLAG	0x80	/* read .csv format file */
 
 struct read_save
 {
-        char	**argv;
-	char	*prompt;
-        int	fd;
-        int	plen;
-	int	flags;
-	ssize_t	len;
-        long	timeout;
+	char		**argv;
+	char		*prompt;
+	int		fd;
+	int		plen;
+	int		flags;
+	ssize_t		len;
+	Sflong_t	timeout;
 };
 
 int	b_read(int argc,char *argv[], Shbltin_t *context)
@@ -66,7 +66,7 @@ int	b_read(int argc,char *argv[], Shbltin_t *context)
 	const char *msg = e_file+4;
 	int r, flags=0, fd=0;
 	ssize_t	len=0;
-	long timeout = 1000*sh.st.tmout;
+	Sflong_t timeout = sh.st.tmout && tty_check(0) ? 1000*(Sflong_t)sh.st.tmout : 0;
 	int save_prompt, fixargs=context->invariant;
 	struct read_save *rp;
 	static char default_prompt[3] = {ESC,ESC};
@@ -178,7 +178,7 @@ int	b_read(int argc,char *argv[], Shbltin_t *context)
 	}
 bypass:
 	sh.prompt = default_prompt;
-	if(r && (sh.prompt=(char*)sfreserve(sfstderr,r,SF_LOCKR)))
+	if(r && (sh.prompt=(char*)sfreserve(sfstderr,r,SFIO_LOCKR)))
 	{
 		memcpy(sh.prompt,prompt,r);
 		sfwrite(sfstderr,sh.prompt,r-1);
@@ -212,7 +212,7 @@ static void timedout(void *handle)
  *  <flags> is union of -A, -r, -s, and contains delimiter if not '\n'
  *  <timeout> is the number of milliseconds until timeout
  */
-int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long timeout)
+int sh_readline(char **names, volatile int fd, int flags, ssize_t size, Sflong_t timeout)
 {
 	ssize_t			c;
 	unsigned char		*cp;
@@ -277,11 +277,11 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 		}
 		else if(flags&C_FLAG)
 		{
-			char *sp =  np->nvenv;
+			void *sp = np->nvmeta;
 			delim = -1;
 			nv_unset(np);
 			if(!nv_isattr(np,NV_MINIMAL))
-				np->nvenv = sp;
+				np->nvmeta = sp;
 			nv_setvtree(np);
 		}
 		else
@@ -292,10 +292,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 	else
 	{
 		name = 0;
-		if(dtvnext(sh.var_tree) || sh.namespace)
-			np = nv_open(nv_name(REPLYNOD),sh.var_tree,0);
-		else
-			np = REPLYNOD;
+		np = sh_scoped(REPLYNOD);
 	}
 	keytrap =  ep?ep->e_keytrap:0;
 	if(size || (flags>>D_FLAG))	/* delimiter not new-line or fixed size read */
@@ -349,9 +346,9 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 		flags |= NN_FLAG;
 		size = nv_size(np);
 	}
-	was_write = (sfset(iop,SF_WRITE,0)&SF_WRITE)!=0;
+	was_write = (sfset(iop,SFIO_WRITE,0)&SFIO_WRITE)!=0;
 	if(fd==0)
-		was_share = (sfset(iop,SF_SHARE,sh.redir0!=2)&SF_SHARE)!=0;
+		was_share = (sfset(iop,SFIO_SHARE,sh.redir0!=2)&SFIO_SHARE)!=0;
 	if(timeout || (sh.fdstatus[fd]&(IOTTY|IONOSEEK)))
 	{
 		sh_pushcontext(&buff,1);
@@ -381,7 +378,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 		else
 			end = var + sizeof(buf) - 1;
 		up = cur = var;
-		if((sfset(iop,SF_SHARE,1)&SF_SHARE) && fd!=0)
+		if((sfset(iop,SFIO_SHARE,1)&SFIO_SHARE) && fd!=0)
 			was_share = 1;
 		if(size==0)
 		{
@@ -408,7 +405,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 				else
 				{
 					f = 1;
-					if(cp = sfreserve(iop,c,SF_LOCKR))
+					if(cp = sfreserve(iop,c,SFIO_LOCKR))
 						m = sfvalue(iop);
 					else if(flags&NN_FLAG)
 					{
@@ -419,7 +416,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 					else
 					{
 						c = sfvalue(iop);
-						m = (cp = sfreserve(iop,c,SF_LOCKR)) ? sfvalue(iop) : 0;
+						m = (cp = sfreserve(iop,c,SFIO_LOCKR)) ? sfvalue(iop) : 0;
 					}
 				}
 				if(m>0 && (flags&N_FLAG) && !binary && (v=memchr(cp,'\n',m)))
@@ -490,8 +487,8 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 #else
 			int optimize = 1;
 #endif
-			if(optimize && c==size && np->nvalue.cp && !nv_isarray(np))
-				memcpy((char*)np->nvalue.cp,var,c);
+			if(optimize && c==size && np->nvalue && !nv_isarray(np))
+				memcpy(np->nvalue,var,c);
 			else
 			{
 				Namval_t *mp;
@@ -499,7 +496,7 @@ int sh_readline(char **names, volatile int fd, int flags, ssize_t size, long tim
 					var = sh_memdup(var,c+1);
 				nv_putval(np,var,NV_RAW);
 				nv_setsize(np,c);
-				if(!nv_isattr(np,NV_IMPORT|NV_EXPORT)  && (mp=(Namval_t*)np->nvenv))
+				if(!nv_isattr(np,NV_MINIMAL|NV_EXPORT) && (mp = np->nvmeta))
 					nv_setsize(mp,c);
 			}
 		}
@@ -843,9 +840,9 @@ done:
 	if(timeout || (sh.fdstatus[fd]&(IOTTY|IONOSEEK)))
 		sh_popcontext(&buff);
 	if(was_write)
-		sfset(iop,SF_WRITE,1);
+		sfset(iop,SFIO_WRITE,1);
 	if(!was_share)
-		sfset(iop,SF_SHARE,0);
+		sfset(iop,SFIO_SHARE,0);
 	if((sh.fdstatus[fd]&IOTTY) && !keytrap)
 		tty_cooked(fd);
 #if !SHOPT_SCRIPTONLY

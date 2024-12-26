@@ -126,7 +126,7 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 	/* subtract lengths of leading and trailing static arguments */
 	for(av=argv; (cp= *av) && av< &argv[sh.xargmin]; av++)
 		size -= strlen(cp) + 1 + arg_extra;
-	for(av=avlast; cp= *av; av++,nlast++)  
+	for(av=avlast; cp= *av; av++,nlast++)
 		size -= strlen(cp) + 1 + arg_extra;
 	size -= 2 + 2 * arg_extra;  /* final null env and arg elements */
 	if(size < 2048)
@@ -174,6 +174,8 @@ static pid_t command_xargs(const char *path, char *argv[],char *const envp[], in
 			}
 			job_post(pid,0);
 			job_wait(pid);
+			if(sh.chldexitsig)
+				break;
 			if(sh.exitval>exitval)
 				exitval = sh.exitval;
 			if(saveargs)
@@ -271,7 +273,7 @@ void  path_delete(Pathcomp_t *first)
 		}
 		else
 			old = pp;
-		pp = ppnext; 
+		pp = ppnext;
 	}
 }
 
@@ -407,14 +409,14 @@ static void pathinit(void)
 {
 	const char *val;
 	Pathcomp_t *pp;
-	if(val=sh_scoped((PATHNOD))->nvalue.cp)
+	if(val=sh_scoped((PATHNOD))->nvalue)
 		sh.pathlist = pp = path_addpath((Pathcomp_t*)sh.pathlist,val,PATH_PATH);
 	else
 	{
 		pp = defpathinit();
 		sh.pathlist = path_dup(pp);
 	}
-	if(val=sh_scoped((FPATHNOD))->nvalue.cp)
+	if(val=sh_scoped((FPATHNOD))->nvalue)
 		pp = path_addpath((Pathcomp_t*)sh.pathlist,val,PATH_FPATH);
 }
 
@@ -432,7 +434,7 @@ Pathcomp_t *path_get(const char *name)
 			pathinit();
 		pp = (Pathcomp_t*)sh.pathlist;
 	}
-	if(!pp && (!(sh_scoped(PATHNOD)->nvalue.cp)) || sh_isstate(SH_DEFPATH))
+	if(!pp && (!(sh_scoped(PATHNOD)->nvalue)) || sh_isstate(SH_DEFPATH))
 		pp = defpathinit();
 	return pp;
 }
@@ -548,8 +550,8 @@ static void funload(int fno, const char *name)
 		{
 			if((np = dtsearch(funtree,rp->np)) && is_afunction(np))
 			{
-				if(np->nvalue.rp)
-					np->nvalue.rp->fdict = 0;
+				if(np->nvalue)
+					((struct Ufunction*)np->nvalue)->fdict = 0;
 				nv_delete(np,funtree,NV_NOFREE);
 			}
 			dtinsert(funtree,rp->np);
@@ -574,7 +576,7 @@ static void funload(int fno, const char *name)
 	sh.funload = 1;
 	sh.inlineno = 1;
 	error_info.line = 0;
-	sh_eval(sfnew(NULL,buff,IOBSIZE,fno,SF_READ),SH_FUNEVAL);
+	sh_eval(sfnew(NULL,buff,IOBSIZE,fno,SFIO_READ),SH_FUNEVAL);
 	sh_close(fno);
 	sh.readscript = 0;
 #if SHOPT_NAMESPACE
@@ -583,7 +585,7 @@ static void funload(int fno, const char *name)
 	else
 #endif /* SHOPT_NAMESPACE */
 		np = nv_search(name,sh.fun_tree,0);
-	if(!np || !np->nvalue.ip)
+	if(!np || !np->nvalue)
 		pname = stkcopy(sh.stk,sh.st.filename);
 	else
 		pname = 0;
@@ -654,7 +656,7 @@ int	path_search(const char *name,Pathcomp_t **oldpp, int flag)
 		Namval_t *np;
 		if(!(flag & 1) && (np = path_gettrackedalias(name)))
 		{
-			pp = (Pathcomp_t*)np->nvalue.cp;
+			pp = np->nvalue;
 			stkseek(sh.stk,PATH_OFFSET);
 			path_nextcomp(pp,name,pp);
 			if(oldpp)
@@ -665,7 +667,7 @@ int	path_search(const char *name,Pathcomp_t **oldpp, int flag)
 		pp = path_absolute(name,oldpp?*oldpp:NULL,flag);
 		if(oldpp)
 			*oldpp = pp;
-		if(!pp && (np=nv_search(name,sh.fun_tree,0))&&np->nvalue.ip)
+		if(!pp && (np=nv_search(name,sh.fun_tree,0)) && np->nvalue)
 			return 1;
 		if(!pp)
 			*stkptr(sh.stk,PATH_OFFSET) = 0;
@@ -728,8 +730,8 @@ Pathcomp_t *path_absolute(const char *name, Pathcomp_t *pp, int flag)
 			sh.path_err = ENOENT;
 			return NULL;
 		}
-		isfun = (oldpp->flags&PATH_FPATH);
-		if(!isfun)
+		isfun = (oldpp->flags&PATH_FPATH) && !sh_isstate(SH_EXEC) && !sh_isstate(SH_XARG);
+		if(!isfun && !sh_isstate(SH_EXEC) && !sh_isstate(SH_XARG))
 		{
 #if SHOPT_DYNAMIC
 			Shbltin_f addr;
@@ -797,7 +799,7 @@ Pathcomp_t *path_absolute(const char *name, Pathcomp_t *pp, int flag)
 				   (!(np = sh_addbuiltin(stkptr(sh.stk,PATH_OFFSET),NULL,NULL)) || funptr(np)!=addr) &&
 				   (np = sh_addbuiltin(stkptr(sh.stk,PATH_OFFSET),addr,NULL)))
 				{
-					np->nvenv = dll;
+					np->nvmeta = dll;
 					goto found;
 				}
 				if(*stkptr(sh.stk,PATH_OFFSET)=='/' && nv_search(stkptr(sh.stk,PATH_OFFSET),sh.bltin_tree,0))
@@ -982,6 +984,8 @@ noreturn void path_exec(const char *arg0,char *argv[],struct argnod *local)
 		}
 		else
 			opath = arg0;
+		if(sh.subshell)
+			sh_subtmpfile();
 		spawnpid = path_spawn(opath,argv,envp,libpath,0);
 		if(spawnpid==-1 && sh.path_err!=ENOENT)
 		{
@@ -997,8 +1001,20 @@ noreturn void path_exec(const char *arg0,char *argv[],struct argnod *local)
 			pp = path_nextcomp(pp,arg0,0);
 	}
 	while(pp);
-	/* force an exit */
-	((struct checkpt*)sh.jmplist)->mode = SH_JMPEXIT;
+	if(sh_isstate(SH_EXEC) && sh_isstate(SH_INTERACTIVE))
+	{
+		/*
+		 * An error just occurred and the shell cannot exit because it's
+		 * interactive. Reincrement SHLVL and turn off the SH_EXEC state.
+		 */
+		sh.shlvl++;
+		sh_offstate(SH_EXEC);
+	}
+	else
+	{
+		/* Force an exit */
+		((struct checkpt*)sh.jmplist)->mode = SH_JMPEXIT;
+	}
 	errno = not_executable ? not_executable : sh.path_err;
 	switch(errno)
 	{
@@ -1021,12 +1037,12 @@ noreturn void path_exec(const char *arg0,char *argv[],struct argnod *local)
 pid_t path_spawn(const char *opath,char **argv, char **envp, Pathcomp_t *libpath, int spawn)
 {
 	char		*path;
-	char		**xp=0, *xval, *libenv = (libpath?libpath->lib:0); 
+	char		**xp=0, *xval, *libenv = (libpath?libpath->lib:0);
 	Namval_t*	np;
 	char		*s, *v;
 	int		r, n, pidsize=0;
 	pid_t		pid= -1;
-	if(nv_search(opath,sh.bltin_tree,0))
+	if(!sh_isstate(SH_EXEC) && nv_search(opath,sh.bltin_tree,0))
 	{
 		/* Found a path-bound built-in. Since this was not caught earlier in sh_exec(), it must
 		   have been found on a temporarily assigned PATH, as with 'PATH=/opt/ast/bin:$PATH cat'.
@@ -1186,7 +1202,21 @@ pid_t path_spawn(const char *opath,char **argv, char **envp, Pathcomp_t *libpath
 	    case EISDIR:
 		return -1;
 	    case ENOEXEC:
-		errno = ENOEXEC;
+#if _execve_dir_enoexec
+		/* on Android, execve(3) sets errno to ENOEXEC instead of EACCES when trying to execute a directory */
+		{
+			struct stat statb;
+			if(stat(path,&statb)>=0 && S_ISDIR(statb.st_mode))
+			{
+				errno = sh.path_err = EISDIR;
+				return -1;
+			}
+		}
+#endif /* _execve_dir_enoexec */
+		/*
+		 * A script without #! -- it starts here. Summary of events:
+		 * fork; exscript; longjmp back to sh_main; sh_reinit; exfile
+		 */
 		if(spawn)
 		{
 			if(sh.subshell)
@@ -1276,7 +1306,7 @@ static noreturn void exscript(char *path,char *argv[],char **envp)
 	}
 	sh.cpid = 0;
 	if(sp=fcfile())
-		while(sfstack(sp,SF_POPSTACK));
+		while(sfstack(sp,SFIO_POPSTACK));
 	job_clear();
 	if(sh.infd>0 && (sh.fdstatus[sh.infd]&IOCLEX))
 		sh_close(sh.infd);
@@ -1299,11 +1329,31 @@ static noreturn void exscript(char *path,char *argv[],char **envp)
 	if(sh.hist_ptr && (path=nv_getval(HISTFILE)) && strcmp(path,sh.hist_ptr->histname))
 	{
 		hist_close(sh.hist_ptr);
-		(HISTCUR)->nvalue.lp = 0;
+		HISTCUR->nvalue = NULL;
 	}
 	sh_offstate(SH_FORKED);
 	if(sh.sigflag[SIGCHLD]==SH_SIGOFF)
 		sh.sigflag[SIGCHLD] = SH_SIGFAULT;
+	/*
+	 * Export -x vars to new environment now, before longjmp & removing any local scope.
+	 * Since sh_envgen() puts it all on the stack, create a stack to preserve 'environ'.
+	 */
+	{
+		static Stk_t	*envstk;
+		Stk_t		*savstk = sh.stk;
+		if (envstk)
+			stkset(envstk, NULL, 0);
+		else
+			envstk = stkopen(STK_SMALL);
+		sh.stk = envstk;
+		environ = sh_envgen();
+		sh.stk = savstk;
+		stkfreeze(envstk,0);
+	}
+	/*
+	 * Longjmp with SH_JMPSCRIPT triggers a chain of longjmps to restore state as appropriate,
+	 * ending up back in sh_main() which then calls sh_reinit() and executes the script.
+	 */
 	siglongjmp(*sh.jmplist,SH_JMPSCRIPT);
 	UNREACHABLE();  /* silence warning on Haiku */
 }
@@ -1434,7 +1484,7 @@ static Pathcomp_t *path_addcomp(Pathcomp_t *first, Pathcomp_t *old,const char *n
 	else
 		first = pp;
 	pp->flags = flag;
-	if(strcmp(name,SH_CMDLIB_DIR)==0)
+	if(!sh_isstate(SH_EXEC) && strcmp(name,SH_CMDLIB_DIR)==0)
 	{
 		pp->dev = 1;
 		pp->blib = pp->bbuf = sh_malloc(sizeof(LIBCMD));
@@ -1448,7 +1498,7 @@ static Pathcomp_t *path_addcomp(Pathcomp_t *first, Pathcomp_t *old,const char *n
 
 /*
  * This function checks for the .paths file in directory in <pp>
- * it assumes that the directory is on the stack at <offset> 
+ * it assumes that the directory is on the stack at <offset>
  */
 static int checkdotpaths(Pathcomp_t *first, Pathcomp_t* old,Pathcomp_t *pp, int offset)
 {
@@ -1571,7 +1621,7 @@ Pathcomp_t *path_addpath(Pathcomp_t *first, const char *path,int type)
 	{
 		if(!first && !path)
 			first = path_dup(defpathinit());
-		if(cp=(sh_scoped(FPATHNOD))->nvalue.cp)
+		if(cp=(sh_scoped(FPATHNOD))->nvalue)
 			first = path_addpath((Pathcomp_t*)first,cp,PATH_FPATH);
 		path_delete(old);
 	}
@@ -1715,7 +1765,7 @@ Pathcomp_t *path_dirfind(Pathcomp_t *first,const char *name,int c)
  */
 static char *talias_get(Namval_t *np, Namfun_t *nvp)
 {
-	Pathcomp_t *pp = (Pathcomp_t*)np->nvalue.cp;
+	Pathcomp_t *pp = np->nvalue;
 	char *ptr;
 	if(!pp)
 		return NULL;
@@ -1727,9 +1777,9 @@ static char *talias_get(Namval_t *np, Namfun_t *nvp)
 
 static void talias_put(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 {
-	if(!val && np->nvalue.cp)
+	if(!val && np->nvalue)
 	{
-		Pathcomp_t *pp = (Pathcomp_t*)np->nvalue.cp;
+		Pathcomp_t *pp = np->nvalue;
 		if(--pp->refcount<=0)
 			free(pp);
 	}
@@ -1745,7 +1795,7 @@ static Namfun_t  talias_init = { &talias_disc, 1 };
 void path_settrackedalias(const char *name, Pathcomp_t *pp)
 {
 	Namval_t *np;
-	if(sh_isstate(SH_DEFPATH) || sh_isstate(SH_XARG))
+	if(sh_isstate(SH_DEFPATH) || sh_isstate(SH_XARG) || sh_isstate(SH_EXEC))
 		return;
 	if(!(np = nv_search(name,sh_subtracktree(1),NV_ADD|NV_NOSCOPE)))
 		return;
@@ -1756,10 +1806,10 @@ void path_settrackedalias(const char *name, Pathcomp_t *pp)
 		Pathcomp_t *old;
 		nv_offattr(np,NV_NOPRINT);
 		nv_stack(np,&talias_init);
-		old = (Pathcomp_t*)np->nvalue.cp;
+		old = np->nvalue;
 		if (old && (--old->refcount <= 0))
 			free(old);
-		np->nvalue.cp = (char*)pp;
+		np->nvalue = pp;
 		pp->refcount++;
 		nv_setattr(np,NV_TAGGED|NV_NOFREE);
 		path_nextcomp(pp,name,pp);
@@ -1781,9 +1831,10 @@ Namval_t *path_gettrackedalias(const char *name)
 	Namval_t *np;
 	if(!sh_isstate(SH_DEFPATH)
 	&& !sh_isstate(SH_XARG)
+	&& !sh_isstate(SH_EXEC)
 	&& (np=nv_search(name,sh.track_tree,0))
 	&& !nv_isattr(np,NV_NOALIAS)
-	&& np->nvalue.cp)
+	&& np->nvalue)
 		return np;
 	return NULL;
 }

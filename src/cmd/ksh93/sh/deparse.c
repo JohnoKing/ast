@@ -149,7 +149,7 @@ static void p_tree(const Shnode_t *t,int tflags)
 				begin_line = 1;
 			}
 			break;
-	
+
 		case TIF:
 			p_keyword("if",BEGIN);
 			p_tree(t->if_.iftre,0);
@@ -253,7 +253,7 @@ static void p_tree(const Shnode_t *t,int tflags)
 			level--;
 			break;
 		}
-	
+
 		case TPAR:
 		{
 			char indented_block = (begin_line || !level);
@@ -295,7 +295,7 @@ static void p_tree(const Shnode_t *t,int tflags)
 			p_tree(t,0);
 			p_keyword("done",END);
 			break;
-	
+
 		case TSW:
 			p_keyword("case",BEGIN|NOTAB);
 			p_arg(t->sw.swarg,' ',0);
@@ -334,7 +334,7 @@ static void p_tree(const Shnode_t *t,int tflags)
 			}
 			begin_line = 1;
 			p_keyword("{",BEGIN);
-			p_tree(t->funct.functtre,0); 
+			p_tree(t->funct.functtre,0);
 			p_keyword("}",END);
 			break;
 
@@ -345,7 +345,7 @@ static void p_tree(const Shnode_t *t,int tflags)
 			if((t->tre.tretyp&TPAREN)==TPAREN)
 			{
 				p_keyword("(",BEGIN|NOTAB);
-				p_tree(t->lst.lstlef,NO_BRACKET|NO_NEWLINE); 
+				p_tree(t->lst.lstlef,NO_BRACKET|NO_NEWLINE);
 				p_keyword(")",END);
 			}
 			else
@@ -542,18 +542,18 @@ static void p_comarg(const struct comnod *com)
 	int flag = end_line;
 	if(com->comtyp&FAMP)
 		sfwrite(outfile,"& ",2);
-	if(com->comarg || com->comio)
+	if(com->comarg.ap || com->comio)
 		flag = ' ';
 	if(com->comset)
 		p_arg(com->comset,flag,POST);
-	if(com->comarg)
+	if(com->comarg.ap)
 	{
 		if(!com->comio)
 			flag = end_line;
 		if(com->comtyp&COMSCAN)
-			p_arg(com->comarg,flag,POST);
+			p_arg(com->comarg.ap,flag,POST);
 		else
-			p_comlist((struct dolnod*)com->comarg,flag);
+			p_comlist(com->comarg.dp,flag);
 	}
 	if(com->comio)
 		p_redirect(com->comio);
@@ -613,7 +613,7 @@ static void here_body(const struct ionod *iop)
 {
 	Sfio_t *infile;
 	if(iop->iofile&IOSTRG)
-		infile = sfnew(NULL,iop->ioname,iop->iosize,-1,SF_STRING|SF_READ);
+		infile = sfnew(NULL,iop->ioname,iop->iosize,-1,SFIO_STRING|SFIO_READ);
 	else
 		sfseek(infile=sh.heredocs,iop->iooffset,SEEK_SET);
 	sfmove(infile,outfile,iop->iosize,-1);

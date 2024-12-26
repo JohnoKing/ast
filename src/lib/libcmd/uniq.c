@@ -40,9 +40,9 @@ static const char usage[] =
 "[D:all-repeated?Output all duplicate lines as a group with an empty "
     "line delimiter specified by \adelimit\a:]:?[delimit:=none]"
     "{"
-        "[n:none?Do not delimit duplicate groups.]"
-        "[p:prepend?Prepend an empty line before each group.]"
-        "[s:separate?Separate each group with an empty line.]"
+	"[n:none?Do not delimit duplicate groups.]"
+	"[p:prepend?Prepend an empty line before each group.]"
+	"[s:separate?Separate each group with an empty line.]"
     "}"
 "[f:skip-fields]#[fields?\afields\a is the number of fields to skip over "
     "before checking for uniqueness. A field is the minimal string matching "
@@ -56,7 +56,7 @@ static const char usage[] =
 	"an empty string will be used for comparison. +\anumber\a is "
 	"equivalent to \b--skip-chars\b=\anumber\a.]"
 "[u:unique?Output unique lines.]"
-"[w:check-chars]#[chars?\achars\a is the number of characters to compare " 
+"[w:check-chars]#[chars?\achars\a is the number of characters to compare "
 	"after skipping any specified fields and characters.]"
 "\n"
 "\n[infile [outfile]]\n"
@@ -91,7 +91,7 @@ static int uniq(Sfio_t *fdin, Sfio_t *fdout, int fields, int chars, int width, i
 	{
 		if(bufp = sfgetr(fdin,'\n',0))
 			n = sfvalue(fdin);
-		else if(bufp = sfgetr(fdin,'\n',SF_LASTR))
+		else if(bufp = sfgetr(fdin,'\n',SFIO_LASTR))
 		{
 			n = sfvalue(fdin);
 			bufp = memcpy(fmtbuf(n + 1), bufp, n);

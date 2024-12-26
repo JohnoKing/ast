@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -174,7 +174,7 @@ fx values[1]
 
 function test_short_integer
 {
-        compound out=( typeset stdout stderr ; integer res )
+	compound out=( typeset stdout stderr ; integer res )
 	compound -r -a tests=(
 		( cmd='integer -s -r -a x=( 1 2 3 ) ; print "${x[2]}"' stdoutpattern='3' )
 		( cmd='integer -s -r -A x=( [0]=1 [1]=2 [2]=3 ) ; print "${x[2]}"' stdoutpattern='3' )
@@ -195,7 +195,7 @@ function test_short_integer
        		[[ "${out.stderr}" == ''			]] || err_exit "${testname}: Expected empty stderr, got $(printf '%q\n' "${out.stderr}")"
 		(( out.res == 0 )) || err_exit "${testname}: Unexpected exit code ${out.res}"
 	done
-	
+
 	return 0
 }
 # run tests
@@ -304,6 +304,26 @@ got=$(typeset -a arr=(a (b d e) c d e); echo ${arr[@]:2:${#arr[@]}-2})
 [[ $got == "$exp" ]] || err_exit "array slicing test 12 (expected $(printf %q "$exp"), got $(printf %q "$got"))"
 got=$(typeset -A arr=(a (b d e) c d e); echo ${arr[@]:2:${#arr[@]}-2})
 [[ $got == "$exp" ]] || err_exit "array slicing test 13 (expected $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+# Reserved words as values
+# https://github.com/ksh93/ksh/issues/790
+got=$(set +x; eval 'typeset -a a1=((demo) (select) (if) (case) (while))' 2>&1 && typeset -p a1)
+exp='typeset -a a1=((demo) (select) (if) (case) (while) )'
+[[ $got == "$exp" ]] || err_exit "reserved word assigned as multidimensional array value" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval 'typeset -a a1=((demo) (select) if case while)' 2>&1 && typeset -p a1)
+exp='typeset -a a1=((demo) (select) if case while)'
+[[ $got == "$exp" ]] || err_exit "reserved word assigned as top-level value in multidimensional array" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval 'a1=((demo) (select) (if) (case) (while))' 2>&1 && typeset -p a1)
+exp='typeset -a a1=((demo) (select) (if) (case) (while) )'
+[[ $got == "$exp" ]] || err_exit "reserved word assigned as implicit multidimensional array value" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+got=$(set +x; eval 'a1=((demo) (select) if case while)' 2>&1 && typeset -p a1)
+exp='typeset -a a1=((demo) (select) if case while)'
+[[ $got == "$exp" ]] || err_exit "reserved word assigned as top-level value in implicit multidimensional array" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

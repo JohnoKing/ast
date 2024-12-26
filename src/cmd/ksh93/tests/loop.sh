@@ -70,4 +70,13 @@ exp=a1xb1xc1x
 [[ $got == "$exp" ]] || err_exit "'continue 3' broken (expected '$exp', got '$got')"
 
 # ======
+# arithmetic for
+
+exp=': `))'\'' unexpected'
+for t in 'for((i=0,i<10,i++))' 'for(())' 'for((;))' 'for((0;))'
+do	got=$(set +x; (ulimit -c 0; eval "$t; do :; done") 2>&1)
+	[[ $got == *"$exp" ]] || err_exit "$t (expected match of *$(printf %q "$exp"), got $(printf %q "$got"))"
+done
+
+# ======
 exit $((Errors<125?Errors:125))

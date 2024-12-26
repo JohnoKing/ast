@@ -19,7 +19,8 @@
 ***********************************************************************/
 #if __clang__
 #pragma clang diagnostic ignored "-Wunused-variable"
-#elif __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
+#elif __GNUC__
+#pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #endif
 /*
@@ -65,7 +66,6 @@
 #undef	_SGIAPI
 #define _SGIAPI		0
 
-#include "FEATURE/lib"
 #include "FEATURE/common"
 
 #include <unistd.h>
@@ -73,7 +73,7 @@
 #include "FEATURE/param"
 
 #undef	getpagesize
-#undef	getdtablesize   
+#undef	getdtablesize
 
 int main(void)
 {

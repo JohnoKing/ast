@@ -90,7 +90,7 @@ wait 2>/dev/null
 # Before 2024-01-05, ksh wrongly printed job numbers for background jobs invoked from subshells in profile scripts.
 if((!SHOPT_SCRIPTONLY));then
 print '(true &); :' >$tmp/profile
-got=$(ENV=$tmp/profile "$SHELL" -i </dev/null 2>&1)
+got=$(set +x; ENV=$tmp/profile "$SHELL" -i </dev/null 2>&1)
 [[ -n $got ]] && err_exit "subshell bg job in profile script prints job number (got $(printf %q "$got"))"
 fi # !SHOPT_SCRIPTONLY
 

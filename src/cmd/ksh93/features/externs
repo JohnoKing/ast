@@ -83,7 +83,7 @@ tst	note{ determining default number of extra bytes per argument for arguments l
 				int bytec;
 
 				error_info.id="_arg_extrabytes test (child)";
-				argv = (char **)stkalloc(stkstd, (argmax / 2 + 1) * sizeof(char*));
+				argv = stkalloc(stkstd, (argmax / 2 + 1) * sizeof(char*));
 				argc = bytec = 0;
 				while(bytec < argmax)
 				{
@@ -166,11 +166,11 @@ tst	note{ determining size of PID variables }end output{
 		 * If there is ever a system where this test returns 1, then both this
 		 * test and nv_getval() must learn a new integer size attribute.
 		 */
-		if(s==sizeof(int16_t))		/* union Value: sp */
+		if(s==sizeof(int16_t))
 			a="NV_INTEGER|NV_SHORT";
-		else if(s==sizeof(int32_t))	/* union Value: lp */
+		else if(s==sizeof(int32_t))
 			a="NV_INTEGER";
-		else if(s==sizeof(Sflong_t))	/* union Value: llp */
+		else if(s==sizeof(Sflong_t))
 			a="NV_INTEGER|NV_LONG";
 		else
 			return 1;
@@ -186,4 +186,45 @@ tst	note{ determining size of PID variables }end output{
 }end fail{
 	echo "$0: cannot determine size of PID variables" >&2
 	exit 1
+}end
+
+# execve(3) breakage on Android/Termux (early versions of API 35)
+tst	execve_ignores_argv0 note{ does execve(3) ignore the specified argv[0] }end output{
+	#include <string.h>
+	#include <unistd.h>
+	extern char **environ;
+	/* Check if argv[0] can be set to "TEST_OK" while exec'ing self */
+	int main(int argc, char *argv[])
+	{
+		char *orig0 = argv[0], *newenv[2], b[64];
+		int i;
+		sprintf(b,"_KSH_EXECVE_TEST_%d=y",(int)getpid());
+		newenv[0] = b;
+		newenv[1] = NULL;
+		/* check if we've already been re-exec'ed */
+		for (i = 0; environ[i]; i++)
+			if (strcmp(environ[i],newenv[0])==0)
+				return !(strcmp(argv[0],"TEST_OK")!=0);
+		/* exec self */
+		argv[0] = "TEST_OK";
+		execve(orig0,argv,newenv);
+		return 128;
+	}
+}end
+tst	execve_dir_enoexec note{ does execve(3) set errno to ENOEXEC when trying to execute a directory }end output{
+	#include <sys/stat.h>
+	#include <unistd.h>
+	#include <errno.h>
+	extern char **environ;
+	int main(int argc, char *argv[])
+	{
+		char	dirname[64];
+		int	e;
+		sprintf(dirname,".dir.%u",(unsigned)getpid());
+		mkdir(dirname,0777);
+		execve(dirname,argv,environ);
+		e = errno;
+		rmdir(dirname);
+		return !(e == ENOEXEC);
+	}
 }end

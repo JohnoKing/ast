@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1985-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -25,14 +25,14 @@
 
 /* these bits should be outside the scope of DT_METHODS */
 #define H_FIXED		0100000	/* table size is fixed	*/
-#define	H_FLATTEN	0200000	/* table was flattened	*/
+#define H_FLATTEN	0200000	/* table was flattened	*/
 
 #define HLOAD(n)	(n)	/* load one-to-one	*/
 
 /* internal data structure for hash table with chaining */
 typedef struct _dthash_s
 {	Dtdata_t	data;
-	int		type; 
+	int		type;
 	Dtlink_t*	here;	/* fingered object	*/
 	Dtlink_t**	htbl;	/* hash table slots 	*/
 	ssize_t		tblz;	/* size of hash table 	*/
@@ -74,17 +74,19 @@ static int htable(Dt_t* dt)
 	}
 	memset(htbl, 0, n*sizeof(Dtlink_t*));
 
-	/* move objects into new table */
-	for(endt = (t = hash->htbl) + hash->tblz; t < endt; ++t)
-	{	for(l = *t; l; l = next)
-		{	next = l->_rght;
-			l->_rght = htbl[k = l->_hash&(n-1)];
-			htbl[k] = l;
+	if(hash->htbl)
+	{
+		/* move objects into new table */
+		for(endt = (t = hash->htbl) + hash->tblz; t < endt; ++t)
+		{	for(l = *t; l; l = next)
+			{	next = l->_rght;
+				l->_rght = htbl[k = l->_hash&(n-1)];
+				htbl[k] = l;
+			}
 		}
-	}
-
-	if(hash->htbl) /* free old table and set new table */
+		/* free old table and set new table */
 		(void)(*dt->memoryf)(dt, hash->htbl, 0, disc);
+	}
 	hash->htbl = htbl;
 	hash->tblz = n;
 
@@ -292,7 +294,7 @@ static void* dthashchain(Dt_t* dt, void* obj, int type)
 		obj = _DTOBJ(disc,lnk);
 		key = _DTKEY(disc,obj);
 	}
-	else 
+	else
 	{	lnk = NULL;
 		if((type&DT_MATCH) )
 		{	key = obj;
@@ -317,7 +319,7 @@ static void* dthashchain(Dt_t* dt, void* obj, int type)
 			else	break;
 		}
 	}
-	if(l) /* found an object, use it */ 
+	if(l) /* found an object, use it */
 		{ pp = p; ll = l; }
 
 	if(ll) /* found object */

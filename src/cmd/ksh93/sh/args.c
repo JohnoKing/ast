@@ -68,9 +68,9 @@ static const int flagval[]  =
 #endif
 	SH_NOCLOBBER, SH_GLOBSTARS, SH_RC, SH_LOGIN_SHELL,
 #if SHOPT_HISTEXPAND
-        SH_HISTEXPAND,
+	SH_HISTEXPAND,
 #endif
-	0 
+	0
 };
 
 #define NUM_OPTS	(sizeof(flagval)/sizeof(*flagval))
@@ -119,6 +119,7 @@ int sh_argopts(int argc,char *argv[])
 #endif
 	Shopt_t		newflags;
 	int		defaultflag=0, setflag=0, action=0, trace=(int)sh_isoption(SH_XTRACE);
+	int		invalidate_ifs = 0;
 	Namval_t	*np = NULL;
 	const char	*cp;
 	int		verbose, f;
@@ -175,7 +176,7 @@ int sh_argopts(int argc,char *argv[])
 					{
 						off_option(&newflags,o);
 						if(o==SH_POSIX)
-							sh_invalidate_ifs();
+							invalidate_ifs = 1;
 					}
 				}
 			}
@@ -204,11 +205,6 @@ int sh_argopts(int argc,char *argv[])
 				n = 'n';
 			}
 #endif /* SHOPT_KIA */
-#if SHOPT_REGRESS
-			goto skip;
-		    case 'I':
-			continue;
-#endif /* SHOPT_REGRESS */
 			/* FALLTHROUGH */
 		    skip:
 		    default:
@@ -251,7 +247,7 @@ int sh_argopts(int argc,char *argv[])
 				off_option(&newflags,SH_BRACEEXPAND);
 #endif
 				on_option(&newflags,SH_LETOCTAL);
-				sh_invalidate_ifs();
+				invalidate_ifs = 1;
 			}
 			on_option(&newflags,o);
 			off_option(&sh.offoptions,o);
@@ -269,7 +265,7 @@ int sh_argopts(int argc,char *argv[])
 				on_option(&newflags,SH_BRACEEXPAND);
 #endif
 				off_option(&newflags,SH_LETOCTAL);
-				sh_invalidate_ifs();
+				invalidate_ifs = 1;
 			}
 			if(o==SH_XTRACE)
 				trace = 0;
@@ -294,6 +290,9 @@ int sh_argopts(int argc,char *argv[])
 	}
 	if(trace)
 		sh_trace(argv,1);
+	/* Invalidating the IFS state table must be done after sh_trace, because xtrace reads IFS */
+	if(invalidate_ifs)
+		sh_invalidate_ifs();
 	argc -= opt_info.index;
 	argv += opt_info.index;
 	if(action==PRINT)
@@ -332,25 +331,25 @@ int sh_argopts(int argc,char *argv[])
 			errormsg(SH_DICT,ERROR_usage(2),"-R requires scriptname");
 			UNREACHABLE();
 		}
-		if(!(lp->kiafile=sfopen(NULL,ap->kiafile,"w+")))
+		if(!(kia.file=sfopen(NULL,ap->kiafile,"w+")))
 		{
 			errormsg(SH_DICT,ERROR_system(3),e_create,ap->kiafile);
 			UNREACHABLE();
 		}
-		if(!(lp->kiatmp=sftmp(2*SF_BUFSIZE)))
+		if(!(kia.tmp=sftmp(2*SFIO_BUFSIZE)))
 		{
 			errormsg(SH_DICT,ERROR_system(3),e_tmpcreate);
 			UNREACHABLE();
 		}
-		sfputr(lp->kiafile,";vdb;CIAO/ksh",'\n');
-		lp->kiabegin = sftell(lp->kiafile);
-		lp->entity_tree = dtopen(&_Nvdisc,Dtbag);
-		lp->scriptname = sh_strdup(sh_fmtq(argv[0]));
-		lp->script=kiaentity(lp,lp->scriptname,-1,'p',-1,0,0,'s',0,"");
-		lp->fscript=kiaentity(lp,lp->scriptname,-1,'f',-1,0,0,'s',0,"");
-		lp->unknown=kiaentity(lp,"<unknown>",-1,'p',-1,0,0,'0',0,"");
-		kiaentity(lp,"<unknown>",-1,'p',0,0,lp->unknown,'0',0,"");
-		lp->current = lp->script;
+		sfputr(kia.file,";vdb;CIAO/ksh",'\n');
+		kia.begin = sftell(kia.file);
+		kia.entity_tree = dtopen(&_Nvdisc,Dtbag);
+		kia.scriptname = sh_strdup(sh_fmtq(argv[0]));
+		kia.script=kiaentity(lp,kia.scriptname,-1,'p',-1,0,0,'s',0,"");
+		kia.fscript=kiaentity(lp,kia.scriptname,-1,'f',-1,0,0,'s',0,"");
+		kia.unknown=kiaentity(lp,"<unknown>",-1,'p',-1,0,0,'0',0,"");
+		kiaentity(lp,"<unknown>",-1,'p',0,0,kia.unknown,'0',0,"");
+		kia.current = kia.script;
 		ap->kiafile = 0;
 	}
 #endif /* SHOPT_KIA */
@@ -412,7 +411,7 @@ char *sh_argdolminus(void* context)
 }
 
 /*
- * set up positional parameters 
+ * set up positional parameters
  */
 static void argset(Arg_t *ap,char *argv[])
 {
@@ -639,21 +638,21 @@ char **sh_argbuild(int *nargs, const struct comnod *comptr,int flag)
 		const struct comnod *ac = comptr;
 		int n;
 		/* see if the arguments have already been expanded */
-		if(!ac->comarg)
+		if(!ac->comarg.ap)
 		{
 			*nargs = 0;
 			return &null;
 		}
 		else if(!(ac->comtyp&COMSCAN))
 		{
-			struct dolnod *ap = (struct dolnod*)ac->comarg;
+			struct dolnod *ap = ac->comarg.dp;
 			*nargs = ap->dolnum;
 			return ap->dolval+ap->dolbot;
 		}
 		*nargs = 0;
 		if(ac)
 		{
-			argp = ac->comarg;
+			argp = ac->comarg.ap;
 			while(argp)
 			{
 				n = arg_expand(argp,&arghead,flag);
@@ -681,7 +680,7 @@ char **sh_argbuild(int *nargs, const struct comnod *comptr,int flag)
 		 * TODO: find/fix root cause, eliminate argi
 		 */
 		argn = *nargs + 1;	/* allow room to prepend args */
-		comargn=(char**)stkalloc(sh.stk,(unsigned)(argn+1)*sizeof(char*));
+		comargn = stkalloc(sh.stk,(unsigned)(argn+1)*sizeof(char*));
 		comargm = comargn += argn;
 		*comargn = NULL;
 		if(!argp)
@@ -724,7 +723,7 @@ struct argnod *sh_argprocsub(struct argnod *argp)
 	int savestates = sh_getstate();
 	char savejobcontrol = job.jobcontrol;
 	unsigned int savesubshell = sh.subshell;
-	ap = (struct argnod*)stkseek(sh.stk,ARGVAL);
+	ap = stkseek(sh.stk,ARGVAL);
 	ap->argflag |= ARG_MAKE;
 	ap->argflag &= ~ARG_RAW;
 	fd = argp->argflag&ARG_RAW;
@@ -752,12 +751,11 @@ struct argnod *sh_argprocsub(struct argnod *argp)
 	sfputr(sh.stk,sh.fifo,0);
 #endif /* SHOPT_DEVFD */
 	sfputr(sh.stk,fmtint(pv[fd],1),0);
-	ap = (struct argnod*)stkfreeze(sh.stk,0);
+	ap = stkfreeze(sh.stk,0);
 	sh.inpipe = sh.outpipe = 0;
 	/* turn off job control */
 	sh_offstate(SH_INTERACTIVE);
 	sh_offstate(SH_MONITOR);
-	sh_offstate(SH_PROFILE);
 	job.jobcontrol = 0;
 	/* run the process substitution */
 	sh.subshell = 0;
@@ -765,6 +763,7 @@ struct argnod *sh_argprocsub(struct argnod *argp)
 		sh.inpipe = pv;
 	else
 		sh.outpipe = pv;
+	sh_onstate(SH_PROCSUB);
 	sh_exec((Shnode_t*)argp->argchn.ap,(int)sh_isstate(SH_ERREXIT));
 	/* restore the previous state */
 	sh.subshell = savesubshell;

@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2012 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2023 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -244,6 +244,33 @@ do
 	[[ e=$? -eq 2 && $got =~ $exp ]] || err_exit "'unset -f .ns.$b' fails in subshell (2b)" \
 		"(expected status 2 and ERE match of $(printf %q "$exp"), got status $e and $(printf %q "$got"))"
 done
+
+# ======
+# https://github.com/ksh93/ksh/issues/727
+exp=foo
+got=$(unset _AST_FEATURES; "$SHELL" -c 'namespace foo { echo foo; }' 2>&1)
+[[ $got == "$exp" ]] || err_exit "'echo' botched in namespace" \
+	"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+case $'\n'${ builtin;}$'\n' in
+*$'\n'/opt/ast/bin/getconf$'\n'*)
+	got=$(unset _AST_FEATURES; "$SHELL" -c 'namespace ucb { /opt/ast/bin/getconf UNIVERSE = ucb; echo foo; }' 2>&1)
+	[[ $got == "$exp" ]] || err_exit "'getconf' and/or 'echo' botched in namespace" \
+		"(expected $(printf %q "$exp"), got $(printf %q "$got"))"
+	;;
+esac
+
+# ======
+# https://github.com/ksh93/ksh/issues/728
+got=$(PATH=/opt/ast/bin; PATH=$(getconf PATH); "$SHELL" -c 'builtin basename; namespace ns { basename --version; }' 2>&1)
+exp='  version         basename (*) ????-??-??'
+[[ $got == $exp ]] || err_exit "optional builtin not found when run from namespace" \
+	"(expected match of $(printf %q "$exp"), got $(printf %q "$got"))"
+
+# ======
+got=$("$SHELL" -c 'namespace foo { echo OK | read _DeFiNiTeLy_nOnExIsTeNt_vAr_; }' 2>&1) ||
+	err_exit "read fails in namespace (got $(printf %q "$got"))"
+got=$("$SHELL" -c 'namespace foo { export "_dEfInItElY_NoNeXiStEnT_VaR_=1"; }' 2>&1) ||
+	err_exit "export with quoted assignment-argument fails in namespace (got $(printf %q "$got"))"
 
 # ======
 exit $((Errors<125?Errors:125))

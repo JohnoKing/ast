@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -23,8 +23,8 @@
 #include	"shopt.h"
 #include	<ast.h>
 #include	<ast_wchar.h>
+#include	<lc.h>
 #include	"defs.h"
-#include	<ccode.h>
 #include	"shtable.h"
 #include	"lexstates.h"
 #include	"national.h"
@@ -41,6 +41,7 @@
  *  Table lookup routine
  *  <table> is searched for string <sp> and corresponding value is returned
  *  This is only used for small tables and is used to save non-shareable memory
+ *  NOTE: assumes tables are sorted by sh_name in ASCII order!
  */
 const Shtable_t *sh_locate(const char *sp,const Shtable_t *table,int size)
 {
@@ -51,7 +52,7 @@ const Shtable_t *sh_locate(const char *sp,const Shtable_t *table,int size)
 	if(sp==0 || (first= *sp)==0)
 		return &empty;
 	tp=table;
-	while((c= *tp->sh_name) && (CC_NATIVE!=CC_ASCII || c <= first))
+	while((c = *tp->sh_name) && c <= first)
 	{
 		if(first == c && strcmp(sp,tp->sh_name)==0)
 			return tp;
@@ -306,10 +307,10 @@ static char	*sh_fmtcsv(const char *string)
  */
 static int	sh_isprint(int c)
 {
-	if(!mbwide())					/* not in multibyte locale? */
+	if(!mbwide() || ('a'==97 && c<=127))		/* not in multibyte locale, or multibyte but c is ASCII? */
 		return isprint(c);			/* use plain isprint(3) */
-	else if(c == ' ')				/* optimisation: check ASCII space first */
-		return 1;				/* return true like isprint(3) */
+	else if(!(lcinfo(LC_CTYPE)->lc->flags&LC_utf8))	/* not in UTF-8 locale? */
+		return iswgraph(c);			/* the test below would not be valid */
 	else if(iswgraph(0x5E38) && !iswgraph(0xFEFF))	/* can we use iswgraph(3)? */
 		return iswgraph(c);			/* use iswgraph(3) */
 	else						/* fallback: */
@@ -412,7 +413,7 @@ char	*sh_fmtq(const char *string)
 				if(mbwide())
 				{
 					/* We're in a multibyte locale */
-					if(c<0 || c<128 && !isprint(c))
+					if(c<0 || ('a'!=97 || c<128) && !isprint(c))
 					{
 						/* Invalid multibyte char, or unprintable ASCII char: quote as hex byte */
 						c = *((unsigned char *)op);
@@ -670,7 +671,7 @@ int sh_strchr(const char *string, const char *dp)
 		wchar_t c, d;
 		cp = string;
 		mbinit();
-		d = mbchar(dp); 
+		d = mbchar(dp);
 		mbinit();
 		while(c = mbchar(cp))
 		{

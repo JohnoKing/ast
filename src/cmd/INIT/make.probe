@@ -3,7 +3,7 @@
 # Glenn Fowler
 # AT&T Research
 #
-# @(#)make.probe (ksh 93u+m) 2024-01-09
+# @(#)make.probe (ksh 93u+m) 2024-08-13
 #
 # C probe for make
 #
@@ -21,6 +21,7 @@ probe_export_dynamic="-rdynamic -export-dynamic -Wl,-export-dynamic -Wl,-E -bexp
 probe_gcc_optimize="-Os"
 probe_gcc_version="*[Gg][Cc][Cc]*"
 probe_include_local="'-ignore-source-dir -iquote' -iquote -I-"
+probe_ldasneeded="-Wl,-as-needed -Wl,-no-as-needed"
 probe_ldlazy='-zlazyload -znolazyload -Wl,-zlazyload -Wl,-znolazyload'
 probe_ldlib="LD_LIBRARY_PATH LIBPATH LPATH"
 probe_ldmap="'-Wl,-M' '-Qoption ld -M' '-Wl,-m' '-m'"
@@ -37,14 +38,10 @@ probe_nmflags="'' -p -B"
 probe_optimize="-Os -O"
 probe_pic="-Kpic -KPIC -fpic -fPIC -pic -PIC +z +Z"
 probe_no_protect="'-fno-stack-protector -fno-stack-protector-all' -GS-"
+probe_no_strict_aliasing="-fno-strict-aliasing"
 probe_readonly="-R -Krodata -xMerge -Wa,-r"
 probe_shared="'' -G -b -c -shared -Wl,dll"
 probe_shared_name="-Wl,-soname= -h"
-probe_shared_nostart="-nostartfiles"
-case `gcc -v 2>&1 | grep -E gcc.version` in
-*version' '[0123456].*) ;;
-*) probe_shared_nostart= ;;  # gcc 7+
-esac
 probe_shared_registry='"-update_registry $probe_shared_registry_file"'
 probe_shared_registry_file='registry.ld'
 probe_shared_registry_path="\$(LIBDIR)/$probe_shared_registry_file"
@@ -129,6 +126,7 @@ export_dynamic=
 gnu=
 implicitc=
 include_local=
+ldasneeded=
 lddynamic=
 ldlazy=
 ldnolazy=
@@ -149,6 +147,7 @@ makeoptions=
 nmedit=
 nmflags=
 no_protect=
+no_strict_aliasing=
 optimize=
 prefix_archive=lib
 prefix_dynamic=
@@ -557,6 +556,20 @@ then	eval set x x $probe_ldlazy
 		ldnorecord=$2
 		break
 	done
+	eval set x x $probe_ldasneeded
+	while	:
+	do	shift
+		shift
+		case $# in
+		0)	break ;;
+		esac
+		rm -f strip.$exe
+		$cc -o strip.$exe $1 strip.$obj $2 2>f && test -f strip.$exe || continue
+		cmp -s e f || continue
+		ldasneeded=$1
+		ldnoasneeded=$2
+		break
+	done
 fi
 
 case $cc_dll:$cc_pic:$so:$dynamic:$static in
@@ -623,34 +636,6 @@ case $cc_dll:$cc_pic:$so:$dynamic:$static in
 		esac
 		dld=$xx
 		shared=$1
-		# does -nostartfiles make sense?
-		z=`wc -c < xxx$dll`
-		eval set x $probe_shared_nostart
-		while	:
-		do	shift
-			case $# in
-			0)	break ;;
-			esac
-			rm -f xxx$dll
-			if	$dld $shared $1 -o xxx$dll shared.$obj 2>e && test -r xxx$dll
-			then	case `wc -c < xxx$dll` in
-				$z)	;;
-				*)	if	test -s e
-					then	case `cat e` in
-						*[Ee][Rr][Rr][Oo][Rr]*|*[Ww][Aa][Rr][Nn][Ii][Nn][Gg]*|*[Oo][Pp][Tt][Ii][Oo][Nn]*)
-							continue
-							;;
-						esac
-					fi
-					case $shared in
-					'')	shared=$1 ;;
-					*)	shared="$shared $1" ;;
-					esac
-					break
-					;;
-				esac
-			fi
-		done
 		case $cc_dll in
 		"")	cc_dll=$cc_dll_def ;;
 		esac
@@ -995,6 +980,7 @@ esac
 
 case $hosttype in
 cygwin.*|os2.*)
+	sd=.dll
 	Lflag=1
 	;;
 *)	if	$cc -c doti.$src
@@ -1455,6 +1441,19 @@ then	e=`wc -c < e`
 		esac
 	done
 
+	eval set x $probe_no_strict_aliasing
+	while	:
+	do	shift
+		case $# in
+		0)	break ;;
+		esac
+		rm -f warn.$obj
+		$cc $1 -c warn.$src 2>e && test -f warn.$obj || continue
+		case $(wc -c < e) in
+		$e)	no_strict_aliasing=$1; break ;;
+		esac
+	done
+
 	case $version_string in
 	$probe_gcc_version)	probe_optimize="$probe_gcc_optimize $probe_optimize" ;;
 	esac
@@ -1775,7 +1774,7 @@ esac
 # path cleanup
 #
 
-for i in ar ccnative dld ld nm size stdinclude stdlib strip 
+for i in ar ccnative dld ld nm size stdinclude stdlib strip
 do	eval o='$'$i
 	v=$o
 	case $v in
@@ -1904,6 +1903,27 @@ case $keepstdlib in
 esac
 
 #
+# determine the need for any API version targets to add to the compiler flags
+#
+
+CC_TARGET=
+case $hosttype in
+android.*)
+	# get current default API level
+	cat >_android_test.c <<-EOF
+	#include <stdio.h>
+	int main(void) { printf("%d\n", __ANDROID_API__); return 0; }
+	EOF
+	$cc -o _android_test _android_test.c
+	got=$(./_android_test)
+	(set +f; exec rm -rf _android_test*) &
+	# check for minimum required; we need API 26 for catopen(3) et al
+	if	test -n "$got" && test "$got" -lt 26
+	then	CC_TARGET="--target=$(uname -m)-linux-android26"
+	fi ;;
+esac
+
+#
 # set up for local override
 #
 
@@ -1941,6 +1961,8 @@ CC_DYNAMIC=$dynamic
 CC_EXPORT_DYNAMIC=$export_dynamic
 CC_INCLUDE_LOCAL=$include_local
 CC_LD=$ld
+CC_LD_ASNEEDED=$ldasneeded
+CC_LD_NOASNEEDED=$ldnoasneeded
 CC_LD_DYNAMIC=$lddynamic
 CC_LD_LAZY=$ldlazy
 CC_LD_NOLAZY=$ldnolazy
@@ -1958,6 +1980,7 @@ CC_NM=$nm
 CC_NMEDIT=$nmedit
 CC_NMFLAGS=$nmflags
 CC_NOPROTECT=$no_protect
+CC_NOSTRICTALIASING=$no_strict_aliasing
 CC_OPTIMIZE=$optimize
 CC_READONLY=$readonly
 CC_REPOSITORY=$repository
@@ -2032,19 +2055,14 @@ echo CC.DLL.VARIANTS = $CC_DLL_VARIANTS
 echo CC.DYNAMIC = $CC_DYNAMIC
 echo CC.EXPORT.DYNAMIC = $CC_EXPORT_DYNAMIC
 echo CC.INCLUDE.LOCAL = $CC_INCLUDE_LOCAL
-#
-# 2004-02-14 release workaround
-#
 case $CC_SHARED_LD in
-$CC_CC)	echo if LDSHARED
-	echo CC.LD = $CC_LD
-	echo else
-	echo CC.LD = $CC_CC
-	echo end
+$CC_CC)	echo CC.LD = $CC_CC
 	;;
 *)	echo CC.LD = $CC_LD
 	;;
 esac
+echo CC.LD.ASNEEDED = $CC_LD_ASNEEDED
+echo CC.LD.NOASNEEDED = $CC_LD_NOASNEEDED
 echo CC.LD.DYNAMIC = $CC_LD_DYNAMIC
 echo CC.LD.LAZY = $CC_LD_LAZY
 echo CC.LD.NOLAZY = $CC_LD_NOLAZY
@@ -2065,6 +2083,7 @@ esac
 echo CC.NMEDIT ="$CC_NMEDIT"
 echo CC.NMFLAGS = $CC_NMFLAGS
 echo CC.NOPROTECT = $CC_NOPROTECT
+echo CC.NOSTRICTALIASING = $CC_NOSTRICTALIASING
 echo CC.OPTIMIZE = $CC_OPTIMIZE
 echo CC.PICBIG = $CC_PICBIG
 echo CC.PICSMALL = $CC_PICSMALL
@@ -2100,6 +2119,7 @@ echo CC.SUFFIX.OBJECT = $CC_SUFFIX_OBJECT
 echo CC.SUFFIX.SHARED = $CC_SUFFIX_SHARED
 echo CC.SUFFIX.SOURCE = $CC_SUFFIX_SOURCE
 echo CC.SUFFIX.STATIC = $CC_SUFFIX_STATIC
+echo CC.TARGET = $CC_TARGET
 echo CC.VERSION = $CC_VERSION
 case $CC_VERSION_STRING in
 *\"*)	i=`echo " $CC_VERSION_STRING" | sed -e 's,",\\\\",g' -e 's,^ ,,' -e 's,.*,"&",'` ;;
@@ -2114,3 +2134,6 @@ echo CC.WARN = $CC_WARN
 for i in $CC_ATTRIBUTES
 do	eval echo CC.$i = \$$i
 done
+
+# for backward compat
+echo CC.SHELLMAGIC =

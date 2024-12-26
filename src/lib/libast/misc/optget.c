@@ -31,7 +31,8 @@
 #include <debug.h>
 #include <ccode.h>
 #include <ctype.h>
-#include <errno.h>
+
+#define OPTGET_VERSION	"optget (ksh 93u+m) 2024-03-05"
 
 #define KEEP		"*[A-Za-z][A-Za-z]*"
 #define OMIT		"*@(\\[[-+]*\\?*\\]|\\@\\(#\\)|Copyright \\(c\\)|\\$\\I\\d\\: )*"
@@ -206,8 +207,9 @@ static const List_t	help_head[] =
 		C("\b-?\b and \b--?\b* options are the same \
 for all \bAST\b commands. For any \aitem\a below, if \b--\b\aitem\a is not \
 supported by a given command then it is equivalent to \b--\?\?\b\aitem\a. The \
-\b--\?\?\b form should be used for portability. All output is written to the \
-standard error."),
+\b--\?\?\b form should be used for portability. \
+All output is written to the standard error. \
+Note that question marks should be quoted to avoid pathanme expansion."),
 };
 
 static const Help_t	styles[] =
@@ -255,8 +257,11 @@ static const List_t	help_tail[] =
 the \aoption\a output in the \aitem\a style. Otherwise print \
 \bversion=\b\an\a where \an\a>0 if \b--\?\?\b\aitem\a is supported, \b0\b \
 if not."),
+	':',	C("\?\?\?\?\?\?EMPHASIS"),
+		C("Equivalent to \b--\?\?\?ESC\b."),
 	':',	C("\?\?\?\?\?\?ESC"),
-		C("Emit escape codes even if output is not a terminal."),
+		C("Emit ANSI escape codes for emphasis even if standard error is not on a terminal. \
+Use \b--\?\?noESC\b to emit no escape codes even if standard error is on a terminal."),
 	':',	C("\?\?\?\?\?\?MAN[=\asection\a]]"),
 		C("List the \bman\b(1) section title for \asection\a [the \
 current command]]."),
@@ -2514,21 +2519,22 @@ opthelp(const char* oopts, const char* what)
 		sfputc(mp, '\f');
 		break;
 	default:
-		state.emphasis = 0;
-		if (x = getenv("ERROR_OPTIONS"))
+		if (!state.emphasis)
 		{
-			if (strmatch(x, "*noemphasi*"))
-				break;
-			if (strmatch(x, "*emphasi*"))
+			if (x = getenv("ERROR_OPTIONS"))
 			{
-				state.emphasis = 1;
-				break;
+				if (strmatch(x, "*noemphasi*"))
+					break;
+				if (strmatch(x, "*emphasi*"))
+				{
+					state.emphasis = 1;
+					break;
+				}
 			}
+			if (isatty(sffileno(sfstderr)) && (x = getenv("TERM"))
+			&& strmatch(x, "(ansi|cons|dtterm|linux|qansi|rxvt|screen|sun|vt[1-5][0-4][0125]|wsvt|xterm)*"))
+				state.emphasis = 1;
 		}
-		if (isatty(sffileno(sfstderr))
-		&& (x = getenv("TERM"))
-		&& strmatch(x, "(ansi|cons|dtterm|linux|screen|sun|vt???|wsvt|xterm)*"))
-			state.emphasis = 1;
 		break;
 	}
 	x = "";
@@ -3756,7 +3762,7 @@ opthelp(const char* oopts, const char* what)
 				*t++ = c;
 			}
 			*t = 0;
-			sfprintf(mp, "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML//EN\">\n<HTML>\n<HEAD>\n<META name=\"generator\" content=\"optget (AT&T Research) 2011-11-11\">\n%s<TITLE>%s man document</TITLE>\n<STYLE type=\"text/css\">\ndiv.SH { padding-left:2em; text-indent:0em; }\ndiv.SY { padding-left:4em; text-indent:-2em; }\ndt { float:left; clear:both; }\ndd { margin-left:3em; }\n</STYLE>\n</HEAD>\n<BODY bgcolor=white>\n", (state.flags & OPT_proprietary) ? "<!--INTERNAL-->\n" : "", id);
+			sfprintf(mp, "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML//EN\">\n<HTML>\n<HEAD>\n<META name=\"generator\" content=\"" OPTGET_VERSION "\">\n%s<TITLE>%s man document</TITLE>\n<STYLE type=\"text/css\">\ndiv.SH { padding-left:2em; text-indent:0em; }\ndiv.SY { padding-left:4em; text-indent:-2em; }\ndt { float:left; clear:both; }\ndd { margin-left:3em; }\n</STYLE>\n</HEAD>\n<BODY bgcolor=white>\n", (state.flags & OPT_proprietary) ? "<!--INTERNAL-->\n" : "", id);
 			sfprintf(mp, "<H4><TABLE width=100%%><TR><TH align=left>%s&nbsp;(&nbsp;%s&nbsp;)&nbsp;<TH align=center><A href=\".\" title=\"Index\">%s</A><TH align=right>%s&nbsp;(&nbsp;%s&nbsp;)</TR></TABLE></H4>\n<HR>\n", ud, section, T(NULL, ID, secname(section)), ud, section);
 			co = 2;
 			pt = ptstk;
@@ -4118,17 +4124,22 @@ optusage(const char* opts)
  * 0x.* or <base>#* for alternate bases
  */
 
-static intmax_t     
+static intmax_t
 optnumber(const char* s, char** t, int* e)
 {
 	intmax_t	n;
-	int		oerrno;
+	const int	oerrno = errno;
+	char		lastbase = 0;
 
-	while (*s == '0' && isdigit(*(s + 1)))
-		s++;
-	oerrno = errno;
 	errno = 0;
-	n = strtonll(s, t, NULL, 0);
+	n = strtonll(s, t, &lastbase, 0);
+	if (lastbase == 8 && *s == '0')
+	{
+		/* disable leading-0 octal by reparsing as decimal */
+		lastbase = 10;
+		errno = 0;
+		n = strtonll(s, t, &lastbase, 0);
+	}
 	if (e)
 		*e = errno;
 	errno = oerrno;
@@ -4301,6 +4312,7 @@ optget(char** argv, const char* oopts)
 
 	if (!oopts)
 		return 0;
+	state.emphasis = 0;
 	state.pindex = opt_info.index;
 	state.poffset = opt_info.offset;
 	if (!opt_info.index)

@@ -1,5 +1,3 @@
-hdr	locale_attr
-
 tst	- -DVAL=0 - -DVAL=1 - -DVAL=2 note{ probing need for va_listval() workaround }end output{
 	/*
 	 * This workaround test is needed until libast's va_listval macro from

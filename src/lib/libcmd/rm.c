@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1992-2013 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -87,7 +87,7 @@ typedef struct State_s			/* program state		*/
 	int		unconditional;	/* enable dir rwx on preorder	*/
 	int		verbose;	/* display each file		*/
 #if _lib_fsync
-	char		buf[SF_BUFSIZE];/* clobber buffer		*/
+	char		buf[SFIO_BUFSIZE];/* clobber buffer		*/
 #endif
 } State_t;
 
@@ -263,7 +263,7 @@ rm(State_t* state, FTSENT* ent)
 		{
 			if ((v = astquery(-1, "override protection %s for %s? ",
 #ifdef ETXTBSY
-				errno == ETXTBSY ? "``running program''" : 
+				errno == ETXTBSY ? "``running program''" :
 #endif
 				ent->fts_statp->st_uid != state->uid ? "``not owner''" :
 				fmtmode(ent->fts_statp->st_mode & S_IPERM, 0) + 1, ent->fts_path)) < 0 ||

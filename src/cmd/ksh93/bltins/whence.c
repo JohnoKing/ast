@@ -2,7 +2,7 @@
 *                                                                      *
 *               This software is part of the ast package               *
 *          Copyright (c) 1982-2012 AT&T Intellectual Property          *
-*          Copyright (c) 2020-2023 Contributors to ksh 93u+m           *
+*          Copyright (c) 2020-2024 Contributors to ksh 93u+m           *
 *                      and is licensed under the                       *
 *                 Eclipse Public License, Version 2.0                  *
 *                                                                      *
@@ -186,7 +186,7 @@ static int whence(char **argv, int flags)
 		/* non-tracked aliases */
 		if((np=nv_search(name,sh.alias_tree,0))
 			&& !nv_isnull(np) && !nv_isattr(np,NV_TAGGED)
-			&& (cp=nv_getval(np))) 
+			&& (cp=nv_getval(np)))
 		{
 			if(flags&V_FLAG)
 			{
@@ -322,9 +322,9 @@ static int whence(char **argv, int flags)
 					sfputr(sfstdout,is_pathbound_builtin ? "builtin" : "file",'\n');
 				else
 					sfputr(sfstdout,sh_fmtq(cp),'\n');
-				free((char*)cp);
+				free((void*)cp);
 			}
-			else if(aflag<=1) 
+			else if(aflag<=1)
 			{
 				ret = 1;
 				if(flags&V_FLAG)

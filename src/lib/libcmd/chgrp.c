@@ -235,7 +235,7 @@ b_chgrp(int argc, char** argv, Shbltin_t* context)
 	before = ~0;
 	if (!(sp = sfstropen()))
 	{
-		error(ERROR_SYSTEM|3, "out of space");
+		error(ERROR_SYSTEM|3, "out of memory");
 		UNREACHABLE();
 	}
 	sfputr(sp, usage_1, -1);
@@ -254,7 +254,7 @@ b_chgrp(int argc, char** argv, Shbltin_t* context)
 	sfputr(sp, usage_3, -1);
 	if (!(usage = sfstruse(sp)))
 	{
-		error(ERROR_SYSTEM|3, "out of space");
+		error(ERROR_SYSTEM|3, "out of memory");
 		UNREACHABLE();
 	}
 	for (;;)
@@ -367,7 +367,7 @@ b_chgrp(int argc, char** argv, Shbltin_t* context)
 			getids(s, &t, &key, options);
 			if (!(m = (Map_t*)dtmatch(map, &key)))
 			{
-				if (!(m = (Map_t*)stkalloc(stkstd, sizeof(Map_t))))
+				if (!(m = stkalloc(stkstd, sizeof(Map_t))))
 				{
 					error(ERROR_SYSTEM|ERROR_PANIC, "out of memory [id dictionary]");
 					UNREACHABLE();

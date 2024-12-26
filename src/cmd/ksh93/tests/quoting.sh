@@ -2,7 +2,7 @@
 #                                                                      #
 #               This software is part of the ast package               #
 #          Copyright (c) 1982-2011 AT&T Intellectual Property          #
-#          Copyright (c) 2020-2022 Contributors to ksh 93u+m           #
+#          Copyright (c) 2020-2024 Contributors to ksh 93u+m           #
 #                      and is licensed under the                       #
 #                 Eclipse Public License, Version 2.0                  #
 #                                                                      #
@@ -369,4 +369,32 @@ case x in
 $x) err_exit "case \$x='$x' should not match x";;
 esac
 
+# ======
+# https://austingroupbugs.net/view.php?id=1852
+# https://mail.gnu.org/archive/html/bug-bash/2024-08/msg00132.html
+unset e E q i
+for e in 3 '"$@"' 5 '"$@$@"' 7 '"$@$@$@"' 9 '"$@$@$@$@"' 11 '"$@$@$@$@$@"' 13 '"$@$@$@$@$@$@"' \
+	5 '"$@""$@"' 7 '"$@""$@""$@"' 9 '"$@""$@""$@""$@"' 11 '"$@""$@""$@""$@""$@"' 13 '"$@""$@""$@""$@""$@""$@"'
+do	[[ $e == [0-9]* ]] && i=$e && continue
+	set --  # set zero PPs
+	eval "set -- $e"
+	(($# == 0)) || err_exit "$e does not yield zero fields for zero positional parameters (got $#)"
+	set -- one two three
+	eval "set -- $e"
+	(($# == i)) || err_exit "$e does not yield $i fields for 3 positional parameters (got $#)"
+	for q in "''" '""'
+	do	for q in "$q" "$q$q" "$q$q$q" "$q$q$q$q" "$q$q$q$q$q" "$q$q$q$q$q$q"
+		do	for E in "$q$e" "$e$q" "$q$e$q"
+			do	set --  # set zero PPs
+				eval "set -- $E"
+				(($# == 1)) || err_exit "$E does not yield one field for zero positional parameters (got $#)"
+				set -- one two three
+				eval "set -- $E"
+				(($# == i)) || err_exit "$E does not yield $i fields for 3 positional parameters (got $#)"
+			done
+		done
+	done
+done
+
+# ======
 exit $((Errors<125?Errors:125))

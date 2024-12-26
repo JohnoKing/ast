@@ -24,6 +24,8 @@
  *
  * Interface definitions for shell command language
  *
+ * NOTE: this header defines a public libshell interface,
+ * unless _BLD_ksh is defined as nonzero
  */
 
 #define SH_VERSION	20220719
@@ -32,12 +34,12 @@
 #include	<cdt.h>
 #include	<history.h>
 #include	<stk.h>
-#ifdef defs_h_defined
+#if _BLD_ksh
 #   include	"name.h"
+#   include	"fault.h"
 #else
 #   include	<nval.h>
-#endif /* defs_h_defined */
-#include	"fault.h"
+#endif /* _BLD_ksh */
 
 /* options */
 typedef struct
@@ -51,7 +53,7 @@ typedef struct Shell_s Shell_t;
 #include	<shcmd.h>
 
 /* get pointer to a built-in command's entry function */
-#define	funptr(n)	((Shbltin_f)(n)->nvalue.bfp)
+#define funptr(n)	((Shbltin_f)(n)->nvalue)
 
 typedef void	(*Shinit_f)(Shell_t*, int);
 #ifndef SH_wait_f_defined
@@ -67,8 +69,8 @@ typedef union Shnode_u Shnode_t;
  * See also shell options below. States 0-5 are also used as shell options.
  */
 #define SH_NOFORK	0	/* set when fork not necessary */
-#define	SH_FORKED	7	/* set when process has been forked */
-#define	SH_PROFILE	8	/* set when processing profiles */
+#define SH_FORKED	7	/* set when process has been forked */
+#define SH_PROFILE	8	/* set when processing profiles */
 #define SH_NOALIAS	9	/* do not expand non-exported aliases */
 #define SH_NOTRACK	10	/* set to disable sftrack() function */
 #define SH_STOPOK	11	/* set for stopable builtins */
@@ -77,11 +79,13 @@ typedef union Shnode_u Shnode_t;
 #define SH_DEFPATH	14	/* set when using default path */
 #define SH_INIT		15	/* set when initializing the shell */
 #define SH_TTYWAIT	16	/* waiting for keyboard input */
-#define	SH_FCOMPLETE	17	/* set for filename completion */
-#define	SH_PREINIT	18	/* set with SH_INIT before parsing options */
+#define SH_FCOMPLETE	17	/* set for filename completion */
+#define SH_PREINIT	18	/* set with SH_INIT before parsing options */
 #define SH_COMPLETE	19	/* set for command completion */
 #define SH_XARG		21	/* set while in xarg (command -x) mode */
 #define SH_NOTILDEXP	22	/* set to disable tilde expansion */
+#define SH_EXEC		23	/* set while in exec(1) */
+#define SH_PROCSUB	24	/* set (also in parent shell) while executing process substitution */
 
 /*
  * Shell options (set -o). Used with sh_isoption(), sh_onoption(), sh_offoption().
@@ -91,13 +95,13 @@ typedef union Shnode_u Shnode_t;
  */
 #define SH_CFLAG	0
 #define SH_HISTORY	1	/* used also as a state */
-#define	SH_ERREXIT	2	/* used also as a state */
-#define	SH_VERBOSE	3	/* used also as a state */
+#define SH_ERREXIT	2	/* used also as a state */
+#define SH_VERBOSE	3	/* used also as a state */
 #define SH_MONITOR	4	/* used also as a state */
-#define	SH_INTERACTIVE	5	/* used also as a state */
-#define	SH_RESTRICTED	6
-#define	SH_XTRACE	7
-#define	SH_KEYWORD	8
+#define SH_INTERACTIVE	5	/* used also as a state */
+#define SH_RESTRICTED	6
+#define SH_XTRACE	7
+#define SH_KEYWORD	8
 #define SH_NOUNSET	9
 #define SH_NOGLOB	10
 #define SH_ALLEXPORT	11
@@ -106,18 +110,18 @@ typedef union Shnode_u Shnode_t;
 #define SH_NOCLOBBER	14
 #define SH_MARKDIRS	15
 #define SH_BGNICE	16
-#if SHOPT_VSH
+#if !_BLD_ksh || SHOPT_VSH
 #define SH_VI		17
 #define SH_VIRAW	18
 #endif
-#define	SH_TFLAG	19
+#define SH_TFLAG	19
 #define SH_TRACKALL	20
-#define	SH_SFLAG	21
-#define	SH_NOEXEC	22
-#if SHOPT_ESH || SHOPT_VSH
+#define SH_SFLAG	21
+#define SH_NOEXEC	22
+#if !_BLD_ksh || SHOPT_ESH || SHOPT_VSH
 #define SH_NOARROWSRCH	23
 #endif
-#if SHOPT_ESH
+#if !_BLD_ksh || SHOPT_ESH
 #define SH_GMACS	24
 #define SH_EMACS	25
 #endif
@@ -128,30 +132,33 @@ typedef union Shnode_u Shnode_t;
 #define SH_GLOBEX	31
 #define SH_PIPEFAIL	32
 #define SH_GLOBSTARS	33
-#if SHOPT_GLOBCASEDET || !defined(SHOPT_GLOBCASEDET)
+#if !_BLD_ksh || SHOPT_GLOBCASEDET || !defined(SHOPT_GLOBCASEDET)
 #define SH_GLOBCASEDET	34
 #endif
 #define SH_RC		35
 #define SH_SHOWME	36
 #define SH_LETOCTAL	37
-#if SHOPT_BRACEPAT
+#if !_BLD_ksh || SHOPT_BRACEPAT
 #define SH_BRACEEXPAND	42
 #endif
-#if SHOPT_HISTEXPAND
+#if !_BLD_ksh || SHOPT_HISTEXPAND
 #define SH_HISTEXPAND	43
-#if SHOPT_ESH || SHOPT_VSH
+#if !_BLD_ksh || SHOPT_ESH || SHOPT_VSH
 #define SH_HISTREEDIT	44
 #define SH_HISTVERIFY	45
 #endif
 #endif
 #define SH_POSIX	46
-#if SHOPT_ESH || SHOPT_VSH
+#if !_BLD_ksh || SHOPT_ESH || SHOPT_VSH
 #define SH_MULTILINE	47
 #define SH_NOBACKSLCTRL	48
 #endif
 #define SH_LOGIN_SHELL	67
+
+#if _BLD_ksh
 #define SH_NOUSRPROFILE	79	/* internal use only */
 #define SH_COMMANDLINE	0x100	/* bit flag for invocation-only options ('set -o' cannot change them) */
+#endif
 
 /*
  * Passed as flags to builtins in Nambltin_t struct when BLT_OPTIM is on
@@ -192,6 +199,8 @@ typedef struct sh_scope
 	Dt_t		*var_tree;
 	struct sh_scope	*self;
 } Shscope_t;
+
+#if _BLD_ksh
 
 /* Private interface to shell scope. The first members must match the public interface. */
 struct sh_scoped
@@ -235,6 +244,8 @@ struct limits
 	int		child_max;	/* maximum number of children */
 };
 
+#endif /* _BLD_ksh */
+
 /*
  * Saves the state of the shell
  */
@@ -251,8 +262,8 @@ struct Shell_s
 	int		inlineno;	/* line number of current input file */
 	int		exitval;	/* exit status of the command currently being run */
 	int		savexit;	/* $? == exit status of the last command executed */
-
-	/* These are the former 'struct shared' (shgd) members. */
+#if _BLD_ksh
+	/* The rest are for ksh's internal use only */
 	struct limits	lim;
 	uid_t		userid;
 	uid_t		euserid;
@@ -273,14 +284,10 @@ struct Shell_s
 	void		*ed_context;
 	int		sigmax;
 	Shwait_f	waitevent;
-#if SHOPT_STATS
-	int		*stats;
-#endif
-
-	/* The following members are not considered to be part of the documented API.
-	 * Programs using libshell should not rely on them as they may change. */
 	int		subshell;	/* set for virtual subshell */
 	int		realsubshell;	/* ${.sh.subshell}, actual subshell level (including virtual and forked) */
+	char		nv_restore;	/* set while restoring variables upon terminating a virtual subshell */
+	int32_t		shlvl;		/* $SHLVL, non-subshell child shell level */
 	char		shcomp;		/* set when running shcomp */
 	unsigned char	trapnote;	/* set when trap/signal is pending */
 	struct sh_scoped st;		/* scoped information */
@@ -308,7 +315,6 @@ struct Shell_s
 	char		*comdiv;	/* points to sh -c argument */
 	char		*prefix;	/* prefix for compound assignment */
 	sigjmp_buf	*jmplist;	/* longjmp return stack */
-	int		oldexit;	/* saves pre-trap exit status for 'exit' default in trap actions */
 	pid_t		bckpid;		/* background process id */
 	pid_t		cpid;
 	pid_t		spid; 		/* subshell process id */
@@ -318,6 +324,7 @@ struct Shell_s
 	int		savesig;
 	unsigned char	*sigflag;	/* pointer to signal states */
 	char		intrap;		/* set while executing a trap action */
+	char		intrap_exit_n;	/* set if 'exit n' within trap */
 	uint32_t	srand_upper_bound;
 	char		forked;
 	char		binscript;
@@ -353,7 +360,8 @@ struct Shell_s
 	int		xargmin;
 	int		xargmax;
 	int		xargexit;
-	int		nenv;
+	int		save_env_n;	/* number of saved pointers to environment variables with invalid names */
+	char		**save_env;	/* saved pointers to environment variables with invalid names */
 	mode_t		mask;
 	void		*init_context;
 	void		*mac_context;
@@ -390,9 +398,14 @@ struct Shell_s
 	char		*mathnodes;
 	char		*bltin_dir;
 	char		tilde_block;	/* set to block .sh.tilde.{get,set} discipline */
+	char		dont_optimize_builtins;
 	/* nv_putsub() hack for nv_create() to avoid double arithmetic evaluation */
 	char		nv_putsub_already_called_sh_arith;
 	int		nv_putsub_idx;	/* saves array index obtained by nv_putsub() using sh_arith() */
+	int16_t		level;		/* ${.sh.level} */
+#if SHOPT_STATS
+	int		*stats;
+#endif
 #if SHOPT_OPTIMIZE
 	char		**argaddr;	/* pointer to arguments for the loop invariants optimizer */
 	void		*optlist;	/* linked list of invariant nodes */
@@ -404,9 +417,7 @@ struct Shell_s
 	char		*fifo;		/* FIFO name for current process substitution */
 	Dt_t		*fifo_tree;	/* for cleaning up process substitution FIFOs */
 #endif /* !SHOPT_DEVFD */
-#if SHOPT_REGRESS
-	struct Regress_s *regress;
-#endif /* SHOPT_REGRESS */
+#endif /* _BLD_ksh */
 };
 
 /* used for builtins */
@@ -437,7 +448,7 @@ extern Libcomp_t *liblist;
 
 extern void		sh_subfork(void);
 extern Shell_t		*sh_init(int,char*[],Shinit_f);
-extern int		sh_reinit(char*[]);
+extern void		sh_reinit(void);
 extern int 		sh_eval(Sfio_t*,int);
 extern void 		sh_delay(double,int);
 extern void		*sh_parse(Sfio_t*,int);
@@ -482,7 +493,7 @@ extern int		sh_exec(const Shnode_t*,int);
  * sh_getinterp() is here for compatibility with the documented interface.
  */
 extern Shell_t		sh;
-#define	sh_getinterp()	(&sh)
+#define sh_getinterp()	(&sh)
 
 #define chdir(a)	sh_chdir(a)
 #define fchdir(a)	sh_fchdir(a)
