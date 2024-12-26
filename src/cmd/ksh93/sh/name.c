@@ -79,7 +79,7 @@ struct sh_type
 		Namval_t	*last_table;
 		Namval_t	*namespace;
 		int		flags;
-		short		size;
+		int32_t		size;
 		short		len;
 	} entries[NVCACHE];
 	short		index;
@@ -443,13 +443,11 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 							nv_putsub(np, NULL, ARRAY_SCAN);
 							if(!ap->fun && !(ap->nelem&ARRAY_TREE) && !np->nvfun->next && !nv_type(np))
 							{
-								unsigned short nvflag = np->nvflag;
+								uint32_t nvflag = np->nvflag;
 								uint32_t nvsize = np->nvsize;
-								uint32_t nvdynscope = np->dynscope;
 								_nv_unset(np,NV_EXPORT);
 								np->nvflag = nvflag;
 								np->nvsize = nvsize;
-								np->dynscope = nvdynscope;
 							}
 							else
 							{
@@ -563,7 +561,6 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 				{
 					L_ARGNOD->nvalue = node.nvalue;
 					L_ARGNOD->nvflag = node.nvflag;
-					L_ARGNOD->dynscope = node.dynscope;
 					L_ARGNOD->nvfun = node.nvfun;
 				}
 				sh.prefix = prefix;
@@ -600,7 +597,6 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 				mp = nv_search(cp,vartree,NV_ADD|NV_NOSCOPE);
 				mp->nvname = np->nvname;  /* put_lang() (init.c) compares nvname pointers */
 				mp->nvflag = np->nvflag;
-				mp->dynscope = np->dynscope;
 				mp->nvsize = np->nvsize;
 				mp->nvfun = nv_cover(np);
 			}
@@ -667,7 +663,6 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 			{
 				L_ARGNOD->nvalue = node.nvalue;
 				L_ARGNOD->nvflag = node.nvflag;
-				L_ARGNOD->dynscope = node.dynscope;
 				L_ARGNOD->nvfun = node.nvfun;
 			}
 		}
@@ -1575,11 +1570,7 @@ skip:
 			savesub = sub;
 			sh.prefix = prefix;
 		}
-		nv_onattr(np, flags&NV_ATTRIBUTES);
-		if(flags&NV_DYNAMIC)
-			np->dynscope = 1;
-		else
-			np->dynscope = 0;
+		nv_onattr(np, flags&~(NV_ATTRIBUTES|NV_OPENMASK));
 	}
 	else if(c)
 	{
@@ -2201,8 +2192,6 @@ static int scanfilter(Namval_t *np, struct scan *sp)
 		return 0;
 	if(sp->scanmask==NV_TABLE && nv_isvtree(np))
 		np_flags = NV_TABLE;
-	else if(np->dynscope==1)
-		np_flags |= NV_DYNAMIC;
 	if(sp->scanmask?(np_flags&sp->scanmask)==sp->scanflags:(!sp->scanflags || (np_flags&sp->scanflags)))
 	{
 		if(tp && tp->mapname)
@@ -2858,7 +2847,7 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 		else if(size==NV_FLTSIZEZERO)
 			np->nvsize = 0;
 		nv_offattr(np, ~NV_NOFREE);
-		nv_onattr(np, newatts);
+		nv_onattr(np, newatts&~(NV_OPENMASK));
 		return;
 	}
 	if(size==NV_FLTSIZEZERO)
@@ -2878,7 +2867,7 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 		{
 			nv_setsize(np,size);
 			np->nvflag &= NV_ARRAY;
-			np->nvflag |= newatts;
+			np->nvflag |= newatts&~(NV_OPENMASK);
 			goto skip;
 		}
 #endif /* SHOPT_FIXEDARRAY */
@@ -2937,8 +2926,8 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 			_nv_unset(np,NV_EXPORT);
 		nv_setsize(np,size);
 		np->nvflag &= (NV_ARRAY|NV_NOFREE);
-		np->nvflag |= newatts;
-		if (cp)
+		np->nvflag |= newatts&~(NV_OPENMASK);
+		if(cp)
 		{
 			if(!mp)
 				nv_putval (np, cp, NV_RDONLY);

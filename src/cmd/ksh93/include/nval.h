@@ -107,20 +107,8 @@ struct Namval
 {
 	Dtlink_t	nvlink;		/* space for cdt links */
 	char		*nvname;	/* pointer to name of the node */
-#if _ast_sizeof_pointer == 8
-#   if _ast_intswap > 0
-	unsigned short	nvflag; 	/* attributes */
-	unsigned short	dynscope;
-#   else
-	unsigned short	dynscope;
-	unsigned short	nvflag; 	/* attributes */
-#   endif
+	uint32_t	nvflag; 	/* attributes */
 	uint32_t  	nvsize;		/* size or base */
-#else
-	unsigned short	nvflag; 	/* attributes */
-	unsigned short 	nvsize;		/* size or base */
-	unsigned int	dynscope;
-#endif
 	Namfun_t	*nvfun;		/* pointer to trap functions */
 	void		*nvalue;	/* pointer to any kind of value */
 	void		*nvmeta;	/* pointer to any of various kinds of type-dependent data */
@@ -188,8 +176,8 @@ struct Namval
 #define NV_NODISC	NV_IDENT	/* ignore disciplines */
 #define NV_UNATTR	0x800000	/* unset attributes before assignment */
 #define NV_GLOBAL	0x20000000	/* create global variable, ignoring local scope */
-#define NV_DYNAMIC	0x40000000	/* create dynamically scoped variable */
-#define NV_STATSCOPE	0x80000000	/* force creation of statically scoped variable */
+#define NV_STATSCOPE	0x40000000	/* force creation of statically scoped variable */
+#define NV_DYNAMIC	0x80000000	/* create dynamically scoped variable */
 
 #define NV_FUNCT	NV_IDENT	/* option for nv_create */
 #define NV_BLTINOPT	NV_ZFILL	/* mark builtins in libcmd */

@@ -3083,19 +3083,21 @@ int sh_funscope(int argn, char *argv[],int(*fun)(void*),void *arg,int execflg)
 	if(dtret)
 	{
 		/*
-		 * Dynamic variables are implemented by being marked via np->dynscope, then
-		 * imported into nested functions via the nv_scan call below with scanflags
-		 * set to NV_DYNAMIC. The separate variable is necessary because np->nvflag
-		 * is an unsigned short and cannot hold the NV_DYNAMIC bitflag. It cannot
-		 * be changed to an unsigned int because the codebase makes too many assumptions
-		 * about its size (cf. https://github.com/att/ast/issues/1038).
+		 * Dynamic variables are implemented by being imported into nested functions
+		 * via the nv_scan call.
 		 *
-		 * The old method ksh93v- uses for its bash mode creates a viewport between
-		 * sh.var_tree and sh.var_base with the help of a sh.st.var_local pointer.
-		 * This could fake dynamic scoping convincingly for the bash mode, but the
-		 * ksh93v- code only manages to create a global scope local to the top level
-		 * function (i.e., nested functions have no scoping at all and their variables
-		 * leak into the calling function.)
+		 * TODO: The old method ksh93v- uses for its bash mode creates a viewport
+		 * between sh.var_tree and sh.var_base with the help of a sh.st.var_local
+		 * pointer. This could fake dynamic scoping convincingly for the bash mode,
+		 * but the ksh93v- code only manages to create a global scope local to the top
+		 * level function (i.e., nested functions have no scoping at all and their
+		 * variables leak into the calling function). That code could to be robustified
+		 * to perhaps create a viewport between the parent function's scope and that of
+		 * the child function, but that runs the risk of breaking static scoping.
+		 * Alternatively, the current method could be altered to simply copy or move
+		 * dynamic local variables from the child function back into the parent function
+		 * when function execution ends; that has its own set of associated risks.
+		 * Cf. https://github.com/ksh93/ksh/pull/703#issuecomment-1898680500
 		 */
 		nv_scan(prevscope->save_tree, local_exports, NULL, 0, NV_EXPORT|NV_DYNAMIC|NV_NOSCOPE);
 	}

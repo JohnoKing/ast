@@ -231,7 +231,7 @@ static Sfdouble_t arith(const char **ptr, struct lval *lvalue, int type, Sfdoubl
 	    case ASSIGN:
 	    {
 		Namval_t *np;
-		unsigned short attr;
+		uint32_t attr;
 		if (lvalue->sub && lvalue->nosub > 0) /* indexed array ARITH_ASSIGNOP */
 		{
 			np = (Namval_t*)lvalue->sub; /* use saved subscript reference instead of last worked value */

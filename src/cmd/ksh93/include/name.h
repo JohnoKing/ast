@@ -87,7 +87,8 @@ struct Ufunction
 
 /* The following attributes are for internal use */
 #define NV_NOCHANGE	(NV_EXPORT|NV_MINIMAL|NV_RDONLY|NV_TAGGED|NV_NOFREE|NV_ARRAY)
-#define NV_ATTRIBUTES	(~(NV_NOSCOPE|NV_ARRAY|NV_NOARRAY|NV_IDENT|NV_ASSIGN|NV_REF|NV_VARNAME|NV_STATIC))
+#define NV_ATTRIBUTES	(NV_ARRAY|NV_IDENT|NV_ASSIGN|NV_REF)
+#define NV_OPENMASK	(NV_APPEND|NV_MOVE|NV_NOARRAY|NV_IARRAY|NV_VARNAME|NV_NOADD|NV_NOSCOPE|NV_NOFAIL|NV_UNATTR|NV_GLOBAL|NV_TYPE|NV_STATIC|NV_COMVAR|NV_STATSCOPE)
 #define NV_PARAM	NV_NODISC	/* expansion use positional params */
 
 /* This following are for use with nodes which are not name-values */
