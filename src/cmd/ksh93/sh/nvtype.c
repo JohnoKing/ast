@@ -117,9 +117,9 @@ typedef struct
 
 #define alignof(t)	((char*)&((_Align_*)0)->_d##t-(char*)&((_Align_*)0)->_c##t)
 
-static void put_type(Namval_t*, const char*, int, Namfun_t*);
-static Namval_t* create_type(Namval_t*, const char*, int, Namfun_t*);
-static Namfun_t* clone_type(Namval_t*, Namval_t*, int, Namfun_t*);
+static void put_type(Namval_t*, const char*, nvflag_t, Namfun_t*);
+static Namval_t* create_type(Namval_t*, const char*, nvflag_t, Namfun_t*);
+static Namfun_t* clone_type(Namval_t*, Namval_t*, nvflag_t, Namfun_t*);
 static Namval_t* next_type(Namval_t*, Dt_t*, Namfun_t*);
 
 static const Namdisc_t type_disc =
@@ -212,7 +212,7 @@ static char *name_chtype(Namval_t *np, Namfun_t *fp)
 	return sfstruse(sh.strbuf);
 }
 
-static void put_chtype(Namval_t* np, const char* val, int flag, Namfun_t* fp)
+static void put_chtype(Namval_t* np, const char* val, nvflag_t flag, Namfun_t* fp)
 {
 	if(!val && nv_isattr(np,NV_REF))
 		return;
@@ -239,7 +239,7 @@ static void put_chtype(Namval_t* np, const char* val, int flag, Namfun_t* fp)
 	}
 }
 
-static Namfun_t *clone_chtype(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
+static Namfun_t *clone_chtype(Namval_t* np, Namval_t *mp, nvflag_t flags, Namfun_t *fp)
 {
 	if(flags&NV_NODISC)
 		return NULL;
@@ -277,7 +277,7 @@ static Namval_t *findref(void *nodes, int n)
 	return NULL;
 }
 
-static int fixnode(Namtype_t *dp, Namtype_t *pp, int i, struct Namref *nrp,int flag)
+static int fixnode(Namtype_t *dp, Namtype_t *pp, int i, struct Namref *nrp,nvflag_t flag)
 {
 	Namval_t	*nq = nv_namptr(dp->nodes,i);
 	Namfun_t	*fp;
@@ -294,7 +294,7 @@ static int fixnode(Namtype_t *dp, Namtype_t *pp, int i, struct Namref *nrp,int f
 			nrp2->np = nv_namptr(pp->childfun.ttype->nodes,i);
 		nrp2->root = sh.last_root;
 		nrp2->table = pp->np;
-		nq ->nvflag = NV_REF|NV_NOFREE|NV_MINIMAL;
+		nq->nvflag = NV_REF|NV_NOFREE|NV_MINIMAL;
 		return 1;
 	}
 	if(nq->nvalue || nq->nvfun)
@@ -341,7 +341,7 @@ static int fixnode(Namtype_t *dp, Namtype_t *pp, int i, struct Namref *nrp,int f
 	return 0;
 }
 
-static Namfun_t *clone_type(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
+static Namfun_t *clone_type(Namval_t* np, Namval_t *mp, nvflag_t flags, Namfun_t *fp)
 {
 	Namtype_t		*dp, *pp=(Namtype_t*)fp;
 	int			i;
@@ -469,7 +469,7 @@ static Namfun_t *clone_type(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
 /*
  * return Namval_t* corresponding to child <name> in <np>
  */
-static Namval_t *create_type(Namval_t *np,const char *name,int flag,Namfun_t *fp)
+static Namval_t *create_type(Namval_t *np,const char *name,nvflag_t flag,Namfun_t *fp)
 {
 	Namtype_t		*dp = (Namtype_t*)fp;
 	const char		*cp=name;
@@ -520,7 +520,7 @@ found:
 	return nq;
 }
 
-static void put_type(Namval_t* np, const char* val, int flag, Namfun_t* fp)
+static void put_type(Namval_t* np, const char* val, nvflag_t flag, Namfun_t* fp)
 {
 	Namval_t	*nq;
 	if(val && (nq=nv_open(val,sh.var_tree,NV_VARNAME|NV_ARRAY|NV_NOADD|NV_NOFAIL)))
@@ -573,7 +573,7 @@ static Namval_t *next_type(Namval_t* np, Dt_t *root,Namfun_t *fp)
 	return nv_namptr(dp->nodes,dp->current);
 }
 
-static Namfun_t *clone_inttype(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
+static Namfun_t *clone_inttype(Namval_t* np, Namval_t *mp, nvflag_t flags, Namfun_t *fp)
 {
 	Namfun_t	*pp = (Namfun_t*)sh_malloc(fp->dsize);
 	memcpy(pp, fp, fp->dsize);
@@ -1259,12 +1259,12 @@ static void type_init(Namval_t *np)
 }
 
 /*
- * This function turns variable <np>  to the type <tp>
+ * This function turns variable <np> to the type <tp>
  */
-int nv_settype(Namval_t* np, Namval_t *tp, int flags)
+int nv_settype(Namval_t* np, Namval_t *tp, nvflag_t flags)
 {
 	int		isnull = nv_isnull(np);
-	int		rdonly = nv_isattr(np,NV_RDONLY);
+	nvflag_t	rdonly = nv_isattr(np,NV_RDONLY);
 	char		*val=0;
 	Namarr_t	*ap=0;
 	int		nelem = 0;

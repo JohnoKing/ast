@@ -287,7 +287,7 @@ char *sh_getcwd(void)
 
 #if SHOPT_VSH || SHOPT_ESH
 /* Trap for VISUAL and EDITOR variables */
-static void put_ed(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_ed(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	const char *cp, *name=nv_name(np);
 	int	newopt=0;
@@ -327,7 +327,7 @@ done:
 #endif /* SHOPT_VSH || SHOPT_ESH */
 
 /* Trap for HISTFILE and HISTSIZE variables */
-static void put_history(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_history(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	void 	*histopen = sh.hist_ptr;
 	char	*cp;
@@ -350,7 +350,7 @@ static void put_history(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 }
 
 /* Trap for OPTINDEX */
-static void put_optindex(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_optindex(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	sh.st.opterror = sh.st.optchar = 0;
 	nv_putv(np, val, flags, fp);
@@ -364,7 +364,7 @@ static Sfdouble_t nget_optindex(Namval_t* np, Namfun_t *fp)
 	return (Sfdouble_t)*lp;
 }
 
-static Namfun_t *clone_optindex(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
+static Namfun_t *clone_optindex(Namval_t* np, Namval_t *mp, nvflag_t flags, Namfun_t *fp)
 {
 	Namfun_t *dp = (Namfun_t*)sh_malloc(sizeof(Namfun_t));
 	memcpy(dp,fp,sizeof(Namfun_t));
@@ -375,7 +375,7 @@ static Namfun_t *clone_optindex(Namval_t* np, Namval_t *mp, int flags, Namfun_t 
 
 
 /* Trap for restricted variables FPATH, PATH, SHELL, ENV */
-static void put_restricted(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_restricted(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	int	path_scoped = 0, fpath_scoped=0;
 	char	*name = nv_name(np);
@@ -415,7 +415,7 @@ static void put_restricted(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 	}
 }
 
-static void put_cdpath(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_cdpath(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	nv_putv(np, val, flags, fp);
 	if(!sh.cdpathlist)
@@ -425,7 +425,7 @@ static void put_cdpath(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 }
 
 /* Trap for the LC_* and LANG variables */
-static void put_lang(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_lang(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	int type;
 	char *name = nv_name(np);
@@ -481,7 +481,7 @@ static void put_lang(Namval_t* np,const char *val,int flags,Namfun_t *fp)
 }
 
 /* Trap for IFS assignment and invalidates state table */
-static void put_ifs(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_ifs(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	struct ifs *ip = (struct ifs*)fp;
 	ip->ifsnp = 0;
@@ -560,7 +560,7 @@ static char* get_ifs(Namval_t* np, Namfun_t *fp)
 #   define timeofday(a)
 #endif
 
-static void put_seconds(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_seconds(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	double d;
 	double *dp = np->nvalue;
@@ -612,7 +612,7 @@ static Sfdouble_t nget_seconds(Namval_t* np, Namfun_t *fp)
 /*
  * These four functions are used to get and set the RANDOM variable
  */
-static void put_rand(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_rand(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	struct rand *rp = (struct rand*)fp;
 	Sfdouble_t n;
@@ -669,7 +669,7 @@ void sh_reseed_rand(struct rand *rp)
  * The following three functions are for SRANDOM
  */
 
-static void put_srand(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_srand(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	if(!val)  /* unset */
 	{
@@ -713,7 +713,7 @@ static Sfdouble_t nget_lineno(Namval_t* np, Namfun_t *fp)
 	return (Sfdouble_t)d;
 }
 
-static void put_lineno(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_lineno(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	Sfdouble_t n;
 	if(!val)
@@ -746,7 +746,7 @@ static char* get_lastarg(Namval_t* np, Namfun_t *fp)
 	return sh.lastarg;
 }
 
-static void put_lastarg(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_lastarg(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	if(flags&NV_INTEGER)
 	{
@@ -1040,7 +1040,7 @@ static void math_init(void)
 	}
 }
 
-static Namval_t *create_math(Namval_t *np,const char *name,int flag,Namfun_t *fp)
+static Namval_t *create_math(Namval_t *np,const char *name,nvflag_t flag,Namfun_t *fp)
 {
 	if(!name)
 		return SH_MATHNOD;
@@ -1612,7 +1612,7 @@ static Namval_t *next_stat(Namval_t* np, Dt_t *root,Namfun_t *fp)
 	return nv_namptr(sp->nodes,sp->current);
 }
 
-static Namval_t *create_stat(Namval_t *np,const char *name,int flag,Namfun_t *fp)
+static Namval_t *create_stat(Namval_t *np,const char *name,nvflag_t flag,Namfun_t *fp)
 {
 	struct Stats		*sp = (struct Stats*)fp;
 	const char		*cp=name;
@@ -1952,7 +1952,7 @@ struct Mapchar
 	int		lctype;
 };
 
-static void put_trans(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_trans(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	struct Mapchar *mp = (struct Mapchar*)fp;
 	int c, offset = stktell(sh.stk), off = offset;

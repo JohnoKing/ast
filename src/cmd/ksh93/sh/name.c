@@ -78,9 +78,9 @@ struct sh_type
 		Namval_t	*np;
 		Namval_t	*last_table;
 		Namval_t	*namespace;
-		int		flags;
-		short		size;
-		short		len;
+		nvflag_t	flags;
+		uint32_t	size;
+		size_t		len;
 	} entries[NVCACHE];
 	short		index;
 	short		ok;
@@ -213,7 +213,7 @@ Namval_t *nv_addnode(Namval_t* np, int remove)
  * Perform parameter assignment for a linked list of parameters
  * <flags> contains attributes for the parameters
  */
-void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
+void nv_setlist(struct argnod *arg,nvflag_t flags, Namval_t *typ)
 {
 	char		*cp;
 	Namval_t	*np, *mp;
@@ -221,11 +221,11 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 	char		*trap=sh.st.trap[SH_DEBUGTRAP];
 	char		*prefix = sh.prefix;
 	int		traceon = (sh_isoption(SH_XTRACE)!=0);
-	int		array = (flags&(NV_ARRAY|NV_IARRAY));
+	nvflag_t	array = (flags&(NV_ARRAY|NV_IARRAY));
 	Namarr_t	*ap;
 	Namval_t	node;
 	struct Namref	nr;
-	int		maketype = flags&NV_TYPE;  /* make a 'typeset -T' type definition command */
+	nvflag_t	maketype = flags&NV_TYPE;  /* make a 'typeset -T' type definition command */
 	struct sh_type	shtp;
 	Dt_t		*vartree, *save_vartree = NULL;
 #if SHOPT_NAMESPACE
@@ -276,7 +276,7 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 			stkseek(sh.stk,0);
 			if(*arg->argval==0 && arg->argchn.ap && !(arg->argflag&~(ARG_APPEND|ARG_QUOTED|ARG_MESSAGE|ARG_ARRAY)))
 			{
-				int flag = (NV_VARNAME|NV_ARRAY|NV_ASSIGN);
+				nvflag_t flag = (NV_VARNAME|NV_ARRAY|NV_ASSIGN);
 				int sub=0;
 				struct fornod *fp=(struct fornod*)arg->argchn.ap;
 				Shnode_t *tp=fp->fortre;
@@ -443,7 +443,7 @@ void nv_setlist(struct argnod *arg,int flags, Namval_t *typ)
 							nv_putsub(np, NULL, ARRAY_SCAN);
 							if(!ap->fun && !(ap->nelem&ARRAY_TREE) && !np->nvfun->next && !nv_type(np))
 							{
-								unsigned short nvflag = np->nvflag;
+								nvflag_t nvflag = np->nvflag;
 								uint32_t nvsize = np->nvsize;
 								_nv_unset(np,NV_EXPORT);
 								np->nvflag = nvflag;
@@ -743,15 +743,16 @@ static char *stack_extend(const char *cname, char *cp, int n)
 	return (char*)name;
 }
 
-Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
+Namval_t *nv_create(const char *name,  Dt_t *root, nvflag_t flags, Namfun_t *dp)
 {
 	char			*sub=0, *cp=(char*)name, *sp, *xp;
 	int			c;
 	Namval_t		*np=0, *nq=0;
 	Namfun_t		*fp=0;
-	long			mode, add=0;
-	int			copy=0,isref,top=0,noscope=(flags&NV_NOSCOPE);
-	int			nofree=0, level=0;
+	nvflag_t		mode, add=0, nofree=0;
+	int			copy=0,isref,top=0;
+	int			level=0;
+	nvflag_t		noscope=(flags&NV_NOSCOPE);
 	Namarr_t		*ap;
 	if(root==sh.var_tree)
 	{
@@ -1057,7 +1058,8 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 #endif /* SHOPT_FIXEDARRAY */
 				if(c=='[' || (c=='.' && nv_isarray(np)))
 				{
-					int n = 0;
+					nvflag_t nvflags = 0;
+					int idx = -2;  /* later on we need to know if nv_aindex returned 0, so this must be negative */
 					sh.nv_putsub_already_called_sh_arith = 0;
 					sub = 0;
 					mode &= ~NV_NOSCOPE;
@@ -1066,7 +1068,7 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 #if SHOPT_FIXEDARRAY
 						ap = nv_arrayptr(np);
 #endif /* SHOPT_FIXEDARRAY */
-						n = mode|nv_isarray(np);
+						nvflags = mode|nv_isarray(np);
 						if(!mode && (flags&NV_ARRAY) && ((c=sp[1])=='*' || c=='@') && sp[2]==']')
 						{
 							/* not implemented yet */
@@ -1078,11 +1080,11 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 							flags |= NV_FARRAY;
 						else
 #endif /* SHOPT_FIXEDARRAY */
-						if((n&NV_ADD)&&(flags&NV_ARRAY))
-							n |= ARRAY_FILL;
+						if((nvflags&NV_ADD)&&(flags&NV_ARRAY))
+							nvflags |= ARRAY_FILL;
 						if(flags&NV_ASSIGN)
-							n |= NV_ADD;
-						cp = nv_endsubscript(np,sp,n|(flags&(NV_ASSIGN|NV_FARRAY)));
+							nvflags |= NV_ADD;
+						cp = nv_endsubscript(np,sp,nvflags|(flags&(NV_ASSIGN|NV_FARRAY)));
 #if SHOPT_FIXEDARRAY
 						flags &= ~NV_FARRAY;
 						if(fixed)
@@ -1094,7 +1096,7 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 
 					if((c = *cp)=='.'
 					|| (c=='[' && nv_isarray(np))
-					|| (n&ARRAY_FILL)
+					|| (nvflags&ARRAY_FILL)
 					|| ((
 #if SHOPT_FIXEDARRAY
 					     ap ||
@@ -1102,14 +1104,15 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 					           (flags&NV_ASSIGN)) && (flags&NV_ARRAY)))
 					{
 						int m = cp-sp;
+						size_t len;
 						sub = m?nv_getsub(np):0;
 						if(!sub)
 						{
-							if(m && !(n&NV_ADD))
+							if(m && !(nvflags&NV_ADD))
 								return NULL;
 							sub = "0";
 						}
-						n = strlen(sub)+2;
+						len = strlen(sub)+2;
 						if(!copy)
 						{
 							copy = cp-name;
@@ -1118,51 +1121,48 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 							cp = (char*)name+copy;
 							sp = cp-m;
 						}
-						if(n <= m)
+						if(len <= m)
 						{
-							if(n)
+							memcpy(sp+1,sub,len-2);
+							sp[len-1] = ']';
+							if(len < m)
 							{
-								memcpy(sp+1,sub,n-2);
-								sp[n-1] = ']';
-							}
-							if(n < m)
-							{
-								char *dp = sp+n;
+								char *dp = sp+len;
 								while(*dp++=*cp++);
-								cp = sp+n;
+								cp = sp+len;
 							}
 						}
 						else
 						{
-							int r = n-m;
+							size_t r = len-m;
 							m = sp-name;
 							name = stack_extend(name, cp-1, r);
 							sp = (char*)name + m;
 							*sp = '[';
-							memcpy(sp+1,sub,n-2);
-							sp[n-1] = ']';
-							cp = sp+n;
+							memcpy(sp+1,sub,len-2);
+							sp[len-1] = ']';
+							cp = sp+len;
 						}
 					}
-					else if(c==0 && mode && (n=nv_aindex(np))>0)
-						nv_putsub(np,NULL,n);
+					else if(c==0 && mode && (idx=nv_aindex(np))>0)
+						nv_putsub(np,NULL,idx);
 #if SHOPT_FIXEDARRAY
-					else if(n==0 && !fixed && (c==0 || (c=='[' && !nv_isarray(np))))
+					else if((nvflags==0 || idx==0) && !fixed && (c==0 || (c=='[' && !nv_isarray(np))))
 #else
-					else if(n==0 && (c==0 || (c=='[' && !nv_isarray(np))))
+					else if((nvflags==0 || idx==0) && (c==0 || (c=='[' && !nv_isarray(np))))
 #endif /* SHOPT_FIXEDARRAY */
 					{
 						/* subscript must be 0 */
 						/* avoid double arithmetic evaluation */
 						if(sh.nv_putsub_already_called_sh_arith)
-							n = sh.nv_putsub_idx;
+							idx = sh.nv_putsub_idx;
 						else
 						{
 							cp[-1] = 0;
-							n = sh_arith(sp+1);
+							idx = sh_arith(sp+1);
 							cp[-1] = ']';
 						}
-						if(n)
+						if(idx)
 							return NULL;
 						if(nv_isarray(np))
 							nv_putsub(np,"0",ARRAY_FILL);
@@ -1179,15 +1179,15 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 							Namarr_t *ap = nv_arrayptr(np);
 							if(!sub && (flags&NV_NOADD))
 								return NULL;
-							n = mode|((flags&NV_NOADD)?0:NV_ADD);
-							if(!ap && (n&NV_ADD))
+							nvflags = mode|((flags&NV_NOADD)?0:NV_ADD);
+							if(!ap && (nvflags&NV_ADD))
 							{
 								nv_putsub(np,sub,ARRAY_FILL);
 								ap = nv_arrayptr(np);
 							}
-							if(n && ap && !ap->table)
+							if(nvflags && ap && !ap->table)
 								ap->table = dtopen(&_Nvdisc,Dtoset);
-							if(ap && ap->table && (nq=nv_search(sub,ap->table,n)))
+							if(ap && ap->table && (nq=nv_search(sub,ap->table,nvflags)))
 								nq->nvmeta = np;
 							if(nq && nv_isnull(nq))
 								nq = nv_arraychild(np,nq,c);
@@ -1225,7 +1225,7 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
 					nv_putsub(np,NULL,ARRAY_UNDEF);
 				}
 				nv_onattr(np,nofree);
-				nofree  = 0;
+				nofree = 0;
 				if(c=='.' && (fp=np->nvfun))
 				{
 					for(; fp; fp=fp->next)
@@ -1276,7 +1276,7 @@ Namval_t *nv_create(const char *name,  Dt_t *root, int flags, Namfun_t *dp)
  * if flags contains NV_REF, does not set NullNode to avoid defeating nameref loop detection
  * if np==0 && !root && flags==0, delete the Refdict dictionary
  */
-void nv_delete(Namval_t* np, Dt_t *root, int flags)
+void nv_delete(Namval_t* np, Dt_t *root, nvflag_t flags)
 {
 #if NVCACHE
 	int			c;
@@ -1347,13 +1347,13 @@ void nv_delete(Namval_t* np, Dt_t *root, int flags)
  * If <flags> & NV_UNATTR then unset attributes before assignment
  * SH_INIT is only set while initializing the environment
  */
-Namval_t *nv_open(const char *name, Dt_t *root, int flags)
+Namval_t *nv_open(const char *name, Dt_t *root, nvflag_t flags)
 {
 	char			*cp=(char*)name;
-	int			c;
+	nvflag_t		c;
 	Namval_t		*np=0;
 	Namfun_t		fun;
-	int			append=0;
+	nvflag_t		append=0;
 	const char		*msg = e_varname;
 	char			*fname = 0;
 	int			offset = stktell(sh.stk);
@@ -1378,14 +1378,14 @@ Namval_t *nv_open(const char *name, Dt_t *root, int flags)
 			fname = strrchr(cp,'.');
 			*fname = 0;
 			fun.nofree |= 1;
-			flags &=  ~NV_IDENT;
+			flags &= ~NV_IDENT;
 			funroot = root;
 			root = sh.var_tree;
 		}
 	}
 	else if(!(flags&(NV_IDENT|NV_VARNAME|NV_ASSIGN)))
 	{
-		long mode = ((flags&NV_NOADD)?0:NV_ADD);
+		nvflag_t mode = ((flags&NV_NOADD)?0:NV_ADD);
 		if(flags&NV_NOSCOPE)
 			mode |= NV_NOSCOPE;
 		np = nv_search(name,root,mode);
@@ -1569,7 +1569,7 @@ skip:
 			savesub = sub;
 			sh.prefix = prefix;
 		}
-		nv_onattr(np, flags&NV_ATTRIBUTES);
+		nv_onattr(np, flags&~(NV_ATTRIBUTES|NV_OPENMASK));
 	}
 	else if(c)
 	{
@@ -1601,7 +1601,7 @@ static char savechars[8+1];
  * If <flags> contains NV_NOFREE, previous value is freed, and <string>
  * becomes value of node and <flags> becomes attributes
  */
-void nv_putval(Namval_t *np, const char *string, int flags)
+void nv_putval(Namval_t *np, const char *string, nvflag_t flags)
 {
 	const char	*sp=string;
 	void		**vpp;	/* pointer to value pointer */
@@ -2176,15 +2176,15 @@ char **sh_envgen(void)
 struct scan
 {
 	void    (*scanfn)(Namval_t*, void*);
-	int     scanmask;
-	int     scanflags;
+	nvflag_t scanmask;
+	nvflag_t scanflags;
 	int     scancount;
 	void    *scandata;
 };
 
 static int scanfilter(Namval_t *np, struct scan *sp)
 {
-	int k=np->nvflag;
+	nvflag_t k=np->nvflag;
 	struct adata *tp = (struct adata*)sp->scandata;
 	char	*cp;
 	if(!is_abuiltin(np) && tp && tp->tp && nv_type(np)!=tp->tp)
@@ -2239,7 +2239,7 @@ void nv_rehash(Namval_t *np,void *data)
  *	more of <flags> is visited
  * If <mask> and <flags> are zero, then all nodes are visited
  */
-int nv_scan(Dt_t *root, void (*fn)(Namval_t*,void*), void *data,int mask, int flags)
+int nv_scan(Dt_t *root, void (*fn)(Namval_t*,void*), void *data,nvflag_t mask, nvflag_t flags)
 {
 	Namval_t *np;
 	Dt_t *base=0;
@@ -2288,7 +2288,7 @@ void sh_scope(struct argnod *envlist, int fun)
 	sh.var_tree = newscope;
 }
 
-static void table_unset(Dt_t *root, int flags, Dt_t *oroot)
+static void table_unset(Dt_t *root, nvflag_t flags, Dt_t *oroot)
 {
 	Namval_t *np,*nq, *npnext;
 	for(np=(Namval_t*)dtfirst(root);np;np=npnext)
@@ -2343,7 +2343,7 @@ static void table_unset(Dt_t *root, int flags, Dt_t *oroot)
  *	being cleared.
  *   <flags> can contain NV_EXPORT to preserve nvmeta.
  */
-void	_nv_unset(Namval_t *np,int flags)
+void _nv_unset(Namval_t *np,nvflag_t flags)
 {
 	void		**vpp;	/* pointer to value pointer */
 #if SHOPT_FIXEDARRAY
@@ -2522,13 +2522,13 @@ void nv_optimize_clear(Namval_t *np)
 	}
 }
 
-static void put_optimize(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_optimize(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	nv_putv(np,val,flags,fp);
 	optimize_clear(np,fp);
 }
 
-static Namfun_t *clone_optimize(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
+static Namfun_t *clone_optimize(Namval_t* np, Namval_t *mp, nvflag_t flags, Namfun_t *fp)
 {
 	return NULL;
 }
@@ -2796,14 +2796,15 @@ Sfdouble_t nv_getnum(Namval_t *np)
  *   value to conform to <newatts>.  The <size> of left and right
  *   justified fields may be given.
  */
-void nv_newattr (Namval_t *np, unsigned newatts, int size)
+void nv_newattr(Namval_t *np, nvflag_t newatts, int size)
 {
 	char *sp;
 	char *cp = 0;
-	unsigned int n;
+	nvflag_t n;
 	Namval_t *mp = 0;
 	Namarr_t *ap = 0;
-	int oldsize,oldatts,trans;
+	int oldsize,trans;
+	nvflag_t oldatts;
 	Namfun_t *fp= (newatts&NV_NODISC)?np->nvfun:0;
 	char *prefix = sh.prefix;
 	newatts &= ~NV_NODISC;
@@ -2844,7 +2845,7 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 		else if(size==NV_FLTSIZEZERO)
 			np->nvsize = 0;
 		nv_offattr(np, ~NV_NOFREE);
-		nv_onattr(np, newatts);
+		nv_onattr(np, newatts&~(NV_OPENMASK));
 		return;
 	}
 	if(size==NV_FLTSIZEZERO)
@@ -2864,7 +2865,7 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 		{
 			nv_setsize(np,size);
 			np->nvflag &= NV_ARRAY;
-			np->nvflag |= newatts;
+			np->nvflag |= newatts&~(NV_OPENMASK);
 			goto skip;
 		}
 #endif /* SHOPT_FIXEDARRAY */
@@ -2875,13 +2876,14 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 		np->nvflag = oldatts;
 		if (sp = nv_getval(np))
  		{
+			size_t len;
 			if(nv_isattr(np,NV_ZFILL) && *sp=='0')
 			{
 				while(*sp=='0') sp++;	/* skip initial zeros */
 				if(!*sp) sp--;		/* if number was 0, leave one zero */
 			}
-			n = strlen(sp);
-			cp = (char*)sh_malloc((n >= (unsigned)size ? n : (unsigned)size) + 1);
+			len = strlen(sp);
+			cp = (char*)sh_malloc((len >= (unsigned)size ? len : (unsigned)size) + 1);
 			strcpy(cp, sp);
 			if(sp && (mp=nv_opensub(np)))
 			{
@@ -2911,20 +2913,20 @@ void nv_newattr (Namval_t *np, unsigned newatts, int size)
 				char *cq = cp;
 				wchar_t c;
 				int w;
-				n = 0;
+				len = 0;
 				mbinit();
 				while(c = mbchar(cq))
 					if ((w = mbwidth(c)) > 0)
-						n += w;
-				size = n;
+						len += w;
+				size = len;
 			}
 		}
 		else if(!trans)
 			_nv_unset(np,NV_EXPORT);
 		nv_setsize(np,size);
 		np->nvflag &= (NV_ARRAY|NV_NOFREE);
-		np->nvflag |= newatts;
-		if (cp)
+		np->nvflag |= newatts&~(NV_OPENMASK);
+		if(cp)
 		{
 			if(!mp)
 				nv_putval (np, cp, NV_RDONLY);
@@ -3082,7 +3084,7 @@ static char *lastdot(char *cp, int eq)
 	return eq?0:ep;
 }
 
-int nv_rename(Namval_t *np, int flags)
+int nv_rename(Namval_t *np, nvflag_t flags)
 {
 	Namval_t		*mp=0,*nr=0;
 	char			*cp;
@@ -3244,7 +3246,7 @@ int nv_rename(Namval_t *np, int flags)
 /*
  * Create a reference node from <np> to $np in dictionary <hp>
  */
-void nv_setref(Namval_t *np, Dt_t *hp, int flags)
+void nv_setref(Namval_t *np, Dt_t *hp, nvflag_t flags)
 {
 	Namval_t	*nq=0, *nr=0;
 	char		*ep,*cp;

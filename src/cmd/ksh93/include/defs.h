@@ -113,7 +113,7 @@ extern struct dolnod	*sh_arguse(void);
 extern char		*sh_checkid(char*,char*);
 extern void		sh_chktrap(void);
 extern void		sh_deparse(Sfio_t*,const Shnode_t*,int,int);
-extern int		sh_debug(const char*,const char*,const char*,char *const[],int);
+extern int		sh_debug(const char*,const char*,const char*,char *const[],nvflag_t);
 extern char 		**sh_envgen(void);
 extern Sfdouble_t	sh_arith(const char*);
 extern void		*sh_arithcomp(char*);
@@ -149,7 +149,7 @@ extern void		sh_trim(char*);
 extern int		sh_type(const char*);
 extern void             sh_unscope(void);
 #if SHOPT_NAMESPACE
-    extern Namval_t	*sh_fsearch(const char *,int);
+    extern Namval_t	*sh_fsearch(const char *,nvflag_t);
 #endif /* SHOPT_NAMESPACE */
 
 /* malloc related wrappers */

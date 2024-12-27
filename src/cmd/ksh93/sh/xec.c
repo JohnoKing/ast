@@ -503,7 +503,7 @@ static void out_string(Sfio_t *iop, const char *cp, int c, int quoted)
  * If a script changes .sh.level inside a DEBUG trap, it will switch the
  * scope as if it were executing the trap at that function call depth.
  */
-static void put_level(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_level(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	Shscope_t	*sp;
 	int16_t		level, oldlevel = sh.level;
@@ -535,7 +535,7 @@ static Namfun_t level_disc_fun = { &level_disc, 1 };
  * Execute the DEBUG trap:
  * write the current command on the stack and make it available as .sh.command
  */
-int sh_debug(const char *trap, const char *name, const char *subscript, char *const argv[], int flags)
+int sh_debug(const char *trap, const char *name, const char *subscript, char *const argv[], nvflag_t flags)
 {
 	Namval_t		*np = SH_COMMANDNOD;
 	int			n=4, offset=stktell(sh.stk);
@@ -751,7 +751,7 @@ static long set_instance(Namval_t *nq, Namval_t *node, struct Namref *nr)
 	return 0;
 }
 
-static void unset_instance(Namval_t *nq, Namval_t *node, struct Namref *nr,long mode)
+static void unset_instance(Namval_t *nq, Namval_t *node, struct Namref *nr,nvflag_t mode)
 {
 	L_ARGNOD->nvalue = node->nvalue;
 	L_ARGNOD->nvflag = node->nvflag;
@@ -938,7 +938,8 @@ int sh_exec(const Shnode_t *t, int flags)
 			char		*trap;
 			Namval_t	*np, *nq, *last_table;
 			struct ionod	*io;
-			int		command=0, flgs=NV_ASSIGN, jmpval=0;
+			int		command=0, jmpval=0;
+			nvflag_t	flgs = NV_ASSIGN;
 			sh.bltindata.invariant = type>>(COMBITS+2);
 			type &= (COMMSK|COMSCAN);
 			sh_stats(STAT_SCMDS);
@@ -2409,7 +2410,7 @@ int sh_exec(const Shnode_t *t, int flags)
 				Dt_t *root;
 				Namval_t *oldnspace = sh.namespace;
 				int offset = stktell(sh.stk);
-				int	flags=NV_NOARRAY|NV_VARNAME;
+				nvflag_t flags=NV_NOARRAY|NV_VARNAME;
 				struct checkpt *chkp = stkalloc(sh.stk,sizeof(struct checkpt));
 				int jmpval;
 				if(cp)
@@ -2435,7 +2436,7 @@ int sh_exec(const Shnode_t *t, int flags)
 				sh_pushcontext(chkp,SH_JMPCMD);
 				jmpval = sigsetjmp(chkp->buff,0);
 				if(!jmpval)
-					sh_exec(t->for_.fortre,flags|sh_state(SH_ERREXIT));
+					sh_exec(t->for_.fortre,sh_state(SH_ERREXIT));
 				sh_popcontext(chkp);
 				enter_namespace(oldnspace);
 				if(jmpval)	/* error occurred */

@@ -199,7 +199,7 @@ void sh_subfork(void)
 	}
 }
 
-int nv_subsaved(Namval_t *np, int flags)
+int nv_subsaved(Namval_t *np, nvflag_t flags)
 {
 	struct subshell	*sp;
 	struct Link		*lp, *lpprev;
@@ -327,7 +327,8 @@ static void nv_restore(struct subshell *sp)
 	struct Link	*lp, *lq;
 	Namval_t	*mp, *np;
 	Namval_t	*mpnext;
-	int		flags,nofree;
+	nvflag_t	flags;
+	int		nofree;
 	sh.nv_restore = 1;
 	for(lp=sp->svar; lp; lp=lq)
 	{

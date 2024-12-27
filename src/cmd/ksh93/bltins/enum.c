@@ -148,7 +148,7 @@ static int enuminfo(Opt_t* op, Sfio_t *out, const char *str, Optdisc_t *fp)
 	return 0;
 }
 
-static Namfun_t *clone_enum(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
+static Namfun_t *clone_enum(Namval_t* np, Namval_t *mp, nvflag_t flags, Namfun_t *fp)
 {
 	struct Enum	*ep, *pp=(struct Enum*)fp;
 	ep = sh_newof(0,struct Enum,1,pp->nelem*sizeof(char*));
@@ -156,7 +156,7 @@ static Namfun_t *clone_enum(Namval_t* np, Namval_t *mp, int flags, Namfun_t *fp)
 	return &ep->hdr;
 }
 
-static void put_enum(Namval_t* np,const char *val,int flags,Namfun_t *fp)
+static void put_enum(Namval_t* np,const char *val,nvflag_t flags,Namfun_t *fp)
 {
 	struct Enum 		*ep = (struct Enum*)fp;
 	const char		*v;
