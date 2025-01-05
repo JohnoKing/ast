@@ -4,6 +4,11 @@ Uppercase BUG_* IDs are shell bug IDs as used by the Modernish shell library.
 
 2025-01-05:
 
+- Fixed a crash that could occur if a discipline function was first assigned
+  to a variable in a virtual subshell before the variable was scoped to that
+  subshell, then upon subshell completion another discipline function of the
+  same type was assigned to that selfsame variable in the parent shell.
+
 - Fixed a crash that could occur in some scenarios when /opt/ast/bin
   builtins handled invalid options in virtual subshells.
 

@@ -2382,7 +2382,14 @@ int sh_exec(const Shnode_t *t, int flags)
 			if(npv)
 			{
 				if(!sh.mktype)
+				{	/*
+					 * Set the discipline function. If this is done in a subshell, the variable
+					 * must be scoped to the subshell before nvfun is set to the discipline.
+					 */
+					if(sh.subshell && !sh.subshare)
+						sh_assignok(npv, 1);
 					cp = nv_setdisc(npv,cp,np,(Namfun_t*)npv);
+				}
 				if(!cp)
 				{
 					errormsg(SH_DICT,ERROR_exit(1),e_baddisc,fname);
